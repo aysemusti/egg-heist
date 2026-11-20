@@ -224,6 +224,20 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 // and the host passes each player's position on to the others.
 (() => {
   const NICK_KEY = 'egg-heist-nick';
+  // ---- owner login: only hashes are stored here, never the password ----
+  const ADMIN_H1 = 'f1aa095eccdf68fbbbb5e0819dd0617ba2c1c3025b687c67489006c64f5b6657', ADMIN_H2 = '1b70fc5bbd78857547150c658223c695766f425f1881ea7edeaccc52139b48d5', ADMIN_KEY = 'egg-heist-owner';
+  const sha = async str => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)))].map(b => b.toString(16).padStart(2, '0')).join('');
+  let adminKey = null, adminOk = false, current = null;
+  const lobby = {};
+  const ready = (async () => { try { const k = localStorage.getItem(ADMIN_KEY); if (k && await sha(k) === ADMIN_H2) { adminKey = k; adminOk = true; } } catch (e) {} })();
+  const deliver = (topic, data, isMe) => (lobby[topic] || []).forEach(f => { try { f({ topic, data, isMe, peer: '', by: null, sameTab: isMe, kind: 'viewer', guest: false }); } catch (e) {} });
+  window.__siteAdmin = { unlock: async () => {
+    const pw = (window.prompt('Owner password') || '').trim();
+    if (!pw || await sha(pw) !== ADMIN_H1) return false;
+    adminKey = await sha('msg:' + pw); adminOk = true;
+    try { localStorage.setItem(ADMIN_KEY, adminKey); } catch (e) {}
+    return true;
+  } };
   let nick = '';
   function askNick() {
     let n = '';
@@ -244,9 +258,13 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     const sendAll = (msg, except) => conns.forEach(c => { if (c !== except && c.open) { try { c.send(msg); } catch (e) {} } });
     const end = () => { if (closed) return; closed = true; errs.forEach(f => { try { f({ code: 'upstream_error', message: 'The party ended' }); } catch (e) {} }); };
     const handle = (msg, from) => {
-      if (!msg || typeof msg !== 'object' || typeof msg.id !== 'string') return;
-      if (msg.t === 'p' && msg.p && typeof msg.p === 'object') { setPeer(msg.id, msg.p); if (isHost) sendAll(msg, from); }
-      else if (msg.t === 'bye') { dropPeer(msg.id); if (isHost) sendAll(msg, from); }
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.t === 'p' && typeof msg.id === 'string' && msg.p && typeof msg.p === 'object') { setPeer(msg.id, msg.p); if (isHost) sendAll(msg, from); }
+      else if (msg.t === 'e' && typeof msg.topic === 'string' && typeof msg.key === 'string') {
+        if (isHost) sendAll(msg, from);
+        sha(msg.key).then(x => { if (x === ADMIN_H2) deliver(msg.topic, msg.data, false); });
+      }
+      else if (msg.t === 'bye' && typeof msg.id === 'string') { dropPeer(msg.id); if (isHost) sendAll(msg, from); }
     };
     const wire = conn => {
       conns.add(conn);
@@ -263,14 +281,18 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
       }));
     } else { wire(hostConn); hostConn.liveRoom = true; (early || []).forEach(d => handle(d, hostConn)); }
     peer.on('disconnected', () => { if (!closed) { try { peer.reconnect(); } catch (e) {} } });
-    return {
+    const roomObj = {
+      sendEvent: msg => sendAll(msg),
       presence: async patch => { mine = { ...mine, ...patch, n: nick }; for (const k in patch) if (patch[k] === null) delete mine[k]; sendAll({ t: 'p', id: peer.id, p: mine }); },
       onPeers: (h, onErr) => { hs.push(h); if (onErr) errs.push(onErr); setTimeout(() => { const ps = [...others.values()]; h({ peers: ps, joined: ps, left: [], updated: [] }); }, 0); return () => {}; },
       peers: () => [...others.values()],
       on: () => () => {}, emit: async () => {},
       connected: () => !closed,
-      leave: async () => { closed = true; sendAll({ t: 'bye', id: peer.id }); setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 300); },
+      leave: async () => { closed = true; if (current === roomObj) current = null; sendAll({ t: 'bye', id: peer.id }); setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 300); },
     };
+    current = roomObj;
+    errs.push(() => { if (current === roomObj) current = null; });
+    return roomObj;
   }
   const ICE = { config: { iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -278,7 +300,13 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
   ] } };
   const p2pRoom = {
-    on: () => () => {}, emit: async () => {},
+    on: (topic, f) => { (lobby[topic] = lobby[topic] || []).push(f); return () => {}; },
+    emit: async (topic, data) => {
+      await ready;
+      if (!adminOk) throw { code: 'not_permitted' };
+      deliver(topic, data, true);
+      if (current) current.sendEvent({ t: 'e', topic, data, key: adminKey });
+    },
     join: name => new Promise((resolve, reject) => {
       if (!window.Peer) { reject({ code: 'upstream_error' }); return; }
       nick = nick || askNick();
@@ -311,7 +339,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
       });
     }),
   };
-  window.claude = { use: async n => (n === 'room' ? p2pRoom : null) };
+  const siteUser = { isOwner: async () => { await ready; return adminOk; }, canEdit: async () => { await ready; return adminOk; }, id: async () => null, profiles: async () => ({}) };
+  window.claude = { use: async n => (n === 'room' ? p2pRoom : n === 'user' ? siteUser : null) };
 })();
 </script>
 <script>
@@ -1248,6 +1277,7 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.sell) sell(+b.dataset.sell);
   else if (b.dataset.fuse) fuse(b.dataset.fuse);
   else if (b.id === 'cloudBtn') cloudPush();
+  else if (b.id === 'ownerLogin') ownerLogin();
   else if (b.dataset.adm) adminAction(b.dataset.adm);
   else if (b.dataset.store) toBag(+b.dataset.store);
   else if (b.dataset.topen) toPen(+b.dataset.topen);
@@ -1311,6 +1341,7 @@ function renderTab() {
       <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${b.req}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
       <p class="note">Carrying an egg slows you down: rare eggs by 8%, epic by 15%, legendary by 25%, mythic by 32%. Big eggs weigh 8% more and huge eggs 16% more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
       <div class="cloud-box"><p><b>Cloud save</b><br>${cloud ? (cloudState === 'error' ? 'Could not reach the cloud just now. It will try again.' : cloudAt ? `Saved ${Math.max(0, Math.round((Date.now() - cloudAt) / 1000))} seconds ago. Open the game on another device to keep playing.` : 'Saving…') : 'Your progress is saved in this browser. Play on the same device and browser to keep it.'}</p>${cloud ? '<button class="buy" id="cloudBtn">Save now</button>' : ''}</div>
+      ${window.__siteAdmin && !isAdmin ? '<button class="reset" id="ownerLogin" style="color:var(--muted)">Owner login</button>' : ''}
       <button class="reset" id="resetBtn">Reset progress</button>`;
   } else if (tab === 'bag') {
     body.innerHTML = bagHTML();
@@ -1519,7 +1550,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1575,6 +1606,15 @@ function applyGift(g, from) {
   } else return;
   save(); syncHud(); if (modalOpen) renderTab();
 }
+// a gift sent live to the party (website version)
+function onPartyGift(msg) {
+  if (!msg || msg.isMe) return;
+  const g = msg.data;
+  if (!g || typeof g.id !== 'string') return;
+  G.gifts = Array.isArray(G.gifts) ? G.gifts : [];
+  if (G.gifts.includes(g.id)) return;
+  G.gifts.push(g.id); applyGift(g, 'From the game owner'); save(); cloudPush();
+}
 function onAdminSpawn(msg) {
   const d = msg && msg.data || {}, int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
   const b = int(d.b, 0, BIOMES.length - 1), es = int(d.es, 0, 2), n = int(d.n, 1, 10), r = RORDER.includes(d.r) ? d.r : null;
@@ -1606,7 +1646,15 @@ async function adminAction(what) {
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
   else if (kind === 'pet') Object.assign(g, { sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
-  if (target === 'me' || !adminDb) { applyGift(g, 'From your admin panel'); save(); cloudPush(); if (!adminDb && target !== 'me') toast('⚠️', 'Only you got it', 'The shared gift list is not available right now.', true); return; }
+  if (target === 'me') { applyGift(g, 'From your admin panel'); save(); cloudPush(); return; }
+  if (!adminDb) {
+    // no shared gift list here (the website): send it live to everyone in your party
+    G.gifts = Array.isArray(G.gifts) ? G.gifts : []; G.gifts.push(g.id); applyGift(g, 'From your admin panel'); save(); cloudPush();
+    const r = await getRoom(); let sent = false;
+    if (r && party) { try { await r.emit('gift', g); sent = true; } catch (e) {} }
+    toast(sent ? '\ud83d\udce8' : '\u26a0\ufe0f', sent ? 'Sent to everyone in your party' : 'Only you got it', sent ? 'Players who are not in your party right now do not get it.' : 'Make or join a party to send gifts to friends.', !sent);
+    return;
+  }
   try {
     // you are one of "everyone": get it now and mark it received BEFORE it goes out,
     // so another tab or device of yours sees it as already given
@@ -1623,11 +1671,19 @@ function giftText(g) {
   const i = spIndex(String(g.sid));
   return g.kind === 'money' ? `$${fmt(g.amount)}` : g.kind === 'speed' ? `+${g.amount} speed` : g.kind === 'pet' && i >= 0 ? `${g.n > 1 ? g.n + '× ' : ''}${petName({ sp: i, z: g.z || 0, f: g.f || 0 })}` : 'gift';
 }
+// website only: the owner unlocks the admin panel with a password
+async function ownerLogin() {
+  if (!window.__siteAdmin) return;
+  if (await window.__siteAdmin.unlock()) {
+    isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false;
+    toast('🔑', 'Owner login worked', 'The Admin button is at the top now.'); renderTab();
+  } else toast('🔒', 'That is not the owner password', 'Nothing changed.', true);
+}
 function adminHTML() {
   const f = admForm, sel = (id, opts) => `<select id="${id}">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(f[id]) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   const pets = BIOMES.map((b, bi) => `<optgroup label="${esc(b.name)}">${SPECIES.filter(sp => sp.b === bi).map(sp => `<option value="${sp.id}"${f.admPet === sp.id ? ' selected' : ''}>${esc(sp.name)} (${RAR[sp.r].name})</option>`).join('')}</optgroup>`).join('');
   return `
-    <div><h3>Admin panel</h3><p class="note">Only you can see this. Gifts sent to everyone reach each player right away, or the next time they open the game. Spawned eggs appear for everyone playing right now.</p></div>
+    <div><h3>Admin panel</h3><p class="note">Only you can see this. On the website, Give everyone, spawning eggs and placing things reach everyone in your party right now.</p></div>
     <div class="ups adm">
       <div class="up"><h3>Money</h3>
         <label>Amount<input id="admMoney" type="number" min="1" value="${esc(f.admMoney)}"></label>
@@ -1656,7 +1712,7 @@ function adminHTML() {
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
         <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
     </div>
-    <div><h3>Gifts waiting for players</h3>${giftList.length ? `<ol class="gift-list">${giftList.slice(-8).reverse().map(g => `<li>${esc(giftText(g))}</li>`).join('')}</ol>` : '<p class="note">None yet.</p>'}</div>
+    <div hidden><h3>Gifts waiting for players</h3>${giftList.length ? `<ol class="gift-list">${giftList.slice(-8).reverse().map(g => `<li>${esc(giftText(g))}</li>`).join('')}</ol>` : '<p class="note">None yet.</p>'}</div>
     ${giftList.length ? '<button class="reset" data-adm="clear">Clear the gift list (players keep what they already got)</button>' : ''}`;
 }
 // ================= PLACED GUARDIANS AND PETS =================
