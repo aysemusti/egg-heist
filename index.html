@@ -61,6 +61,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .adm-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .gift-list{margin:0;padding-left:18px;font-size:14px;line-height:1.5;color:var(--muted)}
 .bag-btns{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+.placebar{position:absolute;left:50%;top:calc(110px + env(safe-area-inset-top,0px));transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#2B2230;color:#FFE066;font-weight:800;font-size:15px;padding:8px 10px 8px 16px;border-radius:14px;box-shadow:0 4px 0 #120E16;max-width:calc(100% - 32px)}
+canvas.placing{cursor:crosshair}
 .party-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 #partyCode{font-family:var(--display);font-size:26px;letter-spacing:.18em;text-transform:uppercase;padding:8px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);width:100%;box-sizing:border-box;-webkit-user-select:text;user-select:text}
 #partyCode:focus{outline:3px solid var(--speed);outline-offset:1px}
@@ -194,6 +196,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     </button>
   </div>
   <div class="toasts" id="toasts"></div>
+  <div class="placebar" id="placeBar" hidden><span id="placeTxt"></span><button class="sell" id="placeDone">Done</button></div>
   <div class="hint" id="hint"></div>
   <button class="runbtn" id="runBtn" hidden>RUN<small>tap fast</small></button>
 
@@ -798,6 +801,7 @@ function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcT
 const keys = {};
 let joy = null, modalOpen = false;
 addEventListener('keydown', ev => {
+  if (placing && ev.key === 'Escape') { stopPlacing(); return; }
   if (modalOpen) { if (ev.key === 'Escape') closeModal(); return; }
   keys[ev.key.toLowerCase()] = true;
   if (ev.key.startsWith('Arrow') || ev.key === ' ') ev.preventDefault();
@@ -806,7 +810,7 @@ addEventListener('keydown', ev => {
 });
 addEventListener('keyup', ev => { keys[ev.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; joy = null; });
-cv.addEventListener('pointerdown', ev => { audioOn(); joy = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, x: ev.clientX, y: ev.clientY }; cv.setPointerCapture(ev.pointerId); });
+cv.addEventListener('pointerdown', ev => { if (placing) { placeAt(ev); return; } audioOn(); joy = { id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, x: ev.clientX, y: ev.clientY }; cv.setPointerCapture(ev.pointerId); });
 cv.addEventListener('pointermove', ev => { if (joy && joy.id === ev.pointerId) { joy.x = ev.clientX; joy.y = ev.clientY; } });
 const endJoy = ev => { if (joy && joy.id === ev.pointerId) joy = null; };
 cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
@@ -850,6 +854,7 @@ function setActionBtn(mode) {
   const b = $('runBtn'); b.hidden = !mode;
   if (mode === 'run') b.innerHTML = 'RUN<small>tap fast</small>';
   if (mode === 'grab') b.innerHTML = 'GRAB<small>or Space</small>';
+  if (mode === 'adopt') b.innerHTML = 'ADOPT<small>or Space</small>';
 }
 function tryGrab() {
   const e = nearEgg; if (!e || player.carry || !biome) return;
@@ -861,8 +866,8 @@ function tryGrab() {
 }
 function tap() {
   if (modalOpen) return;
-  if (scene !== 'hub') { tryGrab(); return; }
-  if (!onTread) return;
+  if (scene !== 'hub') { if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); return; }
+  if (!onTread) { if (nearPet) adoptPet(); return; }
   const cap = treadCap(G.tL);
   if (G.speed >= cap) { floatText(player.x, player.y - 60, 'MAX', '#FFD23F'); gateToast('cap', '⚡', 'Speed is maxed for this treadmill', 'Upgrade the treadmill in the Shop to go faster'); return; }
   const g = treadTap(G.tL);
@@ -919,6 +924,9 @@ function update(dt) {
   }
   if (z !== scene) changeZone(z);
 
+  // a placed pet in reach can be adopted
+  nearPet = null; let bestP = 56;
+  if (!player.carry) for (const wp of worldPets) { const d = dist(player.x, player.y, wp.x, wp.y); if (d < bestP) { bestP = d; nearPet = wp; } }
   if (scene === 'hub') updateHub(dt); else updateBiome(dt);
   updateGuards(dt);
   updateCam(dt);
@@ -926,7 +934,7 @@ function update(dt) {
 
 function updateHub(dt) {
   onTread = player.x > TM.x && player.x < TM.x + TM.w && player.y > TM.y && player.y < TM.y + TM.h;
-  setActionBtn(onTread ? 'run' : null); nearEgg = null;
+  setActionBtn(onTread ? 'run' : nearPet ? 'adopt' : null); nearEgg = null;
   if (onTread) {
     if (!player.moving) { player.x += (TM.x + TM.w / 2 - player.x) * Math.min(1, dt * 8); player.y += (TM.y + TM.h / 2 - player.y) * Math.min(1, dt * 8); player.step += dt * (8 + tapHeat * 2); player.fx = 1; }
     const cap = treadCap(G.tL);
@@ -1036,7 +1044,7 @@ function updateBiome(dt) {
   // eggs: the closest one in reach can be picked up with Space or the GRAB button
   nearEgg = null; let best = 1e9;
   if (!player.carry) for (const e of biome.eggs) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < best) { best = d; nearEgg = e; } }
-  setActionBtn(nearEgg ? 'grab' : null);
+  setActionBtn(nearEgg ? 'grab' : nearPet ? 'adopt' : null);
   for (let i = biome.respawn.length - 1; i >= 0; i--) { biome.respawn[i] -= dt; if (biome.respawn[i] <= 0) { biome.respawn.splice(i, 1); spawnEgg(scene); } }
   for (const e of biome.eggs) e.ph += dt;
 
@@ -1079,18 +1087,18 @@ function updateGuards(dt) {
   for (const k in zones) {
     const zi = +k, B = BIOMES[zi];
     for (const g of zones[k].guards) {
-      const d = dist(player.x, player.y, g.x, g.y);
-      // guardians only care about you while you carry one of THEIR eggs, and give up once you are home
-      const theirs = !!player.carry && player.carry.b === zi && !atHome;
-      if (g.st === 'patrol' && theirs && scene === zi && player.invuln <= 0 && d < B.guard.seeCarry) { g.st = 'wait'; g.wait = 1; g.alert = 1; sfx.alert(); }
+      const d = dist(player.x, player.y, g.x, g.y), GD = g.def || B.guard;
+      // guardians only care about you while you carry one of THEIR eggs (a placed one: any egg), and give up once you are home
+      const theirs = !!player.carry && (g.wild || player.carry.b === zi) && !atHome;
+      if (g.st === 'patrol' && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = 1; g.alert = 1; sfx.alert(); }
       if (g.st === 'wait') { g.fx = Math.sign(player.x - g.x) || g.fx; if (!theirs) g.st = 'return'; else if ((g.wait -= dt) <= 0) g.st = 'chase'; }
       if (g.st === 'chase' && !theirs) g.st = 'return';
       let tx, ty, sp;
       if (g.st === 'chase') {
-        tx = player.x; ty = player.y; sp = B.guard.speed;
-        if (d < 30 && player.invuln <= 0) { caught(B, g); return; }
+        tx = player.x; ty = player.y; sp = GD.speed;
+        if (d < 30 && player.invuln <= 0) { caught({ guard: GD }, g); return; }
       } else if (g.st === 'return') {
-        tx = g.hx; ty = g.hy; sp = B.guard.speed * .55;
+        tx = g.hx; ty = g.hy; sp = GD.speed * .55;
         if (dist(g.x, g.y, g.hx, g.hy) < 20) { g.st = 'patrol'; g.x = g.hx; g.y = g.hy; if (g.carry) { spawnEgg(zi, g.carry); g.carry = null; } }
       } else {
         // waiting, or standing guard on the nest and watching you
@@ -1255,6 +1263,7 @@ function toggleSlow() {
 $('slowBtn').onclick = toggleSlow;
 $('partyBtn').onclick = () => openModal('party');
 $('adminBtn').onclick = () => openModal('admin');
+$('placeDone').onclick = stopPlacing;
 $('bagBtn').onclick = () => openModal('bag');
 const keepAdm = ev => { if (ev.target.id && ev.target.id in admForm) admForm[ev.target.id] = ev.target.value; };
 $('sheetBody').addEventListener('input', keepAdm); $('sheetBody').addEventListener('change', keepAdm);
@@ -1481,7 +1490,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1494,7 +1503,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) r.on('spawn', onAdminSpawn, () => {});
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1570,6 +1579,8 @@ async function adminAction(what) {
     toast('⚠️', 'Spawned only in your game', 'Could not reach the other players right now.', true);
     return;
   }
+  if (kind === 'place') { startPlacing(); return; }
+  if (kind === 'unplace') { await sendPlacement('unplace', {}); toast('\ud83e\uddf9', 'Removed everything you placed', ''); return; }
   if (kind === 'clear') {
     if (!adminDb) return;
     try { await adminDb.doc('admin/gifts').set({ list: [] }); toast('🧹', 'Gift list cleared', 'Players keep what they already got.'); } catch (e) { toast('⚠️', 'Could not clear the gift list', 'Try again in a moment.', true); }
@@ -1623,9 +1634,86 @@ function adminHTML() {
         <div class="adm-row"><label>Rarity${sel('admRar', RORDER.map(k => [k, RAR[k].name]))}</label><label>Egg size${sel('admEggSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label></div>
         <label>How many<input id="admEggN" type="number" min="1" max="10" value="${esc(f.admEggN)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="spawn">Spawn for everyone</button></div></div>
+      <div class="up"><h3>Place in the world</h3>
+        <label>What<select id="admPlace"><optgroup label="Guardians (chase anyone carrying an egg)">${BIOMES.map((b, i) => `<option value="g:${i}"${f.admPlace === 'g:' + i ? ' selected' : ''}>${esc(b.guard.name)} (${esc(b.name)})</option>`).join('')}</optgroup><optgroup label="Pets (players walk up and adopt them)">${SPECIES.map(sp => `<option value="p:${sp.id}"${f.admPlace === 'p:' + sp.id ? ' selected' : ''}>${esc(sp.name)} (${RAR[sp.r].name})</option>`).join('')}</optgroup></select></label>
+        <div class="adm-row"><label>Pet size${sel('admPlaceSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Pet fusion${sel('admPlaceFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
+        <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
+        <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
     </div>
     <div><h3>Gifts waiting for players</h3>${giftList.length ? `<ol class="gift-list">${giftList.slice(-8).reverse().map(g => `<li>${esc(giftText(g))}</li>`).join('')}</ol>` : '<p class="note">None yet.</p>'}</div>
     ${giftList.length ? '<button class="reset" data-adm="clear">Clear the gift list (players keep what they already got)</button>' : ''}`;
+}
+// ================= PLACED GUARDIANS AND PETS =================
+let worldPets = [], nearPet = null, placing = null, placeSeq = 0;
+function drawWorldPet(wp, t) {
+  const sp = SPECIES[wp.sp], st = moveStyle(sp.id), ph = wp.ph;
+  const lift = st === 'fly' ? 18 + Math.sin(t * 4 + ph) * 5 : st === 'swim' ? 8 + Math.sin(t * 2 + ph) * 4 : Math.abs(Math.sin(t * 3 + ph)) * 4;
+  const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * wp.f) * SIZES[wp.z].scale);
+  ctx.fillStyle = 'rgba(255,224,102,.35)'; ctx.beginPath(); ctx.ellipse(wp.x, wp.y + 14, 26 + Math.sin(t * 5) * 3, 9, 0, 0, 7); ctx.fill();
+  drawModel(sp.id, wp.x, wp.y + 14 - lift, size, Math.sin(t * .6 + ph) > 0 ? 1 : -1, sp.r === 'M' ? rainbow(t) : '#FFE066', wp.f, Math.sin(t * 3 + ph) * .06);
+  if (nearPet === wp) drawGrabPrompt({ x: wp.x, y: wp.y - size * .45, es: 0 }, t, 'adopt');
+  else label(petName(wp), wp.x, wp.y - size * .7 - 8, 14, '#FFE066');
+}
+function adoptPet() {
+  const wp = nearPet; if (!wp) return;
+  const it = { id: G.nextId++, egg: false, sp: wp.sp, sid: SPECIES[wp.sp].id, b: SPECIES[wp.sp].b, r: SPECIES[wp.sp].r, z: wp.z, f: wp.f };
+  if (G.pen.length < penSlots(G.pL)) G.pen.push(it);
+  else if (G.inv.length < BAG_MAX) G.inv.push(it);
+  else { toast('🚧', 'Your pen and bag are full', 'Make room first, then come back for it.', true); return; }
+  worldPets = worldPets.filter(w => w !== wp); nearPet = null;
+  const isNew = !G.found[it.sid]; G.found[it.sid] = (G.found[it.sid] || 0) + 1;
+  if (it.f) G.fusedFound[it.sid] = Math.max(G.fusedFound[it.sid] || 0, it.f);
+  sfx.hatch(it.r === 'L' || it.r === 'M'); burst(wp.x, wp.y, RAR[it.r].color, 20);
+  toast(it.sid + '|' + it.f, `You adopted a ${petName(it)}!`, G.pen.includes(it) ? 'It went to your pen.' : 'Your pen is full, so it went into your bag.', false, isNew);
+  save(); syncHud();
+}
+// everyone hears placements on the "place" room topic, which only owners and editors can send
+function onPlace(msg) {
+  const d = msg && msg.data || {}, num = v => Number.isFinite(Number(v)) ? Number(v) : null;
+  const x = num(d.x), y = num(d.y);
+  if (x === null || y === null || x < 0 || x > WORLD_W || y < 0 || y > BH) return;
+  const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+  if (d.kind === 'guard') {
+    const gi = int(d.g, 0, BIOMES.length - 1), zi = zoneAt(x);
+    if (gi === null || zi === 'hub') return;
+    const gx = clamp(x, HOME_W + 20, WORLD_W - 20), gy = clamp(y, 20, BH - 20);
+    getZone(zi).guards.push({ x: gx, y: gy, hx: gx, hy: gy, tx: gx, ty: gy, st: 'patrol', fx: -1, alert: 0, wild: true, def: BIOMES[gi].guard });
+    if (!msg.isMe) toast(BIOMES[gi].guard.m, `A ${BIOMES[gi].guard.name.toLowerCase()} appeared in the ${BIOMES[zi].name}!`, 'Placed by the game owner. It chases anyone carrying an egg.', true);
+  } else if (d.kind === 'pet') {
+    const i = spIndex(String(d.sid)), z = int(d.z, 0, 2), f = int(d.f, 0, 2);
+    if (i < 0 || z === null || f === null) return;
+    const wp = { sp: i, z, f, x, y, ph: Math.random() * 6 };
+    worldPets.push(wp);
+    if (!msg.isMe) toast(SPECIES[i].id + '|' + f, `A ${petName(wp)} is waiting ${zoneAt(x) === 'hub' ? 'at home' : 'in the ' + BIOMES[zoneAt(x)].name}!`, 'Walk up to it and press Space to adopt it.', false, false, SPECIES[i].r === 'M' ? 'mythic' : '');
+  }
+}
+function onUnplace(msg) {
+  for (const k in zones) zones[k].guards = zones[k].guards.filter(g => !g.wild);
+  worldPets = []; nearPet = null;
+  if (msg && !msg.isMe) toast('🧹', 'The placed guardians and pets are gone', '');
+}
+async function sendPlacement(topic, data) {
+  const r = await getRoom();
+  if (r) { try { await r.emit(topic, data); return true; } catch (e) {} }
+  (topic === 'place' ? onPlace : onUnplace)({ data, isMe: true });
+  return false;
+}
+function startPlacing() {
+  const [k, v] = String(admForm.admPlace).split(':');
+  placing = k === 'g' ? { kind: 'guard', g: +v } : { kind: 'pet', sid: v, z: +admForm.admPlaceSize || 0, f: +admForm.admPlaceFuse || 0 };
+  const what = k === 'g' ? `the ${BIOMES[+v] ? BIOMES[+v].guard.name.toLowerCase() : 'guardian'}` : `a ${petName({ sp: Math.max(0, spIndex(v)), z: placing.z, f: placing.f })}`;
+  $('placeTxt').textContent = `Tap anywhere to place ${what}`;
+  $('placeBar').hidden = false; cv.classList.add('placing'); closeModal();
+}
+function stopPlacing() { placing = null; $('placeBar').hidden = true; cv.classList.remove('placing'); }
+async function placeAt(ev) {
+  const rc = cv.getBoundingClientRect();
+  const x = Math.round(camX + (ev.clientX - rc.left) / Z), y = Math.round(camY + (ev.clientY - rc.top) / Z);
+  if (placing.kind === 'guard' && zoneAt(x) === 'hub') { toast('🏡', "Guardians can't go in your home", 'Tap somewhere in a biome instead.', true); return; }
+  if (y < 0 || y > BH) return;
+  burst(x, y, '#FFE066', 14);
+  const live = await sendPlacement('place', { ...placing, x, y });
+  toast('📍', 'Placed!', live ? 'Everyone playing right now can see it. Tap again to place another.' : 'Only in your game right now (others could not be reached).', !live);
 }
 // ================= MODELS =================
 // Every pet and guardian is drawn in a 110-unit box centred on (0,0), facing right, feet near y=40.
@@ -3021,9 +3109,10 @@ function drawGate(i) {
   for (const sy of [BH * .2, BH * .5, BH * .8]) drawSign(x, sy, B, locked, night ? '🌙 closed for the night' : '');
   if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'M')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('✨ Mythic egg inside!', x, sy - 44, 16, '#FFB8F0');
 }
-function drawGuard(g, B, z, t) {
+function drawGuard(g, B0, z, t) {
+  const B = g.def ? { guard: g.def } : B0;
   if (g.st !== 'chase') {
-    const theirs = !!player.carry && player.carry.b === z;
+    const theirs = !!player.carry && (g.wild || player.carry.b === z);
     ctx.strokeStyle = [4, 8, 9, 10, 13].includes(z) ? 'rgba(50,90,130,.35)' : 'rgba(255,255,255,.25)'; ctx.setLineDash([8, 10]); ctx.lineWidth = theirs ? 3 : 2;
     ctx.globalAlpha = theirs ? 1 : .4;
     ctx.beginPath(); ctx.arc(g.x, g.y, B.guard.seeCarry, 0, 7); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -3039,14 +3128,14 @@ function drawGuard(g, B, z, t) {
     ctx.fillStyle = '#fff'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', g.x, g.y - 53);
   }
 }
-function drawGrabPrompt(e, t) {
+function drawGrabPrompt(e, t, word = 'grab') {
   const s = EGG_SIZES[e.es || 0].scale, pulse = 1 + .1 * Math.sin(t * 8);
   ctx.strokeStyle = '#FFE066'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(e.x, e.y + 10 * s, 22 * s * pulse, 9 * s * pulse, 0, 0, 7); ctx.stroke();
   const y = e.y - 26 * s - 18;
   ctx.fillStyle = 'rgba(20,28,18,.88)'; roundRect(ctx, e.x - 56, y - 16, 112, 26, 8); ctx.fill();
   ctx.fillStyle = '#FFF9EE'; roundRect(ctx, e.x - 50, y - 11, 48, 16, 4); ctx.fill();
   ctx.textAlign = 'center'; ctx.font = '800 11px Rubik, system-ui, sans-serif'; ctx.fillStyle = '#1E2A1B'; ctx.fillText('SPACE', e.x - 26, y + 1);
-  ctx.fillStyle = '#FFE066'; ctx.font = '15px "Lilita One", system-ui, sans-serif'; ctx.fillText('grab', e.x + 24, y + 2);
+  ctx.fillStyle = '#FFE066'; ctx.font = '15px "Lilita One", system-ui, sans-serif'; ctx.fillText(word, e.x + 24, y + 2);
 }
 // draws only the stretch of the long world that is on screen
 function drawWorld(t, dt) {
@@ -3065,8 +3154,9 @@ function drawWorld(t, dt) {
   // draw every guardian that is on screen, even one that chased you out of its own biome
   for (const k in zones) for (const g of zones[k].guards) if (g.x > xs - 150 && g.x < xe + 150) ents.push({ y: g.y, g, B: BIOMES[k], z: +k });
   for (const fr of partyFriends(dt)) if (fr.v.x > xs - 150 && fr.v.x < xe + 150) ents.push({ y: fr.v.y, fr });
+  for (const wp of worldPets) if (wp.x > xs - 150 && wp.x < xe + 150) ents.push({ y: wp.y, wp });
   ents.sort((a, b) => a.y - b.y);
-  for (const en of ents) { if (en.p) drawPlayer(t); else if (en.fr) drawFriend(en.fr, t); else drawGuard(en.g, en.B, en.z, t); }
+  for (const en of ents) { if (en.p) drawPlayer(t); else if (en.fr) drawFriend(en.fr, t); else if (en.wp) drawWorldPet(en.wp, t); else drawGuard(en.g, en.B, en.z, t); }
 }
 
 const STARS = Array.from({ length: 90 }, () => [Math.random(), Math.random() * .75, Math.random() * 6]);
