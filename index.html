@@ -272,6 +272,11 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
       leave: async () => { closed = true; sendAll({ t: 'bye', id: peer.id }); setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 300); },
     };
   }
+  const ICE = { config: { iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+  ] } };
   const p2pRoom = {
     on: () => () => {}, emit: async () => {},
     join: name => new Promise((resolve, reject) => {
@@ -281,22 +286,28 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
       let done = false;
       const ok = r => { if (!done) { done = true; clearTimeout(timer); resolve(r); } };
       const fail = c => { if (!done) { done = true; clearTimeout(timer); reject({ code: c }); } };
-      const timer = setTimeout(() => fail('upstream_error'), 15000);
-      const host = new Peer(hostId);
-      host.on('open', () => ok(makeRoom(host, true)));
+      let found = false;   // true once the party's host is known to exist
+      const timer = setTimeout(() => fail(found ? 'blocked' : 'upstream_error'), 20000);
+      const host = new Peer(hostId, ICE);
+      host.on('open', () => {
+        // the code was free, so no such party exists: when joining, say so instead of starting an empty party
+        if (window.__partyJoinHow === 'join') { try { host.destroy(); } catch (e) {} fail('not_found'); return; }
+        ok(makeRoom(host, true));
+      });
       host.on('error', e => {
         if (done) return;
         if (!e || e.type !== 'unavailable-id') { fail('upstream_error'); return; }
         // someone already made this party: join it
         try { host.destroy(); } catch (er) {}
-        const me = new Peer();
+        found = true;
+        const me = new Peer(ICE);
         me.on('open', () => {
           const c = me.connect(hostId, { reliable: true }), early = [];
           // keep anything the host sends before this page is ready (the list of who is already here)
           c.on('data', d => { if (!c.liveRoom) early.push(d); });
           c.on('open', () => ok(makeRoom(me, false, c, early)));
         });
-        me.on('error', () => fail('upstream_error'));
+        me.on('error', er => fail(er && er.type === 'peer-unavailable' ? 'not_found' : 'upstream_error'));
       });
     }),
   };
@@ -1378,6 +1389,7 @@ async function joinParty(raw, how) {
   partyMsg = 'Connecting…'; renderTab();
   try {
     if (party) await leaveParty(true);
+    window.__partyJoinHow = how;   // lets the website version tell 'make' from 'join'
     const rm = await r.join('party-' + code.toLowerCase());
     party = rm; partyCode = code; partyMsg = ''; partyPeers = []; lastPres = '';
     try { localStorage.setItem(PARTY_KEY, code); } catch (e) {}
@@ -1388,7 +1400,11 @@ async function joinParty(raw, how) {
       how === 'made' ? 'Tell your friend to tap Party, then Join party, and type the code.' : 'You will see your friend as soon as they are here.');
   } catch (e) {
     party = null;
-    partyMsg = e && e.code === 'not_permitted' ? 'Party mode is not available for your account here.' : 'Could not connect to the party. Try again in a moment.';
+    const c = e && e.code;
+    partyMsg = c === 'not_permitted' ? 'Party mode is not available for your account here.'
+      : c === 'not_found' ? `No party with code ${code} was found. Check the code with your friend, and make sure you are both playing the same version of the game.`
+      : c === 'blocked' ? 'Found the party, but this network would not let you connect. Some home or school Wi-Fi blocks this. Try again, or try a different network.'
+      : 'Could not connect to the party. Try again in a moment.';
     if (how === 'rejoin') { try { localStorage.removeItem(PARTY_KEY); } catch (er) {} }
   }
   syncParty(); renderTab();
@@ -1473,7 +1489,7 @@ function partyHTML() {
       <div class="up"><h3>Join party</h3><p class="note">Type the code your friend gave you.</p><input id="partyCode" maxlength="8" placeholder="K7QX2" autocomplete="off" spellcheck="false" aria-label="Party code"><button class="buy" id="joinParty">Join party</button></div>
     </div>
     ${partyMsg ? `<p class="note party-msg">${esc(partyMsg)}</p>` : ''}
-    <p class="note">Your friend opens this same website. You each pick a name the first time you join a party.</p>`;
+    <p class="note">Your friend opens this same website. You each pick a name the first time you join a party. Party codes only work between players on this website, not the claude.ai version.</p>`;
   const where = st => !st ? 'Connecting…' : (st.z < 0 ? 'At home' : 'In the ' + BIOMES[st.z].name) + (st.c ? ` · carrying a ${RAR[st.c.r].name.toLowerCase()} egg` : '');
   const me = { z: scene === 'hub' ? -1 : scene, c: player.carry };
   return `
