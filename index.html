@@ -58,6 +58,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .unl{display:flex;flex-direction:column;gap:4px;padding-bottom:10px;border-bottom:2px solid var(--line);font-size:14px}
 .unl:last-child{border-bottom:0;padding-bottom:0}
 .unl span{font-size:12px;color:var(--muted)}
+.send-to{background:var(--panel-2);border-radius:16px;padding:12px 14px}
+.send-to select{font-weight:700}
 .adm-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .gift-list{margin:0;padding-left:18px;font-size:14px;line-height:1.5;color:var(--muted)}
 .bag-btns{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
@@ -290,7 +292,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
       connected: () => !closed,
       leave: async () => { closed = true; if (current === roomObj) current = null; sendAll({ t: 'bye', id: peer.id }); setTimeout(() => { try { peer.destroy(); } catch (e) {} }, 300); },
     };
-    current = roomObj;
+    current = roomObj; window.__partyMe = peer.id;
     errs.push(() => { if (current === roomObj) current = null; });
     return roomObj;
   }
@@ -1536,12 +1538,13 @@ function partyHTML() {
 // Gifts for everyone live in one shared document only the owner may write (db rule on "admin").
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
-let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0' };
+let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
     const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+    if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
       db.doc('admin/gifts').onSnapshot(snap => {
@@ -1560,7 +1563,8 @@ let claiming = false;
 async function claimGifts() {
   if (!cloudReady || !giftsLoaded || claiming) return;
   G.gifts = Array.isArray(G.gifts) ? G.gifts : [];
-  const fresh = giftList.filter(g => g && typeof g.id === 'string' && !G.gifts.includes(g.id));
+  const forMe = g => !g.toUid || g.toUid === myUid;
+  const fresh = giftList.filter(g => g && typeof g.id === 'string' && !G.gifts.includes(g.id) && forMe(g));
   if (!fresh.length) return;
   claiming = true;
   try {
@@ -1576,7 +1580,7 @@ async function claimGifts() {
     G.gifts = G.gifts.slice(-300); save(); if (got) cloudPush();
   } finally { claiming = false; }
   // a gift that arrived while this was checking gets its turn now
-  if (giftList.some(g => g && typeof g.id === 'string' && !G.gifts.includes(g.id))) claimGifts();
+  if (giftList.some(g => g && typeof g.id === 'string' && !G.gifts.includes(g.id) && (!g.toUid || g.toUid === myUid))) claimGifts();
 }
 // gift data comes from a shared document: check every field
 function applyGift(g, from) {
@@ -1596,6 +1600,17 @@ function applyGift(g, from) {
     G.found[sp.id] = (G.found[sp.id] || 0) + n;
     if (f) G.fusedFound[sp.id] = Math.max(G.fusedFound[sp.id] || 0, f);
     toast(sp.id + '|' + f, `Gift: ${n > 1 ? n + '× ' : ''}${petName({ sp: i, z, f })}`, from, false, !G.found[sp.id]);
+  } else if (g.kind === 'egg') {
+    const b = int(g.b, 0, BIOMES.length - 1, -1), es = int(g.es, 0, 2, 0), n = int(g.n, 1, 10, 1), r = RORDER.includes(g.r) ? g.r : null;
+    if (b < 0 || !r) return;
+    let toPen = 0, toBag = 0;
+    for (let k = 0; k < n; k++) {
+      const it = makeEggItem({ r, b, es }).item;
+      if (G.pen.length < penSlots(G.pL)) { G.pen.push(it); toPen++; } else if (G.inv.length < BAG_MAX) { G.inv.push(it); toBag++; } else break;
+    }
+    if (!toPen && !toBag) { toast('🚧', 'A gift of eggs could not fit', 'Your pen and bag are full.', true); return; }
+    toast('🥚', `Gift: ${n > 1 ? n + ' ' : 'a '}${EGG_SIZES[es].name ? EGG_SIZES[es].name.toLowerCase() + ' ' : ''}${RAR[r].name.toLowerCase()} ${BIOMES[b].name} egg${n > 1 ? 's' : ''}`,
+      `${from}. ${toPen ? toPen + ' hatching in your pen' : ''}${toPen && toBag ? ', ' : ''}${toBag ? toBag + ' in your bag' : ''}.`, false, false, r === 'M' || r === 'L' ? 'mythic' : '');
   } else if (g.kind === 'index') {
     for (const sp of SPECIES) G.found[sp.id] = Math.max(1, G.found[sp.id] || 0);
     toast('📖', 'Gift: the full Index', `All ${SPECIES.length} animals are unlocked`);
@@ -1611,6 +1626,7 @@ function onPartyGift(msg) {
   if (!msg || msg.isMe) return;
   const g = msg.data;
   if (!g || typeof g.id !== 'string') return;
+  if (g.toPeer && g.toPeer !== window.__partyMe) return;
   G.gifts = Array.isArray(G.gifts) ? G.gifts : [];
   if (G.gifts.includes(g.id)) return;
   G.gifts.push(g.id); applyGift(g, 'From the game owner'); save(); cloudPush();
@@ -1626,7 +1642,7 @@ function onAdminSpawn(msg) {
 }
 async function adminAction(what) {
   if (!isAdmin) return;
-  const [kind, target] = what.split(':'), f = admForm, num = v => Math.round(Number(v)) || 0;
+  let [kind, target] = what.split(':'), f = admForm, num = v => Math.round(Number(v)) || 0;
   if (kind === 'spawn') {
     const data = { b: num(f.admBiome), r: f.admRar, es: num(f.admEggSize), n: clamp(num(f.admEggN), 1, 10) };
     const r = await getRoom();
@@ -1646,25 +1662,38 @@ async function adminAction(what) {
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
   else if (kind === 'pet') Object.assign(g, { sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
+  else if (kind === 'egg') Object.assign(g, { b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
+  // who gets it: the "Send to" menu (Everyone, Just me, or one friend in your party)
+  let toName = '';
+  if (target === 'to') {
+    const sel = String(f.admTo || 'all');
+    if (sel === 'me') target = 'me';
+    else if (sel.startsWith('u:') || sel.startsWith('p:')) {
+      const id = sel.slice(2), p = partyPeers.find(q => (sel[0] === 'u' ? q.by : q.peer) === id);
+      if (sel[0] === 'u') g.toUid = id; else g.toPeer = id;
+      toName = p ? friendName(p) : 'your friend';
+    }
+  }
   if (target === 'me') { applyGift(g, 'From your admin panel'); save(); cloudPush(); return; }
   if (!adminDb) {
     // no shared gift list here (the website): send it live to everyone in your party
-    G.gifts = Array.isArray(G.gifts) ? G.gifts : []; G.gifts.push(g.id); applyGift(g, 'From your admin panel'); save(); cloudPush();
+    if (!toName) { G.gifts = Array.isArray(G.gifts) ? G.gifts : []; G.gifts.push(g.id); applyGift(g, 'From your admin panel'); save(); cloudPush(); }
     const r = await getRoom(); let sent = false;
     if (r && party) { try { await r.emit('gift', g); sent = true; } catch (e) {} }
-    toast(sent ? '\ud83d\udce8' : '\u26a0\ufe0f', sent ? 'Sent to everyone in your party' : 'Only you got it', sent ? 'Players who are not in your party right now do not get it.' : 'Make or join a party to send gifts to friends.', !sent);
+    if (toName) toast(sent ? '\ud83d\udce8' : '\u26a0\ufe0f', sent ? `Sent to ${toName}` : 'Could not send it', sent ? 'They get it right away.' : `${toName} is not in your party right now.`, !sent);
+    else toast(sent ? '\ud83d\udce8' : '\u26a0\ufe0f', sent ? 'Sent to everyone in your party' : 'Only you got it', sent ? 'Players who are not in your party right now do not get it.' : 'Make or join a party to send gifts to friends.', !sent);
     return;
   }
   try {
     // you are one of "everyone": get it now and mark it received BEFORE it goes out,
     // so another tab or device of yours sees it as already given
-    G.gifts = Array.isArray(G.gifts) ? G.gifts : [];
-    G.gifts.push(g.id); applyGift(g, 'From your admin panel'); save(); cloudPush();
+    if (!toName) { G.gifts = Array.isArray(G.gifts) ? G.gifts : []; G.gifts.push(g.id); applyGift(g, 'From your admin panel'); save(); cloudPush(); }
     await adminDb.doc('admin/gifts').set({ list: [...giftList, g].slice(-50) });
-    toast('📨', 'Sent to everyone', 'Players get it right away, or the next time they open the game.');
+    toast('📨', toName ? `Sent to ${toName}` : 'Sent to everyone', toName ? 'They get it right away, or the next time they open the game.' : 'Players get it right away, or the next time they open the game.');
   } catch (e) { toast('⚠️', 'Could not send the gift', e && e.code === 'quota_exceeded' ? 'The gift list is full. Clear it and try again.' : 'Try again in a moment.', true); }
 }
 function giftText(g) {
+  if (g.kind === 'egg' && RAR[g.r] && BIOMES[g.b]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${RAR[g.r].name} ${BIOMES[g.b].name} egg${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'index') return 'Full Index';
   if (g.kind === 'pen') return 'Max level pen';
   if (g.kind === 'tread') return 'Max level treadmill';
@@ -1680,27 +1709,35 @@ async function ownerLogin() {
   } else toast('🔒', 'That is not the owner password', 'Nothing changed.', true);
 }
 function adminHTML() {
+  if (String(admForm.admTo).length > 2 && !partyPeers.some(p => (p.by ? 'u:' + p.by : 'p:' + p.peer) === admForm.admTo)) admForm.admTo = 'all';
   const f = admForm, sel = (id, opts) => `<select id="${id}">${opts.map(([v, t]) => `<option value="${esc(v)}"${String(f[id]) === String(v) ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   const pets = BIOMES.map((b, bi) => `<optgroup label="${esc(b.name)}">${SPECIES.filter(sp => sp.b === bi).map(sp => `<option value="${sp.id}"${f.admPet === sp.id ? ' selected' : ''}>${esc(sp.name)} (${RAR[sp.r].name})</option>`).join('')}</optgroup>`).join('');
   return `
-    <div><h3>Admin panel</h3><p class="note">Only you can see this. On the website, Give everyone, spawning eggs and placing things reach everyone in your party right now.</p></div>
+    <div><h3>Admin panel</h3><p class="note">Only you can see this. On the website, gifts, spawned eggs and placed things reach the players in your party right now.</p></div>
+    <div class="adm send-to"><label>Send gifts to${sel('admTo', [['all', 'Everyone'], ['me', 'Just me'], ...partyPeers.map(p => [p.by ? 'u:' + p.by : 'p:' + p.peer, 'Only ' + friendName(p) + ' (in your party)'])])}</label></div>
     <div class="ups adm">
       <div class="up"><h3>Money</h3>
         <label>Amount<input id="admMoney" type="number" min="1" value="${esc(f.admMoney)}"></label>
-        <div class="adm-btns"><button class="buy" data-adm="money:all">Give everyone</button><button class="sell" data-adm="money:me">Just me</button></div></div>
+        <div class="adm-btns"><button class="buy" data-adm="money:to">Give</button></div></div>
       <div class="up"><h3>Speed</h3>
         <label>Extra speed<input id="admSpeed" type="number" min="1" max="5000" value="${esc(f.admSpeed)}"></label>
-        <div class="adm-btns"><button class="buy" data-adm="speed:all">Give everyone</button><button class="sell" data-adm="speed:me">Just me</button></div></div>
+        <div class="adm-btns"><button class="buy" data-adm="speed:to">Give</button></div></div>
       <div class="up"><h3>Unlocks</h3>
-        <div class="unl"><b>Full Index</b><span>All ${SPECIES.length} animals found</span><div class="adm-btns"><button class="buy" data-adm="index:all">Give everyone</button><button class="sell" data-adm="index:me">Just me</button></div></div>
-        <div class="unl"><b>Max level pen</b><span>Level ${PEN_MAX}: ${penSlots(PEN_MAX)} slots, +${Math.round((penBonus(PEN_MAX) - 1) * 100)}% income</span><div class="adm-btns"><button class="buy" data-adm="pen:all">Give everyone</button><button class="sell" data-adm="pen:me">Just me</button></div></div>
-        <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: speed can be trained up to ${treadCap(TREAD_MAX)}</span><div class="adm-btns"><button class="buy" data-adm="tread:all">Give everyone</button><button class="sell" data-adm="tread:me">Just me</button></div></div>
+        <div class="unl"><b>Full Index</b><span>All ${SPECIES.length} animals found</span><div class="adm-btns"><button class="buy" data-adm="index:to">Give</button></div></div>
+        <div class="unl"><b>Max level pen</b><span>Level ${PEN_MAX}: ${penSlots(PEN_MAX)} slots, +${Math.round((penBonus(PEN_MAX) - 1) * 100)}% income</span><div class="adm-btns"><button class="buy" data-adm="pen:to">Give</button></div></div>
+        <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: speed can be trained up to ${treadCap(TREAD_MAX)}</span><div class="adm-btns"><button class="buy" data-adm="tread:to">Give</button></div></div>
       </div>
       <div class="up"><h3>Pet</h3>
         <label>Animal<select id="admPet">${pets}</select></label>
         <div class="adm-row"><label>Size${sel('admPetSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Fusion${sel('admPetFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
         <label>How many<input id="admPetN" type="number" min="1" max="10" value="${esc(f.admPetN)}"></label>
-        <div class="adm-btns"><button class="buy" data-adm="pet:all">Give everyone</button><button class="sell" data-adm="pet:me">Just me</button></div></div>
+        <div class="adm-btns"><button class="buy" data-adm="pet:to">Give</button></div></div>
+      <div class="up"><h3>Give eggs</h3>
+        <label>Biome${sel('admGiftBiome', BIOMES.map((b, i) => [i, b.name]))}</label>
+        <div class="adm-row"><label>Rarity${sel('admGiftRar', RORDER.map(k => [k, RAR[k].name]))}</label><label>Egg size${sel('admGiftSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label></div>
+        <label>How many<input id="admGiftN" type="number" min="1" max="10" value="${esc(f.admGiftN)}"></label>
+        <span class="note" style="font-size:12px">The eggs go straight into the pen to hatch, or the bag if the pen is full.</span>
+        <div class="adm-btns"><button class="buy" data-adm="egg:to">Give</button></div></div>
       <div class="up"><h3>Spawn eggs</h3>
         <label>Biome${sel('admBiome', BIOMES.map((b, i) => [i, b.name]))}</label>
         <div class="adm-row"><label>Rarity${sel('admRar', RORDER.map(k => [k, RAR[k].name]))}</label><label>Egg size${sel('admEggSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label></div>
