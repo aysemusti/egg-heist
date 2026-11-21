@@ -149,6 +149,10 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .chip.C{background:var(--c-common)}.chip.R{background:var(--c-rare)}.chip.E{background:var(--c-epic)}.chip.L{background:var(--c-legendary)}.chip.Z1{background:#3FA86A}.chip.Z2{background:#E8572C}
 .chip.F1{background:#B05AF0}.chip.F2{background:linear-gradient(90deg,#E09A10,#FFD23F);color:#4A3000}
 .fusebtn{margin:0;padding:8px 14px;font-size:16px;flex:none}
+.chip.mut-bronze{background:#B8703A}.chip.mut-silver{background:#8E99A8}.chip.mut-golden{background:#E0A810;color:#4A3000}
+.chip.mut-singer{background:linear-gradient(90deg,#FF5AB4,#3FB8E0)}.chip.mut-enchanted{background:#8A4AE0;box-shadow:0 0 6px #C86AFF}.chip.mut-dark{background:#2B2230;box-shadow:0 0 6px #7A2EBA}
+.mut-box{gap:10px}.mut-list{display:flex;flex-wrap:wrap;gap:6px}.mut-list .chip{font-size:11px;padding:3px 8px}.mut-list .chip.none{opacity:.35}
+.mut-box .buy{margin:0;align-self:flex-start;padding:9px 18px;font-size:16px}
 .chip.D{background:linear-gradient(90deg,#F2C230,#FFF8E0 50%,#F2C230);color:#6A4A00;box-shadow:0 0 6px rgba(242,194,48,.8)}
 .chip.M{background:linear-gradient(90deg,#FF3FD0,#7F5BFF,#3FC8E0)}
 .sell{border:0;cursor:pointer;font-weight:800;font-size:13px;background:#fff;color:var(--ink);border-radius:10px;padding:7px 10px;box-shadow:0 3px 0 var(--line);flex:none}
@@ -458,9 +462,21 @@ const petIncome = sp => RAR[sp.r].inc * BIOMES[sp.b].mult * penBonus(G.pL);
 const sellValue = sp => Math.round(RAR[sp.r].inc * BIOMES[sp.b].mult * 25);
 // Fusion: 3 of the same animal (same tier) -> 1 of the next tier
 const FUSE = [{ name: '', mult: 1 }, { name: 'Fused', mult: 4 }, { name: 'Mega', mult: 16 }];
-const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult;
-const petSell = p => sellValue(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult;
-const petName = p => [SIZES[p.z || 0].name, FUSE[p.f || 0].name, SPECIES[p.sp].name].filter(Boolean).join(' ');
+// Mutations: found when eggs hatch, put on an egg from the Bag; the animal hatches with a new look and earns more.
+const MUT = {
+  bronze:    { name: 'Bronze',    mult: 1.5, w: 40, egg: '#D08A4E', glow: null },
+  silver:    { name: 'Silver',    mult: 2,   w: 28, egg: '#D9DEE6', glow: '#F4F7FB' },
+  golden:    { name: 'Golden',    mult: 3,   w: 16, egg: '#F2C230', glow: '#FFD23F' },
+  singer:    { name: 'Singer',    mult: 4,   w: 9,  egg: '#FF9AD5', glow: '#FF7AD9' },
+  enchanted: { name: 'Enchanted', mult: 6,   w: 5,  egg: '#B07AF2', glow: '#C86AFF' },
+  dark:      { name: 'Dark',      mult: 10,  w: 2,  egg: '#3A2E48', glow: '#7A2EBA' },
+};
+const MUT_KEYS = Object.keys(MUT), MUT_DROP = 0.25;
+const mutOf = p => p && MUT[p.mut] ? MUT[p.mut] : null;
+function pickMut() { let r = Math.random() * MUT_KEYS.reduce((a, k) => a + MUT[k].w, 0); for (const k of MUT_KEYS) { if ((r -= MUT[k].w) < 0) return k; } return 'bronze'; }
+const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
+const petSell = p => sellValue(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
+const petName = p => [SIZES[p.z || 0].name, mutOf(p) ? mutOf(p).name : '', FUSE[p.f || 0].name, SPECIES[p.sp].name].filter(Boolean).join(' ');
 const FUSER = { x: 175, y: 640 };
 // Animal sizes: bigger animals look bigger and earn more
 const SIZES = [{ name: '', mult: 1, scale: 1 }, { name: 'Big', mult: 2, scale: 1.3 }, { name: 'Huge', mult: 5, scale: 1.65 }];
@@ -481,7 +497,7 @@ const pxSpeed = () => G.slow ? 200 : 160 + 2.2 * Math.min(G.speed, 280) + 1.1 * 
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0 }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0 }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -1059,15 +1075,40 @@ function storeCarry() {
   toast('🎒', `Stored a ${itemName(it)}`, 'Put it in the pen from your bag when you want it to hatch.');
   save(); syncHud(); renderTab();
 }
+const mutForm = { mutPick: '', mutEgg: '' };
+function applyMutation() {
+  const k = mutForm.mutPick, id = +mutForm.mutEgg;
+  if (!MUT[k] || !((G.muts || {})[k] > 0)) { toast('🧪', 'Pick a mutation you have', '', true); return; }
+  const egg = G.pen.concat(G.inv).find(q => q.id === id && q.egg && !q.mut);
+  if (!egg) { toast('🥚', 'Pick an egg first', 'Only eggs without a mutation can get one.', true); return; }
+  G.muts[k]--; egg.mut = k; sfx.hatch(true);
+  toast('🧪', `Your egg is now ${MUT[k].name}!`, `The ${SPECIES[egg.sp] && egg.r ? RAR[egg.r].name.toLowerCase() : ''} animal inside will hatch ${MUT[k].name} and earn ×${MUT[k].mult}.`);
+  mutForm.mutEgg = ''; save(); renderTab();
+}
+function mutationsHTML() {
+  const muts = G.muts || {}, owned = MUT_KEYS.filter(k => muts[k] > 0);
+  const eggs = G.pen.concat(G.inv).filter(q => q.egg && !q.mut);
+  if (!owned.includes(mutForm.mutPick)) mutForm.mutPick = owned[0] || '';
+  if (!eggs.some(q => String(q.id) === String(mutForm.mutEgg))) mutForm.mutEgg = eggs[0] ? String(eggs[0].id) : '';
+  const eggLabel = q => `${q.es ? EGG_SIZES[q.es].name + ' ' : ''}${RAR[q.r].name} ${BIOMES[q.b].name} egg${G.pen.includes(q) ? ' (pen)' : ' (bag)'}`;
+  return `<div class="up mut-box"><h3>Mutations</h3>
+    <div class="mut-list">${MUT_KEYS.map(k => `<span class="chip mut-${k}${muts[k] > 0 ? '' : ' none'}">${MUT[k].name} ×${MUT[k].mult} · ${muts[k] || 0}</span>`).join('')}</div>
+    ${owned.length && eggs.length ? `<div class="adm adm-row"><label>Mutation<select id="mutPick">${owned.map(k => `<option value="${k}"${mutForm.mutPick === k ? ' selected' : ''}>${MUT[k].name} (you have ${muts[k]})</option>`).join('')}</select></label>
+      <label>Egg<select id="mutEgg">${eggs.map(q => `<option value="${q.id}"${String(q.id) === mutForm.mutEgg ? ' selected' : ''}>${esc(eggLabel(q))}</option>`).join('')}</select></label></div>
+      <button class="buy" data-mutapply="1">Apply to egg</button>`
+      : `<p class="note">${owned.length ? 'Get an egg first, then put a mutation on it here.' : 'You find mutations when your eggs hatch. Put one on an egg and the animal hatches with a new look and more money.'}</p>`}
+  </div>`;
+}
 function bagHTML() {
   const carry = player.carry && scene === 'hub';
   const rows = G.inv.slice().reverse().map(p => {
     const sp = SPECIES[p.sp];
-    if (p.egg) return `<div class="row"><span class="eggic" style="background:${BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span></span><span class="sub">Paused · hatches ${Math.ceil(p.left)}s after it goes in the pen</span></div><button class="sell" data-topen="${p.id}">Put in pen</button></div>`;
-    return `<div class="row">${modelTag(sp.id, 'em', p.f || 0)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · earns $${fmt(petInc(p))}/s in the pen</span></div><div class="bag-btns"><button class="sell" data-topen="${p.id}">Put in pen</button><button class="sell" data-bagsell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
+    if (p.egg) return `<div class="row"><span class="eggic" style="background:${mutOf(p) ? mutOf(p).egg : BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span>${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">Paused · hatches ${Math.ceil(p.left)}s after it goes in the pen</span></div><button class="sell" data-topen="${p.id}">Put in pen</button></div>`;
+    return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · earns $${fmt(petInc(p))}/s in the pen</span></div><div class="bag-btns"><button class="sell" data-topen="${p.id}">Put in pen</button><button class="sell" data-bagsell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
   }).join('');
   return `
     <div><h3>Your bag · ${G.inv.length}/${BAG_MAX}</h3><p class="note">Keep animals and eggs you are not using. In the bag, animals don't earn money and eggs don't hatch, but they don't take up pen slots either. Pen ${G.pen.length}/${penSlots(G.pL)}.</p></div>
+    ${mutationsHTML()}
     ${carry ? `<div class="cloud-box"><p>You're holding a ${esc(itemName({ egg: true, ...player.carry }))}.</p><button class="buy" data-bag="carry">Put it in the bag</button></div>` : ''}
     <div class="penlist">${rows || '<p class="note">Your bag is empty. Tap Store next to a pet or egg in the Pen tab to put it here.</p>'}</div>`;
 }
@@ -1077,6 +1118,10 @@ function hatch(p) {
   lastHatch = sp.id + ':' + Date.now();
   const isNew = !G.found[sp.id];
   G.found[sp.id] = (G.found[sp.id] || 0) + 1;
+  if (Math.random() < MUT_DROP) {
+    const k = pickMut(); G.muts = G.muts || {}; G.muts[k] = (G.muts[k] || 0) + 1;
+    setTimeout(() => toast('\ud83e\uddea', `You found a ${MUT[k].name} mutation!`, `Open your Bag to put it on an egg. ${MUT[k].name} animals earn \u00d7${MUT[k].mult}.`, false, true, k === 'dark' || k === 'enchanted' ? 'mythic' : ''), 900);
+  }
   sfx.hatch(sp.r === 'L' || sp.r === 'M' || sp.r === 'D');
   if (scene === 'hub') { const pos = petSpot(p); burst(pos.x, pos.y, RAR[sp.r].color, 22); }
   toast(sp.id, `Hatched a ${petName(p)}!`, `${RAR[sp.r].name}${p.z ? ' · ' + SIZES[p.z].name + ' earns ' + SIZES[p.z].mult + '×' : ''} · $${fmt(petInc(p))}/s`, false, isNew);
@@ -1193,7 +1238,7 @@ function fuse(key) {
   const tier = list[0].f || 0; if (tier >= FUSE.length - 1) return;
   const used = [...list].sort((a, b) => (a.z || 0) - (b.z || 0)).slice(0, 3), base = used[0];
   G.pen = G.pen.filter(p => !used.includes(p)); used.forEach(p => delete petPos[p.id]);
-  const np = { id: G.nextId++, egg: false, sp: base.sp, sid: base.sid || SPECIES[base.sp].id, b: base.b, r: base.r, f: tier + 1, z: Math.max(...used.map(q => q.z || 0)) };
+  const np = { id: G.nextId++, egg: false, sp: base.sp, sid: base.sid || SPECIES[base.sp].id, b: base.b, r: base.r, f: tier + 1, z: Math.max(...used.map(q => q.z || 0)), mut: used.map(q => q.mut).filter(k => MUT[k]).sort((a, b) => MUT[b].mult - MUT[a].mult)[0] };
   G.pen.push(np);
   const sid = SPECIES[np.sp].id; G.fusedFound[sid] = Math.max(G.fusedFound[sid] || 0, np.f);
   fuseFx = 1.2; sfx.hatch(true); if (scene === 'hub') burst(FUSER.x, FUSER.y - 40, np.f === 2 ? '#FFD23F' : '#C86AFF', 30);
@@ -1290,6 +1335,7 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.topen) toPen(+b.dataset.topen);
   else if (b.dataset.bagsell) sellFromBag(+b.dataset.bagsell);
   else if (b.dataset.bag === 'carry') storeCarry();
+  else if (b.dataset.mutapply) applyMutation();
   else if (b.id === 'makeParty') joinParty(newPartyCode(), 'made');
   else if (b.id === 'joinParty') joinParty($('partyCode').value, 'join');
   else if (b.id === 'leaveParty') leaveParty(false);
@@ -1313,7 +1359,7 @@ $('partyBtn').onclick = () => openModal('party');
 $('adminBtn').onclick = () => openModal('admin');
 $('placeDone').onclick = stopPlacing;
 $('bagBtn').onclick = () => openModal('bag');
-const keepAdm = ev => { if (ev.target.id && ev.target.id in admForm) admForm[ev.target.id] = ev.target.value; };
+const keepAdm = ev => { if (ev.target.id && ev.target.id in admForm) admForm[ev.target.id] = ev.target.value; if (ev.target.id && ev.target.id in mutForm) mutForm[ev.target.id] = ev.target.value; };
 $('sheetBody').addEventListener('input', keepAdm); $('sheetBody').addEventListener('change', keepAdm);
 $('sheetBody').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'partyCode') joinParty(ev.target.value, 'join'); });
 function syncMute() { $('muteBtn').classList.toggle('muted', G.muted); $('muteBtn').setAttribute('aria-label', G.muted ? 'Turn sound on' : 'Mute sound'); }
@@ -1373,8 +1419,8 @@ function renderTab() {
       <div><h3>Your pen · ${G.pen.length}/${penSlots(G.pL)}</h3><p class="note">Earning $${fmt(rate)} every second. Sell a pet to free a slot for a better one.</p></div>
       <div class="penlist">${G.pen.length ? G.pen.map(p => {
         const sp = SPECIES[p.sp];
-        if (p.egg) return `<div class="row"><span class="eggic" style="background:${BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span></span><span class="sub" data-left="${p.id}">Hatching in ${Math.ceil(p.left)}s</span></div><button class="sell" data-store="${p.id}">Store</button></div>`;
-        return `<div class="row">${modelTag(sp.id, 'em', p.f || 0)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · $${fmt(petInc(p))}/s</span></div><div class="bag-btns"><button class="sell" data-store="${p.id}">Store</button><button class="sell" data-sell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
+        if (p.egg) return `<div class="row"><span class="eggic" style="background:${mutOf(p) ? mutOf(p).egg : BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span>${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub" data-left="${p.id}">Hatching in ${Math.ceil(p.left)}s</span></div><button class="sell" data-store="${p.id}">Store</button></div>`;
+        return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · $${fmt(petInc(p))}/s</span></div><div class="bag-btns"><button class="sell" data-store="${p.id}">Store</button><button class="sell" data-sell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
       }).join('') : '<p class="note">Your pen is empty. Bring an egg back from the Forest to get started.</p>'}</div>`;
   } else {
     const n = SPECIES.filter(s => G.found[s.id]).length;
@@ -1544,7 +1590,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1610,7 +1656,7 @@ function applyGift(g, from) {
     if (b < 0 || !r) return;
     let toPen = 0, toBag = 0;
     for (let k = 0; k < n; k++) {
-      const it = makeEggItem({ r, b, es }).item;
+      const it = makeEggItem({ r, b, es }).item; if (MUT[g.m]) it.mut = g.m;
       if (G.pen.length < penSlots(G.pL)) { G.pen.push(it); toPen++; } else if (G.inv.length < BAG_MAX) { G.inv.push(it); toBag++; } else break;
     }
     if (!toPen && !toBag) { toast('🚧', 'A gift of eggs could not fit', 'Your pen and bag are full.', true); return; }
@@ -1667,7 +1713,7 @@ async function adminAction(what) {
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
   else if (kind === 'pet') Object.assign(g, { sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
-  else if (kind === 'egg') Object.assign(g, { b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
+  else if (kind === 'egg') Object.assign(g, { m: MUT[f.admGiftMut] ? f.admGiftMut : undefined, b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
   // who gets it: the "Send to" menu (Everyone, Just me, or one friend in your party)
   let toName = '';
   if (target === 'to') {
@@ -1740,6 +1786,7 @@ function adminHTML() {
       <div class="up"><h3>Give eggs</h3>
         <label>Biome${sel('admGiftBiome', BIOMES.map((b, i) => [i, b.name]))}</label>
         <div class="adm-row"><label>Rarity${sel('admGiftRar', RORDER.map(k => [k, RAR[k].name]))}</label><label>Egg size${sel('admGiftSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label></div>
+        <label>Mutation${sel('admGiftMut', [['', 'None'], ...MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult])])}</label>
         <label>How many<input id="admGiftN" type="number" min="1" max="10" value="${esc(f.admGiftN)}"></label>
         <span class="note" style="font-size:12px">The eggs go straight into the pen to hatch, or the bag if the pen is full.</span>
         <div class="adm-btns"><button class="buy" data-adm="egg:to">Give</button></div></div>
@@ -3063,15 +3110,44 @@ function fusedImg(key, tier) {
   }
   return (modelCache[ck] = c);
 }
-function modelURL(key, tier = 0) { const ck = key + '|' + tier; return modelUrlCache[ck] || (modelUrlCache[ck] = (tier ? fusedImg(key, tier) : modelImg(key)).toDataURL()); }
+function mutImg(key, tier, mut) {
+  const ck = key + '|' + tier + '|' + mut;
+  if (modelCache[ck]) return modelCache[ck];
+  const c = document.createElement('canvas'); c.width = c.height = 192;
+  const x = c.getContext('2d'); x.drawImage(tier ? fusedImg(key, tier) : modelImg(key), 0, 0);
+  try {
+    const d = x.getImageData(0, 0, 192, 192), a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] < 10) continue;
+      let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
+      if (l < .2 && mut !== 'dark') continue;   // keep outlines and eyes
+      if (l < .12) continue;
+      if (mut === 'bronze') { h = 26; sat = .62; l = .22 + l * .55; }
+      else if (mut === 'silver') { h = 215; sat = .08; l = .42 + l * .52; }
+      else if (mut === 'golden') { h = 46; sat = .92; l = .34 + l * .5; }
+      else if (mut === 'singer') { h = (h + 300) % 360; sat = Math.max(sat, .65); l = .55 + l * .35; }
+      else if (mut === 'enchanted') { h = 255 + (h % 70); sat = .78; l = .38 + l * .45; }
+      else if (mut === 'dark') { h = 268; sat = .38; l = .1 + l * .3; }
+      const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) {}
+  const star = (sx, sy, r, col) => { x.fillStyle = col; x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); };
+  if (mut === 'enchanted') { star(26, 40, 9, '#7FF2FF'); star(168, 54, 8, '#FF9BF0'); star(160, 158, 7, '#E8A6FF'); star(30, 150, 6, '#7FF2FF'); }
+  if (mut === 'singer') { x.font = 'bold 30px system-ui, sans-serif'; x.fillStyle = '#FF5AB4'; x.fillText('♪', 150, 46); x.fillStyle = '#3FB8E0'; x.fillText('♫', 18, 60); }
+  if (mut === 'dark') { x.fillStyle = '#FF3A3A'; x.globalAlpha = .9; star(20, 44, 5, '#9A4AE0'); star(170, 150, 5, '#9A4AE0'); x.globalAlpha = 1; }
+  if (mut === 'golden' || mut === 'silver') { star(30, 46, 7, '#FFFFFF'); star(164, 150, 6, '#FFFFFF'); }
+  return (modelCache[ck] = c);
+}
+function modelURL(key, tier = 0, mut = null) { const ck = key + '|' + tier + '|' + (mut || ''); return modelUrlCache[ck] || (modelUrlCache[ck] = (mut && MUT[mut] ? mutImg(key, tier, mut) : tier ? fusedImg(key, tier) : modelImg(key)).toDataURL()); }
 // draws a model so its feet land at (x, footY)
-function drawModel(key, x, footY, size, flip = 1, glow = null, tier = 0, rot = 0, sx = 1, sy = 1) {
+function drawModel(key, x, footY, size, flip = 1, glow = null, tier = 0, rot = 0, sx = 1, sy = 1, mut = null) {
   ctx.save(); ctx.translate(x, footY); ctx.rotate(rot); ctx.scale(flip * sx, sy); ctx.translate(0, -size * 0.34);
   if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 18; }
-  ctx.drawImage(tier ? fusedImg(key, tier) : modelImg(key), -size / 2, -size / 2, size, size);
+  ctx.drawImage(mut && MUT[mut] ? mutImg(key, tier, mut) : tier ? fusedImg(key, tier) : modelImg(key), -size / 2, -size / 2, size, size);
   ctx.restore();
 }
-const modelTag = (key, cls, tier = 0) => `<img class="${cls}" src="${modelURL(key, tier)}" alt="" decoding="async" loading="lazy" width="64" height="64">`;
+const modelTag = (key, cls, tier = 0, mut = null) => `<img class="${cls}" src="${modelURL(key, tier, mut)}" alt="" decoding="async" loading="lazy" width="64" height="64">`;
 
 // ================= DRAWING =================
 const emojiCache = {};
@@ -3192,7 +3268,7 @@ function drawHub(t, dt) {
       const x = PEN.x + 46 + col * 50, y = PEN.y + 40 + row * 44;
       ctx.fillStyle = '#A9874C'; ctx.beginPath(); ctx.ellipse(x, y + 12, 22, 9, 0, 0, 7); ctx.fill();
       const wob = p.left < 2 && !reduce ? Math.sin(t * 30) * .15 : 0;
-      ctx.save(); ctx.translate(x, y); ctx.rotate(wob); drawEgg(0, 0, 18 * Math.min(1.4, EGG_SIZES[p.es || 0].scale), p.r, BIOMES[p.b].egg, t); ctx.restore();
+      ctx.save(); ctx.translate(x, y); ctx.rotate(wob); drawEgg(0, 0, 18 * Math.min(1.4, EGG_SIZES[p.es || 0].scale), p.r, mutOf(p) ? mutOf(p).egg : BIOMES[p.b].egg, t); ctx.restore();
       const frac = 1 - p.left / RAR[p.r].hatch;
       ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, 0, 7); ctx.stroke();
       ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
@@ -3201,6 +3277,7 @@ function drawHub(t, dt) {
   const night = isNight();
   for (const p of pets) {
     const s = petSpot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id);
+    if (p.mut === 'singer' && !isNight() && Math.random() < dt * 1.1) floatText(s.x + rand(-12, 12), s.y - 40, Math.random() < .5 ? '\u266a' : '\u266b', '#FF5AB4', 1.3);
     s.it = (s.it || 0) + dt;
     s.wait -= dt;
     if (s.wait <= 0) { s.tx = rand(PEN.x + 30, PEN.x + PEN.w - 30); s.ty = rand(PEN.y + 190, PEN.y + PEN.h - 26); s.wait = rand(2, 5); }
@@ -3224,7 +3301,7 @@ function drawHub(t, dt) {
   pets.sort((a, b) => petSpot(a).y - petSpot(b).y).forEach(p => {
     const s = petSpot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id), ph = p.id * 1.7;
     const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * (p.f || 0)) * SIZES[p.z || 0].scale);
-    const glow = sp.r === 'D' ? `hsl(46,100%,${78 + Math.sin(t * 4 + ph) * 12}%)` : sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
+    const glow = (mutOf(p) && mutOf(p).glow) || sp.r === 'D' ? `hsl(46,100%,${78 + Math.sin(t * 4 + ph) * 12}%)` : sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
     let lift = 0, rot = 0, sx = 1, sy = 1;
     const h = s.hop, mv = s.moving;
     if (night) { sy = 1 + Math.sin(t * 1.2 + ph) * .04; rot = .08 * (s.fx || 1); }        // asleep
@@ -3244,7 +3321,7 @@ function drawHub(t, dt) {
     if (s.jump && !night && style !== 'fly' && style !== 'swim') { const k = Math.sin((1 - s.jump / .5) * Math.PI); lift += k * 14; sy *= 1 + k * .06; }
     const sh = style === 'fly' || style === 'swim' ? .6 : 1 - Math.min(.4, lift / 40);
     ctx.fillStyle = `rgba(0,0,0,${.18 * sh})`; ctx.beginPath(); ctx.ellipse(s.x, s.y + 14, 14 * sh, 5 * sh, 0, 0, 7); ctx.fill();
-    drawModel(sp.id, s.x, s.y + 14 - lift, size, s.fx, glow, p.f || 0, rot, sx, sy);
+    drawModel(sp.id, s.x, s.y + 14 - lift, size, s.fx, glow, p.f || 0, rot, sx, sy, p.mut);
   });
 
 }
