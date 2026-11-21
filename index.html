@@ -149,6 +149,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .chip.C{background:var(--c-common)}.chip.R{background:var(--c-rare)}.chip.E{background:var(--c-epic)}.chip.L{background:var(--c-legendary)}.chip.Z1{background:#3FA86A}.chip.Z2{background:#E8572C}
 .chip.F1{background:#B05AF0}.chip.F2{background:linear-gradient(90deg,#E09A10,#FFD23F);color:#4A3000}
 .fusebtn{margin:0;padding:8px 14px;font-size:16px;flex:none}
+.chip.D{background:linear-gradient(90deg,#F2C230,#FFF8E0 50%,#F2C230);color:#6A4A00;box-shadow:0 0 6px rgba(242,194,48,.8)}
 .chip.M{background:linear-gradient(90deg,#FF3FD0,#7F5BFF,#3FC8E0)}
 .sell{border:0;cursor:pointer;font-weight:800;font-size:13px;background:#fff;color:var(--ink);border-radius:10px;padding:7px 10px;box-shadow:0 3px 0 var(--line);flex:none}
 .eggic{width:26px;height:32px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;margin:0 7px;box-shadow:inset -3px -3px 0 rgba(0,0,0,.1)}
@@ -168,6 +169,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .card.locked .em{filter:brightness(0);opacity:.22}
 .card.locked .nm{color:var(--muted)}
 .card.L:not(.locked){border-color:var(--c-legendary);background:#FFF3CF}
+.card.D:not(.locked){border-color:#F2C230;background:radial-gradient(circle at 50% 30%,#FFFFFF,#FFF1C2);box-shadow:0 0 14px rgba(242,194,48,.55)}
 .card.M:not(.locked){border-color:#FF3FD0;background:linear-gradient(160deg,#FFE6F8,#E8E4FF 55%,#DDF6FB)}
 .card.E:not(.locked){border-color:#DCC2F5}
 @media (prefers-reduced-motion:reduce){.toast,.toast.out{animation-duration:.01s}}
@@ -371,7 +373,8 @@ const RAR = {
   R: { name: 'Rare',      inc: 3,  hatch: 8,  carry: 0.92, color: '#3B95F0', w: 28 },
   E: { name: 'Epic',      inc: 10, hatch: 15, carry: 0.85, color: '#A85FE8', w: 14 },
   L: { name: 'Legendary', inc: 40, hatch: 30, carry: 0.75, color: '#F2B418', w: 5 },
-  M: { name: 'Mythic',    inc: 150, hatch: 60, carry: 0.68, color: '#FF3FD0', w: 0.8 },   // 0.8 out of 99.8 total = 1 egg in 125
+  M: { name: 'Mythic',    inc: 150, hatch: 60, carry: 0.68, color: '#FF3FD0', w: 0.8 },
+  D: { name: 'Divine',    inc: 600, hatch: 120, carry: 0.6, color: '#F2C230', w: 0.15 },   // about 1 egg in 670   // 0.8 out of 99.8 total = 1 egg in 125
 };
 const BIOMES = [
   { name: 'Forest',  req: 0,   mult: 1,    portal: '#5FD068', egg: '#F4EBD6', frame: '#3E7431', pal: { g: '#4C8A3C', p: '#447E35', p2: '#5A9848' },
@@ -423,11 +426,12 @@ const SPECIES = [
   ['triceratops', 'Triceratops', '', 11, 'C'], ['ptero', 'Pterodactyl', '', 11, 'C'], ['stego', 'Stegosaurus', '', 11, 'R'], ['raptor', 'Raptor', '', 11, 'R'], ['brachio', 'Brachiosaurus', '', 11, 'E'], ['spino', 'Spinosaurus', '', 11, 'L'], ['primalrex', 'Primal Rex', '', 11, 'M'],
   ['nightbat', 'Night Bat', '', 12, 'C'], ['pumpkinsnail', 'Pumpkin Snail', '', 12, 'C'], ['blackcat', 'Black Cat', '', 12, 'R'], ['zombiebunny', 'Zombie Bunny', '', 12, 'R'], ['raven', 'Raven', '', 12, 'E'], ['ghostunicorn', 'Ghost Unicorn', '', 12, 'L'], ['phantomdragon', 'Phantom Dragon', '', 12, 'M'],
   ['rainbowfrog', 'Rainbow Frog', '', 13, 'C'], ['butterfly', 'Prism Butterfly', '', 13, 'C'], ['rainbowcobra', 'Rainbow Cobra', '', 13, 'R'], ['glitterowl', 'Glitter Owl', '', 13, 'R'], ['lion', 'Rainbow Lion', '', 13, 'E'], ['prismunicorn', 'Prism Unicorn', '', 13, 'L'], ['aurorphoenix', 'Aurora Phoenix', '', 13, 'M'],
+  ['moonfox', 'Moon Fox', '', 0, 'L'], ['jadefrog', 'Jade Frog Lord', '', 1, 'L'], ['goldcamel', 'Golden Camel', '', 2, 'L'], ['emeraldtoucan', 'Emerald Toucan', '', 3, 'L'], ['snowlion', 'Snow Lion', '', 4, 'L'], ['emberwolf', 'Ember Wolf', '', 5, 'L'], ['pearldolphin', 'Pearl Dolphin', '', 6, 'L'], ['opalaxolotl', 'Opal Axolotl', '', 7, 'L'], ['lunarpup', 'Lunar Pup', '', 8, 'L'], ['candyunicorn', 'Cotton Candy Unicorn', '', 9, 'L'], ['stormeagle', 'Storm Eagle', '', 10, 'L'], ['goldraptor', 'Golden Raptor', '', 11, 'L'], ['ghostfox', 'Ghost Fox', '', 12, 'L'], ['rainbowpegasus', 'Rainbow Pegasus', '', 13, 'L'], ['elderowl', 'Elder Owl King', '', 0, 'M'], ['bogdragon', 'Bog Dragon', '', 1, 'M'], ['miragecobra', 'Mirage Cobra', '', 2, 'M'], ['silverback', 'Silverback King', '', 3, 'M'], ['blizzardmammoth', 'Blizzard Mammoth', '', 4, 'M'], ['lavaphoenix', 'Lava Phoenix', '', 5, 'M'], ['krakenqueen', 'Kraken Queen', '', 6, 'M'], ['spiderqueen', 'Crystal Spider Queen', '', 7, 'M'], ['galaxydragon', 'Galaxy Dragon', '', 8, 'M'], ['gumdrophydra', 'Gumdrop Hydra', '', 9, 'M'], ['thunderbird', 'Thunderbird', '', 10, 'M'], ['ancientbrachio', 'Ancient Brachio', '', 11, 'M'], ['reaperraven', 'Reaper Raven', '', 12, 'M'], ['spectrumserpent', 'Spectrum Serpent', '', 13, 'M'], ['seraphstag', 'Seraph Stag', '', 0, 'D'], ['divinehydra', 'Divine Hydra', '', 1, 'D'], ['pharaohsphinx', 'Pharaoh Sphinx', '', 2, 'D'], ['suntiger', 'Sun Tiger', '', 3, 'D'], ['halophoenix', 'Halo Phoenix', '', 4, 'D'], ['solarkraken', 'Solar Kraken', '', 5, 'D'], ['oceansovereign', 'Ocean Sovereign', '', 6, 'D'], ['diamondtitan', 'Diamond Titan', '', 7, 'D'], ['starwhale', 'Star Whale', '', 8, 'D'], ['heavenlydragon', 'Heavenly Candy Dragon', '', 9, 'D'], ['archangeldragon', 'Archangel Dragon', '', 10, 'D'], ['titanrex', 'Titan Rex', '', 11, 'D'], ['wraithking', 'Wraith King', '', 12, 'D'], ['radiantphoenix', 'Radiant Phoenix', '', 13, 'D'],
 ].map(([id, name, e, b, r]) => ({ id, name, e, b, r }));
 // Always add new animals at the END of this list. Version 5 briefly had Reef/Cave/Moon (36-53)
 // inserted before the Volcano animals (30-35); this is that order, used only to repair those saves.
 const V5_ORDER = [...SPECIES.slice(0, 30), ...SPECIES.slice(36, 54), ...SPECIES.slice(30, 36)];
-const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72 };
+const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72, D: 80 };
 const STYLE_IDS = {
   fly: 'owl parrot toucan eagle emberbat phoenix ptero butterfly crystalbat nightbat raven bluebird thunderowl snowyowl glitterowl icephoenix aurorphoenix dragon crystaldragon candydragon celestialdragon phantomdragon',
   hop: 'bunny frog moonbunny chocobunny cloudbunny zombiebunny rainbowfrog gummybear marshchick squirrel seal',
@@ -436,7 +440,7 @@ const STYLE_IDS = {
 };
 const STYLE_OF = {};
 for (const [st, ids] of Object.entries(STYLE_IDS)) for (const id of ids.split(' ')) STYLE_OF[id] = st;
-const moveStyle = id => STYLE_OF[id] || 'walk';
+const moveStyle = id => STYLE_OF[id] || (typeof VAR !== 'undefined' && VAR[id] ? moveStyle(VAR[id].base) : 'walk');
 const MOVE_SPEED = { walk: 40, hop: 46, fly: 55, swim: 34, slither: 18 };
 const rainbow = t => `hsl(${(t * 140) % 360},95%,62%)`;
 const spIndex = id => SPECIES.findIndex(s => s.id === id);
@@ -466,7 +470,7 @@ const EGG_SIZES = [
   { name: 'Big',  w: 12, scale: 1.4, carry: .92, up: .15, big: [.42, .5, .08] },
   { name: 'Huge', w: 3,  scale: 1.8, carry: .84, up: .35, big: [0, .55, .45] },
 ];
-const RORDER = ['C', 'R', 'E', 'L', 'M'];
+const RORDER = ['C', 'R', 'E', 'L', 'M', 'D'];
 // Day and night: 3 minutes of day, then 10 seconds of night when the biomes close and eggs reset
 const DAY = 180, NIGHT = 10;
 const isNight = () => G.clock >= DAY;
@@ -609,7 +613,7 @@ function changeZone(z) {
   save();
 }
 function pickRarity() {
-  const ks = ['C', 'R', 'E', 'L', 'M'];
+  const ks = ['C', 'R', 'E', 'L', 'M', 'D'];
   let r = Math.random() * ks.reduce((s, k) => s + RAR[k].w, 0);
   for (const k of ks) { if ((r -= RAR[k].w) < 0) return k; }
   return 'C';
@@ -639,7 +643,7 @@ function spawnEgg(i, forced) {
   const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(), see = B.guard.seeCarry;
   for (let t = 0; t < 60; t++) {
     const [nx, ny] = B.nests[Math.floor(Math.random() * B.nests.length)];
-    const a = rand(0, 6.28), d = r === 'C' ? rand(150, see - 40) : r === 'R' ? rand(100, 220) : r === 'E' ? rand(60, 150) : r === 'L' ? rand(35, 90) : rand(14, 45);
+    const a = rand(0, 6.28), d = r === 'C' ? rand(150, see - 40) : r === 'R' ? rand(100, 220) : r === 'E' ? rand(60, 150) : r === 'L' ? rand(35, 90) : r === 'M' ? rand(14, 45) : rand(0, 18);
     let x = nx + Math.cos(a) * d, y = ny + Math.sin(a) * d;
     if (x < 40 || x > BW - 40 || y < 40 || y > BH - 40) continue;
     x += zd.x0;
@@ -648,6 +652,7 @@ function spawnEgg(i, forced) {
     const er = Math.random() * 100, es = forced ? forced.es || 0 : er < EGG_SIZES[2].w ? 2 : er < EGG_SIZES[2].w + EGG_SIZES[1].w ? 1 : 0;
     zd.eggs.push({ x, y, r, es, b: i, ph: rand(0, 6) });
     if (r === 'M' && !forced) announceMythic(i);
+    if (r === 'D' && !forced) setTimeout(() => toast(B.guard.m, `A DIVINE egg appeared in the ${B.name}!`, `It sits right on the ${B.guard.name.toLowerCase()}'s nest${G.speed + 1e-6 < B.req ? ` (needs speed ${B.req})` : ''}. The rarest egg there is!`, false, true, 'mythic'), 1200);
     return;
   }
   if (forced) { const [nx, ny] = B.nests[0]; zd.eggs.push({ x: nx + zd.x0 + 40, y: ny, r, es: forced.es || 0, b: i, ph: 0 }); }
@@ -1072,7 +1077,7 @@ function hatch(p) {
   lastHatch = sp.id + ':' + Date.now();
   const isNew = !G.found[sp.id];
   G.found[sp.id] = (G.found[sp.id] || 0) + 1;
-  sfx.hatch(sp.r === 'L' || sp.r === 'M');
+  sfx.hatch(sp.r === 'L' || sp.r === 'M' || sp.r === 'D');
   if (scene === 'hub') { const pos = petSpot(p); burst(pos.x, pos.y, RAR[sp.r].color, 22); }
   toast(sp.id, `Hatched a ${petName(p)}!`, `${RAR[sp.r].name}${p.z ? ' · ' + SIZES[p.z].name + ' earns ' + SIZES[p.z].mult + '×' : ''} · $${fmt(petInc(p))}/s`, false, isNew);
   save(); syncHud();
@@ -2960,12 +2965,58 @@ const MODELS = {
     h.P([[2, 0], [-16, -30], [-10, -12], [-20, -14], [-4, 8]], '#FFE066');
   },
 };
+const VAR = {
+  moonfox: { base: 'fox', shift: 200, sat: .5 }, jadefrog: { base: 'frog', shift: 60, sat: .6 }, goldcamel: { base: 'camel', shift: 15, sat: .85 },
+  emeraldtoucan: { base: 'toucan', shift: 130, sat: .6 }, snowlion: { base: 'lion', shift: 180, sat: .3 }, emberwolf: { base: 'firehound', shift: 340, sat: .7 },
+  pearldolphin: { base: 'dolphin', shift: 90, sat: .4 }, opalaxolotl: { base: 'axolotl', shift: 150, sat: .5 }, lunarpup: { base: 'astropup', shift: 200, sat: .4 },
+  candyunicorn: { base: 'unicorn', shift: 300, sat: .6 }, stormeagle: { base: 'eagle', shift: 200, sat: .5 }, goldraptor: { base: 'raptor', shift: 10, sat: .9 },
+  ghostfox: { base: 'arcticfox', shift: 260, sat: .35, hue: 270 }, rainbowpegasus: { base: 'skyunicorn', shift: 300, sat: .5, hue: 300 },
+  elderowl: { base: 'owl', shift: 250, sat: .55 }, bogdragon: { base: 'dragon', shift: 110, sat: .6 }, miragecobra: { base: 'cobra', shift: 190, sat: .6 },
+  silverback: { base: 'g-gorilla', shift: 0, sat: .3, hue: 210 }, blizzardmammoth: { base: 'mammoth', shift: 60, sat: .5 }, lavaphoenix: { base: 'phoenix', shift: 330, sat: .9 },
+  krakenqueen: { base: 'octopus', shift: 300, sat: .6 }, spiderqueen: { base: 'g-spider', shift: 0, sat: .45, hue: 300 }, galaxydragon: { base: 'dragon', shift: 240, sat: .6 },
+  gumdrophydra: { base: 'hydra', shift: 300, sat: .7 }, thunderbird: { base: 'phoenix', shift: 200, sat: .6 }, ancientbrachio: { base: 'brachio', shift: 160, sat: .5 },
+  reaperraven: { base: 'raven', shift: 0, sat: .5, hue: 280 }, spectrumserpent: { base: 'leviathan', shift: 270, sat: .7 },
+  seraphstag: { base: 'spiritstag', divine: true }, divinehydra: { base: 'hydra', divine: true }, pharaohsphinx: { base: 'sphinx', divine: true },
+  suntiger: { base: 'jadetiger', divine: true }, halophoenix: { base: 'icephoenix', divine: true }, solarkraken: { base: 'octopus', divine: true },
+  oceansovereign: { base: 'leviathan', divine: true }, diamondtitan: { base: 'geodetitan', divine: true }, starwhale: { base: 'cosmicwhale', divine: true },
+  heavenlydragon: { base: 'candydragon', divine: true }, archangeldragon: { base: 'celestialdragon', divine: true }, titanrex: { base: 'spino', divine: true },
+  wraithking: { base: 'phantomdragon', divine: true }, radiantphoenix: { base: 'aurorphoenix', divine: true },
+};
+// recolours a drawn model in place (dark outlines and eyes stay as they are)
+function tintCanvas(x, v) {
+  let top = 191, topX = 96;
+  try {
+    const d = x.getImageData(0, 0, 192, 192), a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] < 10) continue;
+      const py = (i / 4 / 192) | 0; if (py < top && a[i + 3] > 200) { top = py; topX = (i / 4) % 192; }
+      let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
+      if (l < .2) continue;
+      if (v.divine) { h = 46; sat = .35 + sat * .4; l = .62 + l * .33; }
+      else {
+        if (sat < .15) { if (v.hue === undefined) continue; h = v.hue; } else h = (h + (v.shift || 0)) % 360;
+        sat = Math.max(sat, v.sat || 0);
+      }
+      const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) {}
+  if (v.divine) {
+    // a golden halo above the head and a few sparkles
+    const cx = clamp(topX, 34, 158), cy = Math.max(16, top - 12);
+    x.lineWidth = 5; x.strokeStyle = '#FFD23F'; x.shadowColor = '#FFF6C8'; x.shadowBlur = 10;
+    x.beginPath(); x.ellipse(cx, cy, 22, 7, 0, 0, 7); x.stroke(); x.shadowBlur = 0;
+    x.fillStyle = '#FFF1A8';
+    [[20, 40, 7], [172, 60, 6], [30, 150, 5], [166, 156, 6]].forEach(([sx, sy, r]) => { x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); });
+  }
+}
 const modelCache = {}, modelUrlCache = {};
 function modelImg(key) {
   if (!modelCache[key]) {
     const c = document.createElement('canvas'); c.width = c.height = 192;
     const x = c.getContext('2d'); x.setTransform(192 / 110, 0, 0, 192 / 110, 96, 88);
-    MODELS[key](kit(x), x);
+    if (VAR[key]) { x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(modelImg(VAR[key].base), 0, 0); tintCanvas(x, VAR[key]); }
+    else MODELS[key](kit(x), x);
     modelCache[key] = c;
   }
   return modelCache[key];
@@ -3040,10 +3091,11 @@ function drawEmoji(ch, x, y, size, flip = 1, glow = null) {
   ctx.restore();
 }
 function drawEgg(x, y, w, rarity, base, t = 0) {
-  const col = rarity === 'M' ? rainbow(t) : RAR[rarity].color;
+  const col = rarity === 'M' ? rainbow(t) : rarity === 'D' ? `hsl(46,100%,${62 + Math.sin(t * 5) * 14}%)` : RAR[rarity].color;
+  if (rarity === 'D') base = '#FFF6D6';
   ctx.save(); ctx.translate(x, y);
   if (rarity !== 'C') { ctx.fillStyle = col; ctx.globalAlpha = .25 + Math.sin(t * 4) * .1; ctx.beginPath(); ctx.ellipse(0, w * .55, w * 1.1, w * .45, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-  if (rarity === 'L' || rarity === 'M') { ctx.shadowColor = col; ctx.shadowBlur = rarity === 'M' ? 24 : 16; }
+  if (rarity === 'L' || rarity === 'M' || rarity === 'D') { ctx.shadowColor = rarity === 'D' ? '#FFFFFF' : col; ctx.shadowBlur = rarity === 'D' ? 34 : rarity === 'M' ? 24 : 16; }
   const k = w / 17; ctx.scale(k, k); ctx.translate(-12, -13);
   ctx.fillStyle = base; ctx.fill(EGG); ctx.shadowBlur = 0;
   ctx.lineWidth = rarity === 'C' ? 1.2 : 2; ctx.strokeStyle = rarity === 'C' ? 'rgba(0,0,0,.25)' : col; ctx.stroke(EGG);
@@ -3172,7 +3224,7 @@ function drawHub(t, dt) {
   pets.sort((a, b) => petSpot(a).y - petSpot(b).y).forEach(p => {
     const s = petSpot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id), ph = p.id * 1.7;
     const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * (p.f || 0)) * SIZES[p.z || 0].scale);
-    const glow = sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
+    const glow = sp.r === 'D' ? `hsl(46,100%,${78 + Math.sin(t * 4 + ph) * 12}%)` : sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
     let lift = 0, rot = 0, sx = 1, sy = 1;
     const h = s.hop, mv = s.moving;
     if (night) { sy = 1 + Math.sin(t * 1.2 + ph) * .04; rot = .08 * (s.fx || 1); }        // asleep
