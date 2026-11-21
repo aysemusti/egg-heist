@@ -65,6 +65,15 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .bag-btns{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
 .placebar{position:absolute;left:50%;top:calc(110px + env(safe-area-inset-top,0px));transform:translateX(-50%);display:flex;align-items:center;gap:12px;background:#2B2230;color:#FFE066;font-weight:800;font-size:15px;padding:8px 10px 8px 16px;border-radius:14px;box-shadow:0 4px 0 #120E16;max-width:calc(100% - 32px)}
 canvas.placing{cursor:crosshair}
+.style-top{display:flex;gap:16px;align-items:center;background:var(--panel-2);border-radius:16px;padding:10px 14px}
+#stylePrev{position:static;inset:auto;width:120px;height:140px;flex:none;background:radial-gradient(circle at 50% 70%,#CFE8B8,#A8D58A);border-radius:14px}
+.cos-sec{display:flex;flex-direction:column;gap:8px}
+.cos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
+.cos{background:var(--panel-2);border-radius:14px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;border:2px solid transparent}
+.cos.on{border-color:var(--money);background:#E6F6E2}
+.cos img{width:72px;height:84px}.cos b{font-size:13px;line-height:1.2}
+.cos .buy,.cos .sell{margin:0;padding:6px 10px;font-size:13px;width:100%}
+.cos .buy{font-family:var(--body);font-weight:800}
 .party-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 #partyCode{font-family:var(--display);font-size:26px;letter-spacing:.18em;text-transform:uppercase;padding:8px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);width:100%;box-sizing:border-box;-webkit-user-select:text;user-select:text}
 #partyCode:focus{outline:3px solid var(--speed);outline-offset:1px}
@@ -196,6 +205,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     <button class="hbtn" id="bagBtn">Bag <span class="cnt" id="bagCnt">0</span></button>
     <button class="hbtn" id="indexBtn">Index <span class="cnt" id="idxCnt">0/18</span></button>
     <button class="hbtn admin" id="adminBtn" hidden>Admin</button>
+    <button class="hbtn" id="styleBtn">Style</button>
+    <button class="hbtn" id="langBtn" aria-label="Language">TR</button>
     <button class="hbtn" id="partyBtn">Party <span class="cnt" id="partyCnt" hidden></span></button>
     <button class="hbtn" id="slowBtn" aria-pressed="false" title="Slow mode (Q)">Slow <span class="cnt" id="slowState">off</span></button>
     <button class="hbtn icon" id="muteBtn" aria-label="Mute sound">
@@ -216,6 +227,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
         <button class="tab" data-tab="bag" aria-selected="false">Bag</button>
         <button class="tab" data-tab="fuse" aria-selected="false">Fuse</button>
         <button class="tab" data-tab="index" aria-selected="false">Index</button>
+        <button class="tab" data-tab="style" aria-selected="false">Style</button>
         <button class="tab" data-tab="party" aria-selected="false">Party</button>
         <button class="tab" data-tab="admin" id="adminTab" aria-selected="false" hidden>Admin</button>
         <button class="close" id="closeBtn" aria-label="Close">×</button>
@@ -497,7 +509,7 @@ const pxSpeed = () => G.slow ? 200 : 160 + 2.2 * Math.min(G.speed, 280) + 1.1 * 
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0 }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -515,6 +527,8 @@ function loadSave(obj) {
       }
       p.sid = SPECIES[p.sp].id;
     }
+    g.cos = Object.assign(freshSave().cos, g.cos && typeof g.cos === 'object' ? g.cos : {}); if (!Array.isArray(g.cos.own)) g.cos.own = [];
+    if (g.lang !== 'tr') g.lang = 'en';
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
     g.speed = clamp(+g.speed || 0, 0, treadCap(g.tL)); g.money = Math.max(0, +g.money || 0);
   }
@@ -544,7 +558,7 @@ async function cloudInit() {
       if (obj) {
         G = loadSave(obj); petPos = {};
         const c = G.carry; player.carry = c && RAR[c.r] && BIOMES[c.b] ? { r: c.r, b: c.b, es: c.es || 0 } : null;
-        syncMute(); syncSlow(); syncHud();
+        syncMute(); syncSlow(); syncHud(); setLang(G.lang, true);
         toast('☁️', 'Loaded your cloud save', 'Your progress from your other device is here.');
       }
     }
@@ -959,7 +973,7 @@ function update(dt) {
 
   for (const f of floaters) f.t += dt;
   floaters = floaters.filter(f => f.t < f.life);
-  for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt; }
+  for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.g === undefined ? 300 : p.g) * dt; }
   parts = parts.filter(p => p.t < p.life);
   tapHeat = Math.max(0, tapHeat - dt * 4);
   if (modalOpen) return;
@@ -969,6 +983,7 @@ function update(dt) {
   player.moving = ix !== 0 || iy !== 0;
   const slow = player.carry ? RAR[player.carry.r].carry * EGG_SIZES[player.carry.es || 0].carry : 1;
   const v = pxSpeed() * slow;
+  if (player.moving && G.cos.trail !== 'none') { trailT -= dt; if (trailT <= 0) { trailT = .045; spawnTrail(player.x, player.y, G.cos.trail, performance.now() / 1000); } }
   if (player.moving) { const n = Math.max(1, Math.ceil(v * dt / 14)); for (let k = 0; k < n; k++) { player.x += ix * v * dt / n; player.y += iy * v * dt / n; pushOut(player, 16); } if (Math.abs(ix) > .1) player.fx = Math.sign(ix); player.step += dt * (6 + v / 40); }
   player.x = clamp(player.x, 20, worldW - 20); player.y = clamp(player.y, 30, worldH - 20);
   player.invuln = Math.max(0, player.invuln - dt);
@@ -1335,6 +1350,8 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.topen) toPen(+b.dataset.topen);
   else if (b.dataset.bagsell) sellFromBag(+b.dataset.bagsell);
   else if (b.dataset.bag === 'carry') storeCarry();
+  else if (b.dataset.cos) cosAction(b.dataset.cos);
+  else if (b.dataset.lang) setLang(b.dataset.lang);
   else if (b.dataset.mutapply) applyMutation();
   else if (b.id === 'makeParty') joinParty(newPartyCode(), 'made');
   else if (b.id === 'joinParty') joinParty($('partyCode').value, 'join');
@@ -1359,6 +1376,8 @@ $('partyBtn').onclick = () => openModal('party');
 $('adminBtn').onclick = () => openModal('admin');
 $('placeDone').onclick = stopPlacing;
 $('bagBtn').onclick = () => openModal('bag');
+$('styleBtn').onclick = () => openModal('style');
+$('langBtn').onclick = () => setLang(LANG === 'tr' ? 'en' : 'tr');
 const keepAdm = ev => { if (ev.target.id && ev.target.id in admForm) admForm[ev.target.id] = ev.target.value; if (ev.target.id && ev.target.id in mutForm) mutForm[ev.target.id] = ev.target.value; };
 $('sheetBody').addEventListener('input', keepAdm); $('sheetBody').addEventListener('change', keepAdm);
 $('sheetBody').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'partyCode') joinParty(ev.target.value, 'join'); });
@@ -1395,7 +1414,10 @@ function renderTab() {
       <p class="note">Carrying an egg slows you down: rare eggs by 8%, epic by 15%, legendary by 25%, mythic by 32%. Big eggs weigh 8% more and huge eggs 16% more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
       <div class="cloud-box"><p><b>Cloud save</b><br>${cloud ? (cloudState === 'error' ? 'Could not reach the cloud just now. It will try again.' : cloudAt ? `Saved ${Math.max(0, Math.round((Date.now() - cloudAt) / 1000))} seconds ago. Open the game on another device to keep playing.` : 'Saving…') : 'Your progress is saved in this browser. Play on the same device and browser to keep it.'}</p>${cloud ? '<button class="buy" id="cloudBtn">Save now</button>' : ''}</div>
       ${window.__siteAdmin && !isAdmin ? '<button class="reset" id="ownerLogin" style="color:var(--muted)">Owner login</button>' : ''}
+      <div class="cloud-box"><p><b>Language</b><br>Choose the language of the game.</p><button class="sell" data-lang="en">English</button><button class="sell" data-lang="tr">T\u00fcrk\u00e7e</button></div>
       <button class="reset" id="resetBtn">Reset progress</button>`;
+  } else if (tab === 'style') {
+    body.innerHTML = styleHTML(); requestAnimationFrame(drawStylePreview);
   } else if (tab === 'bag') {
     body.innerHTML = bagHTML();
   } else if (tab === 'admin') {
@@ -1520,7 +1542,8 @@ function onPartyPeers(ch) {
 function sendPresence(force) {
   if (!party) return;
   const pres = { x: Math.round(player.x), y: Math.round(player.y), f: player.fx < 0 ? -1 : 1, m: player.moving ? 1 : 0,
-    z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null };
+    z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null,
+    lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone] };
   const key = JSON.stringify(pres);
   if (!force && key === lastPres) return;
   lastPres = key; party.presence(pres).catch(() => {});
@@ -1540,8 +1563,7 @@ function partyFriends(dt) {
   return out;
 }
 function drawFriend(fr, t) {
-  const [shirt, cap] = friendColor(fr.p);
-  drawKid(fr.v.x, fr.v.y, fr.st.f, fr.st.m, fr.v.step, fr.st.c, shirt, cap, t, 0);
+  drawKid(fr.v.x, fr.v.y, fr.st.f, fr.st.m, fr.v.step, fr.st.c, friendLook(fr.p), t, 0);
   label(friendName(fr.p), fr.v.x, fr.v.y - (fr.st.c ? 100 : 68), 15, '#FFE066');
 }
 // friends off screen get an arrow at the edge
@@ -1888,6 +1910,346 @@ async function placeAt(ev) {
   burst(x, y, '#FFE066', 14);
   const live = await sendPlacement('place', { ...placing, x, y });
   toast('📍', 'Placed!', live ? 'Everyone playing right now can see it. Tap again to place another.' : 'Only in your game right now (others could not be reached).', !live);
+}
+// ================= LANGUAGE: English / Türkçe =================
+// The game is written in English; in Turkish every text on screen (and on the canvas) passes through tr().
+let LANG = 'en';
+const TR_NAMES = {
+  // biomes, places and guardians
+  'Forest': 'Orman', 'Swamp': 'Bataklık', 'Desert': 'Çöl', 'Jungle': 'Cangıl', 'Tundra': 'Tundra', 'Volcano': 'Volkan',
+  'Coral Reef': 'Mercan Resifi', 'Crystal Cave': 'Kristal Mağara', 'Moon': 'Ay', 'Candy Land': 'Şeker Diyarı', 'Sky Kingdom': 'Gökyüzü Krallığı',
+  'Dino Valley': 'Dino Vadisi', 'Haunted Graveyard': 'Perili Mezarlık', 'Rainbow Realm': 'Gökkuşağı Diyarı',
+  'Chicken': 'Tavuk', 'Swan': 'Kuğu', 'Scorpion': 'Akrep', 'Gorilla': 'Goril', 'Polar Bear': 'Kutup Ayısı', 'Magma Golem': 'Magma Golemi',
+  'Shark': 'Köpekbalığı', 'Giant Spider': 'Dev Örümcek', 'Alien': 'Uzaylı', 'Gingerbread Giant': 'Zencefilli Dev', 'Storm Griffin': 'Fırtına Grifonu',
+  'T-Rex': 'T-Rex', 'Giant Ghost': 'Dev Hayalet', 'Prism Golem': 'Prizma Golemi',
+  // rarities, sizes, fusions, mutations
+  'Common': 'Sıradan', 'Rare': 'Nadir', 'Epic': 'Destansı', 'Legendary': 'Efsanevi', 'Mythic': 'Mitik', 'Divine': 'İlahi',
+  'Big': 'Büyük', 'Huge': 'Dev', 'Fused': 'Birleşik', 'Mega': 'Mega',
+  'Bronze': 'Bronz', 'Silver': 'Gümüş', 'Golden': 'Altın', 'Singer': 'Şarkıcı', 'Enchanted': 'Büyülü', 'Dark': 'Karanlık',
+};
+const TR_ANIMALS = {
+  bunny: 'Tavşan', squirrel: 'Sincap', fox: 'Tilki', owl: 'Baykuş', deer: 'Geyik', rooster: 'Altın Horoz',
+  frog: 'Kurbağa', snail: 'Salyangoz', turtle: 'Kaplumbağa', flamingo: 'Flamingo', croc: 'Timsah', bogrex: 'Bataklık Rex',
+  lizard: 'Kertenkele', beetle: 'Bok Böceği', camel: 'Deve', eagle: 'Kartal', cobra: 'Kobra', dragon: 'Güneş Ejderhası',
+  monkey: 'Maymun', parrot: 'Papağan', toucan: 'Tukan', sloth: 'Tembel Hayvan', tiger: 'Kaplan', chameleon: 'Gökkuşağı Bukalemunu',
+  penguin: 'Penguen', seal: 'Fok', arcticfox: 'Kutup Tilkisi', snowyowl: 'Kar Baykuşu', walrus: 'Mors', mammoth: 'Buz Mamutu',
+  salamander: 'Ateş Semenderi', emberbat: 'Kor Yarasa', lavacrab: 'Lav Yengeci', firehound: 'Ateş Tazısı', rhino: 'Obsidyen Gergedan', phoenix: 'Anka Kuşu',
+  clownfish: 'Palyaço Balığı', starfish: 'Deniz Yıldızı', seahorse: 'Denizatı', octopus: 'Ahtapot', dolphin: 'Yunus', narwhal: 'İnci Narval',
+  mole: 'Köstebek', gembeetle: 'Mücevher Böceği', axolotl: 'Aksolotl', crystalbat: 'Kristal Yarasa', cavebear: 'Ametist Ayı', crystaldragon: 'Kristal Ejderha',
+  moonbunny: 'Ay Tavşanı', starjelly: 'Yıldız Denizanası', astropup: 'Astronot Köpek', cometfox: 'Kuyrukluyıldız Tilkisi', saturnturtle: 'Satürn Kaplumbağası', unicorn: 'Galaksi Tekboynuzu',
+  spiritstag: 'Ruh Geyiği', hydra: 'Bataklık Hidrası', sphinx: 'Altın Sfenks', jadetiger: 'Yeşim Kaplan', icephoenix: 'Buz Anka Kuşu', magmakraken: 'Magma Krakeni',
+  leviathan: 'Leviathan', geodetitan: 'Jeot Titanı', cosmicwhale: 'Kozmik Balina',
+  gummybear: 'Jelibon Ayı', marshchick: 'Lokum Civciv', lollisnail: 'Lolipop Salyangoz', cottonsheep: 'Pamuk Şeker Koyun', chocobunny: 'Çikolata Tavşan', sprinkleunicorn: 'Şekerli Tekboynuz', candydragon: 'Şeker Ejderhası',
+  cloudbunny: 'Bulut Tavşan', bluebird: 'Mavi Kuş', skyfox: 'Gök Tilkisi', thunderowl: 'Gök Gürültüsü Baykuşu', skyunicorn: 'Gök Tekboynuzu', skywhale: 'Gök Balinası', celestialdragon: 'Göksel Ejderha',
+  triceratops: 'Triseratops', ptero: 'Pterodaktil', stego: 'Stegozor', raptor: 'Raptor', brachio: 'Brakiyozor', spino: 'Spinozor', primalrex: 'İlkel Rex',
+  nightbat: 'Gece Yarasası', pumpkinsnail: 'Balkabağı Salyangozu', blackcat: 'Kara Kedi', zombiebunny: 'Zombi Tavşan', raven: 'Kuzgun', ghostunicorn: 'Hayalet Tekboynuz', phantomdragon: 'Hayalet Ejderha',
+  rainbowfrog: 'Gökkuşağı Kurbağası', butterfly: 'Prizma Kelebek', rainbowcobra: 'Gökkuşağı Kobrası', glitterowl: 'Simli Baykuş', lion: 'Gökkuşağı Aslanı', prismunicorn: 'Prizma Tekboynuz', aurorphoenix: 'Kutup Işığı Anka Kuşu',
+  moonfox: 'Ay Tilkisi', jadefrog: 'Yeşim Kurbağa Lordu', goldcamel: 'Altın Deve', emeraldtoucan: 'Zümrüt Tukan', snowlion: 'Kar Aslanı', emberwolf: 'Kor Kurt',
+  pearldolphin: 'İnci Yunus', opalaxolotl: 'Opal Aksolotl', lunarpup: 'Ay Köpeği', candyunicorn: 'Pamuk Şeker Tekboynuz', stormeagle: 'Fırtına Kartalı', goldraptor: 'Altın Raptor',
+  ghostfox: 'Hayalet Tilki', rainbowpegasus: 'Gökkuşağı Pegasus',
+  elderowl: 'Kadim Baykuş Kral', bogdragon: 'Bataklık Ejderhası', miragecobra: 'Serap Kobra', silverback: 'Gümüşsırt Kral', blizzardmammoth: 'Tipi Mamutu', lavaphoenix: 'Lav Anka Kuşu',
+  krakenqueen: 'Kraken Kraliçesi', spiderqueen: 'Kristal Örümcek Kraliçesi', galaxydragon: 'Galaksi Ejderhası', gumdrophydra: 'Jelibon Hidra', thunderbird: 'Gök Gürültüsü Kuşu',
+  ancientbrachio: 'Kadim Brakiyozor', reaperraven: 'Azrail Kuzgun', spectrumserpent: 'Tayf Yılanı',
+  seraphstag: 'Melek Geyik', divinehydra: 'İlahi Hidra', pharaohsphinx: 'Firavun Sfenks', suntiger: 'Güneş Kaplanı', halophoenix: 'Hale Anka Kuşu', solarkraken: 'Güneş Krakeni',
+  oceansovereign: 'Okyanus Hükümdarı', diamondtitan: 'Elmas Titan', starwhale: 'Yıldız Balina', heavenlydragon: 'Cennet Şeker Ejderhası', archangeldragon: 'Başmelek Ejderha',
+  titanrex: 'Titan Rex', wraithking: 'Hayalet Kral', radiantphoenix: 'Işıltılı Anka Kuşu',
+};
+const TR_EXACT = {
+  'Shop': 'Mağaza', 'Pen': 'Ağıl', 'Bag': 'Çanta', 'Index': 'Koleksiyon', 'Party': 'Parti', 'Slow': 'Yavaş', 'Admin': 'Yönetici', 'Style': 'Stil',
+  'Speed': 'Hız', 'Home': 'Ev', 'until night': 'geceye kadar', 'until morning': 'sabaha kadar', 'off': 'kapalı', 'on': 'açık', 'Fuse': 'Birleştir',
+  'RUN': 'KOŞ', 'tap fast': 'hızlı bas', 'GRAB': 'AL', 'ADOPT': 'SAHİPLEN', 'or Space': 'veya Boşluk', 'Done': 'Tamam', 'NEW': 'YENİ',
+  'TREADMILL': 'KOŞU BANDI', 'FUSE MACHINE': 'BİRLEŞTİRME MAKİNESİ', '3 ready!': '3 hazır!', 'MAX': 'MAKS', 'SPACE': 'BOŞLUK', 'grab': 'al', 'adopt': 'sahiplen',
+  '✨ Mythic egg inside!': '✨ İçeride mitik yumurta!', '🌙 closed for the night': '🌙 gece kapalı',
+  // Shop
+  'Treadmill': 'Koşu bandı', 'Max speed': 'En yüksek hız', 'Speed per second on it': 'Üstündeyken saniyede hız', 'Speed per tap': 'Dokunuş başına hız',
+  'Fully upgraded': 'Tamamen geliştirildi', 'Slots for eggs and pets': 'Yumurta ve hayvan yeri', 'Pet income bonus': 'Hayvan gelir bonusu',
+  'Biome gates': 'Biyom kapıları', 'Cloud save': 'Bulut kaydı', 'Save now': 'Şimdi kaydet', 'Saving…': 'Kaydediliyor…', 'Reset progress': 'İlerlemeyi sıfırla',
+  'Tap again to wipe all progress': 'Her şeyi silmek için tekrar dokun', 'Owner login': 'Sahip girişi', 'Language': 'Dil', 'Choose the language of the game.': 'Oyunun dilini seç.',
+  'Could not reach the cloud just now. It will try again.': 'Şu an buluta ulaşılamadı. Tekrar deneyecek.',
+  "Off. Sign in to claude.ai to save your progress across devices.": 'Kapalı. İlerlemeni cihazlar arasında kaydetmek için claude.ai\'ye giriş yap.',
+  "Your progress is saved in this browser. Play on the same device and browser to keep it.": 'İlerlemen bu tarayıcıda kaydedilir. Korumak için aynı cihaz ve tarayıcıda oyna.',
+  // Pen / Bag / Fuse
+  'Store': 'Sakla', 'Put in pen': 'Ağıla koy', 'Put it in the bag': 'Çantaya koy', 'Fuse Machine': 'Birleştirme Makinesi', 'Fuse 3': '3 tanesini birleştir',
+  'Your pen has no animals yet. Hatch some eggs first.': 'Ağılında henüz hayvan yok. Önce birkaç yumurta çıkar.',
+  'Your pen is empty. Bring an egg back from the Forest to get started.': 'Ağılın boş. Başlamak için Orman\'dan bir yumurta getir.',
+  'Your bag is empty. Tap Store next to a pet or egg in the Pen tab to put it here.': 'Çantan boş. Buraya koymak için Ağıl sekmesinde bir hayvanın ya da yumurtanın yanındaki Sakla\'ya dokun.',
+  'Mutations': 'Mutasyonlar', 'Mutation': 'Mutasyon', 'Egg': 'Yumurta', 'Apply to egg': 'Yumurtaya uygula',
+  'Get an egg first, then put a mutation on it here.': 'Önce bir yumurta al, sonra buradan ona mutasyon koy.',
+  'You find mutations when your eggs hatch. Put one on an egg and the animal hatches with a new look and more money.': 'Yumurtaların çıkınca mutasyon bulursun. Bir yumurtaya koyarsan hayvan yeni bir görünümle çıkar ve daha çok para kazandırır.',
+  // Index
+  '???': '???', 'Every animal you hatch is recorded here. Undiscovered ones show as shadows.': 'Çıkardığın her hayvan burada kaydedilir. Bulunmayanlar gölge olarak görünür.',
+  // Party
+  'Play with a friend': 'Bir arkadaşla oyna', 'Make party': 'Parti kur', 'Join party': 'Partiye katıl', 'Get a party code to give your friend.': 'Arkadaşına vermek için bir parti kodu al.',
+  'Type the code your friend gave you.': 'Arkadaşının verdiği kodu yaz.', 'Party code': 'Parti kodu', 'Copy': 'Kopyala', 'Leave party': 'Partiden ayrıl', 'You': 'Sen', 'At home': 'Evde',
+  'Connecting…': 'Bağlanıyor…', 'Your friend is here! Find each other in the world.': 'Arkadaşın burada! Dünyada birbirinizi bulun.',
+  'Waiting for your friend. Tell them to tap Party, then Join party, and type this code.': 'Arkadaşın bekleniyor. Ona Parti\'ye, sonra Partiye katıl\'a dokunup bu kodu yazmasını söyle.',
+  // Style
+  'Your look': 'Görünümün', 'Shirts': 'Tişörtler', 'Hats': 'Şapkalar', 'On your back': 'Sırtında', 'Trails': 'İzler', 'Skin color': 'Ten rengi', 'Wear': 'Giy', 'Wearing': 'Giyiliyor',
+  'Buy clothes and extras with your money, then wear them. Friends in your party see your look too.': 'Paranla kıyafet ve süs al, sonra giy. Partideki arkadaşların da görünümünü görür.',
+  'Orange shirt': 'Turuncu tişört', 'Blue shirt': 'Mavi tişört', 'Green shirt': 'Yeşil tişört', 'Purple shirt': 'Mor tişört', 'Pink shirt': 'Pembe tişört', 'Black shirt': 'Siyah tişört', 'Gold shirt': 'Altın tişört', 'Rainbow shirt': 'Gökkuşağı tişört',
+  'Blue cap': 'Mavi kep', 'No hat': 'Şapkasız', 'Party hat': 'Parti şapkası', 'Cowboy hat': 'Kovboy şapkası', 'Wizard hat': 'Büyücü şapkası', 'Viking helmet': 'Viking miğferi', 'Top hat': 'Silindir şapka', 'Bunny ears': 'Tavşan kulakları', 'Crown': 'Taç', 'Halo': 'Hale',
+  'Nothing': 'Hiçbir şey', 'Backpack': 'Sırt çantası', 'Hero cape': 'Kahraman pelerini', 'Jetpack': 'Jetpack', 'Angel wings': 'Melek kanatları',
+  'No trail': 'İz yok', 'Sparkle trail': 'Parıltı izi', 'Heart trail': 'Kalp izi', 'Fire trail': 'Ateş izi', 'Rainbow trail': 'Gökkuşağı izi',
+  'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
+  // Admin
+  'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
+  'Extra speed': 'Ekstra hız', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
+  'Pet': 'Hayvan', 'Animal': 'Hayvan', 'Size': 'Boyut', 'Fusion': 'Birleşim', 'Normal': 'Normal', 'How many': 'Kaç tane', 'Give eggs': 'Yumurta ver', 'Biome': 'Biyom',
+  'Rarity': 'Nadirlik', 'Egg size': 'Yumurta boyu', 'None': 'Yok', 'Spawn eggs': 'Yumurta çıkar', 'Spawn for everyone': 'Herkes için çıkar', 'Place in the world': 'Dünyaya yerleştir',
+  'What': 'Ne', 'Pick a spot': 'Yer seç', 'Remove all placed': 'Yerleştirilenleri kaldır', 'Pet mutation': 'Hayvan mutasyonu', 'Pet size': 'Hayvan boyu', 'Pet fusion': 'Hayvan birleşimi',
+  'Gifts waiting for players': 'Oyuncuları bekleyen hediyeler', 'None yet.': 'Henüz yok.', 'This panel is only for the game owner.': 'Bu panel sadece oyunun sahibi içindir.',
+  'They go into the player\'s Bag, ready to put on an egg.': 'Oyuncunun Çantasına gider, bir yumurtaya konmaya hazır.',
+  'The eggs go straight into the pen to hatch, or the bag if the pen is full.': 'Yumurtalar çıkmak için doğrudan ağıla, ağıl doluysa çantaya gider.',
+  'Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.': 'Yer seç\'e dokun, sonra haritada bir yere dokun. Şu an oynayan herkes görür.',
+  // hints
+  'A guardian is chasing you! Run all the way home.': 'Bir bekçi seni kovalıyor! Eve kadar koş.',
+  'Press Space or tap GRAB to pick up the egg.': 'Yumurtayı almak için Boşluk tuşuna bas ya da AL\'a dokun.',
+  'Run right into the Forest and grab an egg. Move with WASD, arrows or drag.': 'Sağa, Orman\'a koş ve bir yumurta al. WASD, ok tuşları ya da sürükleyerek hareket et.',
+  'You have 3 of the same animal. Walk to the Fuse Machine to fuse them.': 'Aynı hayvandan 3 tane var. Birleştirmek için Birleştirme Makinesine yürü.',
+  'Your pen is full. Sell a pet or upgrade the pen in the Shop.': 'Ağılın dolu. Bir hayvan sat ya da Mağaza\'dan ağılı geliştir.',
+  'Speed maxed. Upgrade the treadmill in the Shop.': 'Hız en yüksekte. Mağaza\'dan koşu bandını geliştir.',
+  'Tap RUN or press Space to build speed.': 'Hız kazanmak için KOŞ\'a dokun ya da Boşluk\'a bas.',
+  // toasts
+  'Good morning!': 'Günaydın!', 'Fresh eggs are waiting in every biome.': 'Her biyomda taze yumurtalar seni bekliyor.',
+  'Night has fallen': 'Gece oldu', 'Night fell, so you ran home': 'Gece oldu, eve koştun', 'You kept your egg. The biomes open again at sunrise.': 'Yumurtan sende kaldı. Biyomlar güneş doğunca tekrar açılır.',
+  'The biomes open again at sunrise.': 'Biyomlar güneş doğunca tekrar açılır.', 'Head home before dark. The eggs reset at night.': 'Hava kararmadan eve dön. Yumurtalar gece sıfırlanır.',
+  'The biomes are closed at night': 'Biyomlar gece kapalı', 'Your pen is full': 'Ağılın dolu', 'Your bag is full': 'Çantan dolu', 'Your pen and bag are full': 'Ağılın ve çantan dolu',
+  'Store or sell something in the pen first, or upgrade it in the Shop.': 'Önce ağıldan bir şey sakla ya da sat, veya Mağaza\'dan geliştir.',
+  'Make room first, then come back for it.': 'Önce yer aç, sonra onun için geri gel.', 'Sell some pets or upgrade the pen to make room': 'Yer açmak için hayvan sat ya da ağılı geliştir',
+  'Pen full, so the egg went into your bag': 'Ağıl dolu, yumurta çantana gitti', 'Open Bag to put it in the pen when there is room.': 'Yer açılınca ağıla koymak için Çanta\'yı aç.',
+  'Walk it into your pen': 'Onu ağılına götür', 'Back to the start': 'Başa döndün', 'It went to your pen.': 'Ağılına gitti.', 'Your pen is full, so it went into your bag.': 'Ağılın dolu, çantana gitti.',
+  'It will wait in your bag without hatching.': 'Çantanda çıkmadan bekleyecek.', 'It waits in your bag and does not earn money there.': 'Çantanda bekler ve orada para kazandırmaz.',
+  'Put it in the pen from your bag when you want it to hatch.': 'Çıkmasını istediğinde çantandan ağıla koy.', 'Slow mode on': 'Yavaş mod açık', 'Slow mode off': 'Yavaş mod kapalı',
+  'You walk at normal speed. Press Q or tap Slow to go fast again.': 'Normal hızda yürüyorsun. Tekrar hızlanmak için Q\'ya bas ya da Yavaş\'a dokun.',
+  'You left the party': 'Partiden ayrıldın', 'You can make or join another one any time.': 'İstediğin zaman başka bir parti kurabilir ya da katılabilirsin.',
+  'Look for them in the world.': 'Onu dünyada ara.', 'Tell your friend to tap Party, then Join party, and type the code.': 'Arkadaşına Parti\'ye, sonra Partiye katıl\'a dokunup kodu yazmasını söyle.',
+  'You will see your friend as soon as they are here.': 'Arkadaşın gelir gelmez onu göreceksin.', 'From the game owner': 'Oyunun sahibinden', 'From your admin panel': 'Yönetici panelinden',
+  'Loaded your cloud save': 'Bulut kaydın yüklendi', 'Your progress from your other device is here.': 'Diğer cihazındaki ilerlemen burada.',
+  'Pick a mutation you have': 'Sahip olduğun bir mutasyonu seç', 'Pick an egg first': 'Önce bir yumurta seç', 'Only eggs without a mutation can get one.': 'Sadece mutasyonu olmayan yumurtalara konabilir.',
+  'Fresh start': 'Yeni başlangıç', 'All progress was wiped': 'Tüm ilerleme silindi', 'Not enough money': 'Yeterli para yok', 'You are wearing it now.': 'Şimdi onu giyiyorsun.',
+  'Placed!': 'Yerleştirildi!', 'Sent to everyone': 'Herkese gönderildi', 'Players get it right away, or the next time they open the game.': 'Oyuncular hemen ya da oyunu bir sonraki açışlarında alır.',
+  'Owner login worked': 'Sahip girişi başarılı', 'The Admin button is at the top now.': 'Yönetici düğmesi artık üstte.', 'That is not the owner password': 'Bu sahip şifresi değil', 'Nothing changed.': 'Hiçbir şey değişmedi.',
+  'Party code copied': 'Parti kodu kopyalandı', 'Removed everything you placed': 'Yerleştirdiğin her şey kaldırıldı', 'The placed guardians and pets are gone': 'Yerleştirilen bekçiler ve hayvanlar gitti',
+  'Walk up to it and press Space to adopt it.': 'Yanına yürü ve sahiplenmek için Boşluk\'a bas.',
+  '☁ saved': '☁ kaydedildi', '☁ saving…': '☁ kaydediliyor…', '☁ offline': '☁ çevrimdışı', 'English': 'English', 'Türkçe': 'Türkçe',
+};
+// sentences with numbers or names in them: [pattern, Turkish] (names inside are translated afterwards)
+const TR_RULES = [
+  [/^Level (\d+)\/(\d+)$/, 'Seviye $1/$2'], [/^Upgrade · \$(.+)$/, 'Geliştir · $$$1'], [/^max (\d+)$/, 'en fazla $1'], [/^Speed (\d+)$/, 'Hız $1'],
+  [/^(.+) · pets ×(.+)$/, '$1 · hayvanlar ×$2'], [/^Buy \$(.+)$/, 'Al $$$1'], [/^Sell \$(.+)$/, 'Sat $$$1'],
+  [/^Carrying an egg slows you down/, 'Yumurta taşımak seni yavaşlatır: nadir yumurtalar %8, destansı %15, efsanevi %25, mitik %32, ilahi %40. Büyük yumurtalar %8, dev yumurtalar %16 daha ağırdır ama daha büyük hayvanlar çıkarır ve nadirliği yükseltebilir. Bir yumurta tutarken bekçiden kaçabilecek kadar hızlan.'],
+  [/^Saved (\d+) seconds ago\..*$/, '$1 saniye önce kaydedildi. Başka bir cihazda oynamaya devam edebilirsin.'],
+  [/^Your pen · (.+)$/, 'Ağılın · $1'], [/^Earning \$(.+) every second\. Sell a pet to free a slot for a better one\.$/, 'Saniyede $$$1 kazanıyorsun. Daha iyisine yer açmak için bir hayvan sat.'],
+  [/^Hatching in (\d+)s$/, '$1 sn sonra çıkacak'], [/^(.+) · \$(.+)\/s$/, '$1 · $$$2/sn'], [/^(.+) · earns \$(.+)\/s in the pen$/, '$1 · ağılda $$$2/sn kazandırır'],
+  [/^Your bag · (.+)$/, 'Çantan · $1'],
+  [/^Keep animals and eggs you are not using\..*Pen (\d+\/\d+)\.$/, 'Kullanmadığın hayvanları ve yumurtaları sakla. Çantada hayvanlar para kazandırmaz ve yumurtalar çıkmaz, ama ağılda yer de kaplamazlar. Ağıl $1.'],
+  [/^Paused · hatches (\d+)s after it goes in the pen$/, 'Durduruldu · ağıla girince $1 sn sonra çıkar'], [/^You're holding a (.+)\.$/, 'Elinde: $1.'],
+  [/^(.+) \(you have (\d+)\)$/, '$1 ($2 tane var)'], [/^(.+) egg \(pen\)$/, '$1 yumurtası (ağıl)'], [/^(.+) egg \(bag\)$/, '$1 yumurtası (çanta)'],
+  [/^Put in 3 of the same animal/, 'Aynı hayvandan 3 tane koy, 1 Birleşik hayvan al: tek birinden 4 kat kazandırır ve ağılda 2 yer açar. 3 Birleşik hayvanı birleştirip 16 kat kazandıran altın bir Mega yap.'],
+  [/^You have (\d+) of 3 · makes a (.+) earning \$(.+)\/s$/, '$1/3 tane var · $$$3/sn kazandıran bir $2 yapar'], [/^You have (\d+) · already the top fusion$/, '$1 tane var · zaten en üst birleşim'],
+  [/^Animal index · (.+)$/, 'Hayvan koleksiyonu · $1'], [/^Guarded by the (.+) · speed (\d+) to enter · pets earn ×(.+)$/, 'Bekçi: $1 · girmek için hız $2 · hayvanlar ×$3'],
+  [/^\$(.+)\/s · hatched (\d+)(.*)$/, '$$$1/sn · $2 kez çıktı$3'], [/^from an? (\w+) egg$/, '$1 yumurtadan'],
+  [/^Make a party and give your friend the code/, 'Bir parti kur ve arkadaşına kodu ver, ya da arkadaşının partisine katıl. Herkes kendi hayvanlarını, parasını ve yumurtalarını tutar ve dünyada birbirinizi koşarken görürsünüz.'],
+  [/^Your friend opens this same website\./, 'Arkadaşın aynı web sitesini açar. İlk kez bir partiye katılırken ikiniz de bir isim seçersiniz. Parti kodları sadece bu web sitesindeki oyuncular arasında çalışır.'],
+  [/^This is the claude\.ai version of the game\./, 'Bu, oyunun claude.ai sürümü. Arkadaşın giriş yapmış olarak aynı claude.ai bağlantısını açar; önce Paylaş menüsünden onunla paylaş. Web sitesi sürümündeki parti kodları burada çalışmaz.'],
+  [/^In the (.+?) · carrying an? (\w+) egg$/, '$1 içinde · $2 yumurta taşıyor'], [/^In the (.+)$/, '$1 içinde'], [/^At home · carrying an? (\w+) egg$/, 'Evde · $1 yumurta taşıyor'],
+  [/^No party with code (.+) was found\..*$/, '$1 kodlu bir parti bulunamadı. Kodu arkadaşınla kontrol et ve ikinizin de oyunun aynı sürümünü oynadığından emin ol.'],
+  [/^Could not connect to the party\. Try again in a moment\.$/, 'Partiye bağlanılamadı. Birazdan tekrar dene.'],
+  [/^Found the party, but this network would not let you connect\..*$/, 'Parti bulundu ama bu ağ bağlanmana izin vermedi. Bazı ev ya da okul ağları bunu engeller. Tekrar dene ya da başka bir ağ dene.'],
+  [/^A party code is 5 letters and numbers, like K7QX2\.$/, 'Parti kodu K7QX2 gibi 5 harf ve rakamdan oluşur.'],
+  [/^Only (.+) \(in your party\)$/, 'Sadece $1 (partinde)'], [/^All (\d+) animals found$/, '$1 hayvanın hepsi bulundu'],
+  [/^Level (\d+): (\d+) slots, \+(\d+)% income$/, 'Seviye $1: $2 yer, +%$3 gelir'], [/^Level (\d+): speed can be trained up to (\d+)$/, 'Seviye $1: hız $2\'ye kadar çalıştırılabilir'],
+  [/^Only you can see this\..*$/, 'Bunu sadece sen görebilirsin. Hediyeler ve çıkarılan ya da yerleştirilen şeyler oyunculara ulaşır.'],
+  [/^Tap anywhere to place (.+)$/, 'Yerleştirmek için bir yere dokun: $1'], [/^✨ Mythic egg in (.+)$/, '✨ Mitik yumurta: $1'],
+  [/^PEN  (.+)$/, 'AĞIL  $1'], [/^🔒 needs speed (\d+)$/, '🔒 hız $1 gerekli'],
+  // hints
+  [/^Got an? (\w+) egg\. Run left, back home to your pen\.$/, '$1 bir yumurta aldın. Sola, evine ve ağılına koş.'],
+  [/^It's night\. The biomes open again in (\d+) seconds\.$/, 'Gece oldu. Biyomlar $1 saniye sonra tekrar açılır.'],
+  [/^Reach speed (\d+) on the treadmill to unlock the (.+)\.$/, '$2 kilidini açmak için koşu bandında $1 hıza ulaş.'],
+  [/^Walk up to an egg\. The (.+) only chases you once you take one of its eggs, and the rarest sit by its nest\.$/, 'Bir yumurtaya yürü. $1 sadece yumurtalarından birini alınca seni kovalar; en nadir olanlar yuvasının yanında durur.'],
+  [/^Carry the (\w+) egg into your pen\.$/, '$1 yumurtayı ağılına taşı.'],
+  // toasts
+  [/^Hatched an? (.+)!$/, '$1 çıktı!'], [/^(.+) egg is incubating$/, '$1 yumurtası kuluçkada'], [/^Hatches in (\d+) seconds\.?$/, '$1 saniye sonra çıkar'],
+  [/^Your (\w+) egg turned (\w+)!$/, '$1 yumurtan $2 oldu!'], [/^Entered the (.+)$/, 'Biyom: $1'], [/^Watch out for the (.+)$/, (m, g) => 'Dikkat: ' + g.replace(/s$/, '')],
+  [/^Mythic egg in the (.+)!$/, 'Mitik yumurta: $1!'], [/^It is right by the (.+)'s nest\. Go get it!$/, '$1 yuvasının hemen yanında. Hadi al!'],
+  [/^A DIVINE egg appeared in the (.+)!$/, 'İLAHİ yumurta çıktı: $1!'], [/^It sits right on the (.+)'s nest(.*)\. The rarest egg there is!$/, '$1 yuvasının tam üstünde$2. En nadir yumurta!'],
+  [/^(A Mythic egg|\d+ Mythic eggs) you can't reach yet$/, 'Henüz ulaşamadığın mitik yumurta'], [/^The (.+) caught you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' seni yakaladı!'],
+  [/^It took the (\w+) egg back to its nest$/, '$1 yumurtayı yuvasına geri götürdü'], [/^Made it home with an? (\w+) egg$/, 'Eve vardın: $1 yumurta'],
+  [/^The (.+) needs speed (\d+)$/, '$1 için hız $2 gerekli'], [/^You have (\d+)\. Run on the treadmill to build it up$/, 'Hızın $1. Koşu bandında koşarak artır'],
+  [/^They open again in (\d+) seconds$/, '$1 saniye sonra tekrar açılır'], [/^Night falls in (\d+) seconds$/, '$1 saniye sonra gece oluyor'],
+  [/^The biomes are closed for (\d+) seconds and every egg resets\.$/, 'Biyomlar $1 saniye kapalı ve tüm yumurtalar sıfırlanıyor.'],
+  [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
+  [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
+  [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
+  [/^Sold an? (.+)$/, '$1 satıldı'], [/^You made an? (.+)!$/, '$1 yaptın!'], [/^Earns \$(.+)\/s · freed 2 pen slots$/, '$$$1/sn kazandırır · ağılda 2 yer açıldı'],
+  [/^You adopted an? (.+)!$/, '$1 sahiplendin!'], [/^Stored (a|your) (.+)$/, '$2 saklandı'], [/^(.+) is back in the pen$/, '$1 ağıla döndü'], [/^Earning \$(.+)\/s again\.$/, 'Yine $$$1/sn kazandırıyor.'],
+  [/^Treadmill level (\d+)$/, 'Koşu bandı seviye $1'], [/^Max speed is now (\d+)$/, 'En yüksek hız artık $1'], [/^Pen level (\d+)$/, 'Ağıl seviye $1'],
+  [/^(\d+) slots, pets earn \+(\d+)%$/, '$1 yer, hayvanlar +%$2 kazandırır'], [/^Back to full speed \((\d+)\)\.$/, 'Tam hıza dönüldü ($1).'],
+  [/^Party (.+) is ready$/, 'Parti $1 hazır'], [/^Joined party (.+)$/, 'Partiye katıldın: $1'], [/^Back in party (.+)$/, 'Partiye döndün: $1'],
+  [/^(.+) joined the party$/, '$1 partiye katıldı'], [/^(.+) left the party$/, '$1 partiden ayrıldı'], [/^(.+) hatched an? (.+)!$/, '$1, bir $2 çıkardı!'],
+  [/^Bought the (.+)!$/, '$1 alındı!'], [/^You need \$(.+) for the (.+)\.$/, '$2 için $$$1 gerekiyor.'],
+  [/^Sent to (.+)$/, '$1 kişisine gönderildi'], [/^A (.+) appeared in the (.+)!$/, '$2 içinde bir $1 belirdi!'], [/^An? (.+) is waiting (at home|in the (.+))!$/, (m, a, b, c) => a + ' ' + (c ? c + ' içinde' : 'evde') + ' bekliyor!'],
+  [/^\+(\d+)$/, '+$1'], [/^(Big |Huge )?(\w+) egg!$/, '$1$2 yumurta!'], [/^It holds (\d+)\.(.*)$/, '$1 tane alır.'],
+];
+// longer names first so "Arctic Fox" wins over "Fox"
+let TR_NAME_LIST = null;
+function trNames(str) {
+  if (!TR_NAME_LIST) {
+    const m = Object.assign({}, TR_NAMES);
+    for (const sp of SPECIES) if (TR_ANIMALS[sp.id]) m[sp.name] = TR_ANIMALS[sp.id];
+    TR_NAME_LIST = { map: Object.fromEntries(Object.entries(m).map(([k, v]) => [k.toLowerCase(), v])), re: new RegExp('\\b(' + Object.keys(m).sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b', 'gi') };
+  }
+  return str.replace(TR_NAME_LIST.re, mm => { const t = TR_NAME_LIST.map[mm.toLowerCase()]; return t ? (mm[0] === mm[0].toLowerCase() && mm[0] !== mm[0].toUpperCase() ? t.toLocaleLowerCase('tr') : t) : mm; });
+}
+const trCache = new Map();
+function tr(str) {
+  if (LANG !== 'tr' || typeof str !== 'string' || !str.trim()) return str;
+  if (trCache.has(str)) return trCache.get(str);
+  const lead = str.match(/^\s*/)[0], tail = str.match(/\s*$/)[0], core = str.trim();
+  let out = TR_EXACT[core];
+  if (out === undefined) {
+    out = core;
+    for (const [re, rp] of TR_RULES) { if (re.test(core)) { out = core.replace(re, rp); break; } }
+    out = out.replace(/\(needs speed (\d+)\)/g, '(hız $1 gerekli)').replace(/\bneeds speed (\d+)/g, 'hız $1 gerekli');
+    out = trNames(out);
+  }
+  out = lead + out + tail;
+  if (trCache.size > 3000) trCache.clear();
+  trCache.set(str, out);
+  return out;
+}
+// every text on the page goes through tr(); the English original is remembered so we can switch back
+const trOrig = new WeakMap();
+function trNode(n) {
+  const cur = n.nodeValue, rec = trOrig.get(n);
+  const orig = rec && rec.out === cur ? rec.orig : cur;
+  const out = tr(orig);
+  trOrig.set(n, { orig, out });
+  if (out !== cur) n.nodeValue = out;
+}
+function trTree(root) {
+  if (!root) return;
+  if (root.nodeType === 3) { if (root.nodeValue.trim()) trNode(root); return; }
+  if (root.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(root.nodeName)) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n;
+  while ((n = w.nextNode())) if (n.nodeValue.trim() && !/^(SCRIPT|STYLE)$/.test(n.parentNode.nodeName)) trNode(n);
+}
+new MutationObserver(recs => {
+  if (LANG !== 'tr') return;
+  for (const r of recs) { if (r.type === 'characterData') trNode(r.target); else r.addedNodes.forEach(trTree); }
+}).observe(document.body, { childList: true, subtree: true, characterData: true });
+function setLang(l, quiet) {
+  LANG = l === 'tr' ? 'tr' : 'en'; G.lang = LANG; trCache.clear();
+  document.documentElement.lang = LANG;
+  $('langBtn').textContent = LANG === 'tr' ? 'EN' : 'TR';
+  $('langBtn').setAttribute('aria-label', LANG === 'tr' ? 'Switch to English' : 'Türkçeye geç');
+  // put every text back to English first, then translate if needed
+  const back = LANG; LANG = 'en'; trTree(document.body); LANG = back; if (LANG === 'tr') trTree(document.body);
+  lastHud = ''; syncHud(); if (modalOpen) renderTab();
+  if (!quiet) { save(); toast('🌐', LANG === 'tr' ? 'Dil: Türkçe' : 'Language: English', ''); }
+}
+// ================= STYLE (cosmetics bought with money) =================
+const COS = {
+  shirt: [
+    { id: 'orange', name: 'Orange shirt', price: 0, c: '#FF7A3D' }, { id: 'blue', name: 'Blue shirt', price: 200, c: '#3B95F0' },
+    { id: 'green', name: 'Green shirt', price: 200, c: '#3DBB5C' }, { id: 'purple', name: 'Purple shirt', price: 1000, c: '#8A5CF0' },
+    { id: 'pink', name: 'Pink shirt', price: 1000, c: '#FF7AB8' }, { id: 'black', name: 'Black shirt', price: 25000, c: '#2B2B33' },
+    { id: 'gold', name: 'Gold shirt', price: 5e6, c: '#F2C230' }, { id: 'rainbow', name: 'Rainbow shirt', price: 5e8, c: 'rainbow' },
+  ],
+  hat: [
+    { id: 'cap', name: 'Blue cap', price: 0 }, { id: 'none', name: 'No hat', price: 0 }, { id: 'party', name: 'Party hat', price: 500 },
+    { id: 'cowboy', name: 'Cowboy hat', price: 5000 }, { id: 'wizard', name: 'Wizard hat', price: 50000 }, { id: 'viking', name: 'Viking helmet', price: 5e5 },
+    { id: 'tophat', name: 'Top hat', price: 5e6 }, { id: 'bunny', name: 'Bunny ears', price: 5e7 }, { id: 'crown', name: 'Crown', price: 1e9 }, { id: 'halo', name: 'Halo', price: 5e10 },
+  ],
+  back: [
+    { id: 'none', name: 'Nothing', price: 0 }, { id: 'backpack', name: 'Backpack', price: 2000 }, { id: 'cape', name: 'Hero cape', price: 2e5 },
+    { id: 'jetpack', name: 'Jetpack', price: 2e7 }, { id: 'wings', name: 'Angel wings', price: 2e9 },
+  ],
+  trail: [
+    { id: 'none', name: 'No trail', price: 0 }, { id: 'sparkle', name: 'Sparkle trail', price: 1e4 }, { id: 'hearts', name: 'Heart trail', price: 1e6 },
+    { id: 'fire', name: 'Fire trail', price: 1e8 }, { id: 'rainbow', name: 'Rainbow trail', price: 1e10 },
+  ],
+  tone: [
+    { id: 't1', name: 'Skin 1', price: 0, c: '#F5CBA7' }, { id: 't2', name: 'Skin 2', price: 0, c: '#E0A97E' },
+    { id: 't3', name: 'Skin 3', price: 0, c: '#B57A50' }, { id: 't4', name: 'Skin 4', price: 0, c: '#7A4E2E' },
+  ],
+};
+const COS_CATS = [['shirt', 'Shirts'], ['hat', 'Hats'], ['back', 'On your back'], ['trail', 'Trails'], ['tone', 'Skin color']];
+const cosItem = (cat, id) => (COS[cat] || []).find(i => i.id === id) || null;
+const cosOwned = (cat, id) => { const it = cosItem(cat, id); return !!it && (it.price === 0 || G.cos.own.includes(cat + ':' + id)); };
+const myLook = () => ({ shirt: G.cos.shirt, hat: G.cos.hat, back: G.cos.back, tone: G.cos.tone });
+function drawBack(c, id, step, moving, t) {
+  if (id === 'backpack') { c.fillStyle = '#8A5A35'; roundRect(c, -20, -31, 9, 20, 3); c.fill(); c.fillStyle = '#6B4426'; c.fillRect(-19, -24, 7, 3); }
+  else if (id === 'cape') { const sw = Math.sin(step) * 3; c.fillStyle = '#D9443A'; c.beginPath(); c.moveTo(-11, -31); c.lineTo(11, -31); c.lineTo(15 + sw, -1); c.lineTo(-16 + sw, -1); c.closePath(); c.fill(); c.fillStyle = '#B8342C'; c.fillRect(-11, -32, 22, 3); }
+  else if (id === 'jetpack') {
+    c.fillStyle = '#8E99A8'; roundRect(c, -22, -33, 10, 21, 4); c.fill(); c.fillStyle = '#5E6874'; c.fillRect(-22, -26, 10, 3);
+    if (moving) { const f = 6 + Math.random() * 6; c.fillStyle = '#FF7A2A'; c.beginPath(); c.moveTo(-21, -12); c.lineTo(-13, -12); c.lineTo(-17, -12 + f); c.closePath(); c.fill(); c.fillStyle = '#FFE066'; c.beginPath(); c.moveTo(-19, -12); c.lineTo(-15, -12); c.lineTo(-17, -12 + f * .6); c.closePath(); c.fill(); }
+  } else if (id === 'wings') {
+    const fl = Math.sin(t * 8) * .25;
+    for (const sd of [-1, 1]) { c.save(); c.translate(sd * 9, -27); c.rotate(sd * (.55 - fl)); c.fillStyle = '#FFFFFF'; c.strokeStyle = '#D9D2C0'; c.lineWidth = 1.5; c.beginPath(); c.ellipse(sd * 13, 0, 15, 6.5, 0, 0, 7); c.fill(); c.stroke(); c.beginPath(); c.ellipse(sd * 9, 5, 10, 4.5, 0, 0, 7); c.fill(); c.stroke(); c.restore(); }
+  }
+}
+function drawHat(c, id, capColor) {
+  const hair = () => { c.fillStyle = '#5A3A22'; c.beginPath(); c.arc(0, -44, 12.5, Math.PI, 0); c.fill(); };
+  if (id === 'none') { hair(); return; }
+  if (id === 'cap' || !id) { c.fillStyle = capColor || '#2E6FD8'; c.beginPath(); c.arc(0, -44, 12.5, Math.PI, 0); c.fill(); c.fillRect(2, -46, 15, 4); return; }
+  hair();
+  if (id === 'party') { c.fillStyle = '#FF7AB8'; c.beginPath(); c.moveTo(-9, -50); c.lineTo(9, -50); c.lineTo(0, -74); c.closePath(); c.fill(); c.strokeStyle = '#FFE066'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(-6, -56); c.lineTo(6, -60); c.moveTo(-3, -64); c.lineTo(4, -66); c.stroke(); c.fillStyle = '#FFE066'; c.beginPath(); c.arc(0, -75, 3.5, 0, 7); c.fill(); }
+  else if (id === 'cowboy') { c.fillStyle = '#8A5A35'; c.beginPath(); c.ellipse(0, -51, 20, 4.5, 0, 0, 7); c.fill(); roundRect(c, -9, -65, 18, 15, 5); c.fill(); c.fillStyle = '#5A3A22'; c.fillRect(-9, -55, 18, 3); }
+  else if (id === 'wizard') { c.fillStyle = '#6A3FE0'; c.beginPath(); c.ellipse(0, -50, 16, 4, 0, 0, 7); c.fill(); c.beginPath(); c.moveTo(-11, -50); c.lineTo(11, -50); c.lineTo(4, -82); c.closePath(); c.fill(); c.fillStyle = '#FFE066'; [[-3, -58], [3, -66], [1, -74]].forEach(([a, b]) => { c.beginPath(); c.arc(a, b, 1.8, 0, 7); c.fill(); }); }
+  else if (id === 'viking') {
+    c.fillStyle = '#9AA3AD'; c.beginPath(); c.arc(0, -45, 13, Math.PI, 0); c.fill(); c.fillStyle = '#7A8290'; c.fillRect(-13, -47, 26, 4);
+    c.fillStyle = '#FFF8EC'; for (const sd of [-1, 1]) { c.beginPath(); c.moveTo(sd * 11, -51); c.quadraticCurveTo(sd * 25, -55, sd * 22, -70); c.lineTo(sd * 16, -54); c.closePath(); c.fill(); }
+  }
+  else if (id === 'tophat') { c.fillStyle = '#1E1A16'; c.beginPath(); c.ellipse(0, -52, 16, 3.5, 0, 0, 7); c.fill(); c.fillRect(-9, -76, 18, 24); c.fillStyle = '#D9443A'; c.fillRect(-9, -58, 18, 4); }
+  else if (id === 'bunny') { for (const sd of [-1, 1]) { c.fillStyle = '#FFFFFF'; c.beginPath(); c.ellipse(sd * 6, -64, 4.5, 14, sd * .15, 0, 7); c.fill(); c.fillStyle = '#FFB3C6'; c.beginPath(); c.ellipse(sd * 6, -63, 2, 10, sd * .15, 0, 7); c.fill(); } }
+  else if (id === 'crown') { c.fillStyle = '#F2C230'; c.beginPath(); [[-11, -50], [-12, -64], [-6, -56], [0, -67], [6, -56], [12, -64], [11, -50]].forEach(([a, b], k) => k ? c.lineTo(a, b) : c.moveTo(a, b)); c.closePath(); c.fill(); c.fillStyle = '#E8402C'; c.beginPath(); c.arc(0, -54, 2.2, 0, 7); c.fill(); c.fillStyle = '#3B95F0'; c.beginPath(); c.arc(-6, -53, 1.8, 0, 7); c.arc(6, -53, 1.8, 0, 7); c.fill(); }
+  else if (id === 'halo') { c.save(); c.strokeStyle = '#FFD23F'; c.lineWidth = 3; c.shadowColor = '#FFF1A8'; c.shadowBlur = 8; c.beginPath(); c.ellipse(0, -64, 12, 4, 0, 0, 7); c.stroke(); c.restore(); }
+}
+let trailT = 0;
+function spawnTrail(x, y, id, t) {
+  if (id === 'sparkle') parts.push({ x: x + rand(-8, 8), y: y + rand(-6, 2), vx: rand(-15, 15), vy: rand(-40, -15), t: 0, life: .6, color: '#FFE066', size: rand(2, 3.5), g: 0 });
+  else if (id === 'hearts') parts.push({ x: x + rand(-8, 8), y: y - 6, vx: rand(-10, 10), vy: rand(-50, -25), t: 0, life: .9, color: '#FF7AB0', size: rand(3, 4.5), g: -20 });
+  else if (id === 'fire') parts.push({ x: x + rand(-7, 7), y: y + rand(-4, 2), vx: rand(-20, 20), vy: rand(-70, -30), t: 0, life: .5, color: ['#FF7A2A', '#FFB13B', '#E8402C'][Math.floor(Math.random() * 3)], size: rand(3, 5), g: -60 });
+  else if (id === 'rainbow') parts.push({ x: x + rand(-4, 4), y: y + rand(-3, 3), vx: 0, vy: rand(-10, 0), t: 0, life: .8, color: `hsl(${(t * 220) % 360},90%,62%)`, size: 4.5, g: 0 });
+}
+const cosThumbCache = {};
+function cosThumb(cat, id) {
+  const k = cat + ':' + id; if (cosThumbCache[k]) return cosThumbCache[k];
+  const cv2 = document.createElement('canvas'); cv2.width = 96; cv2.height = 112; const c = cv2.getContext('2d');
+  const look = { shirt: 'orange', hat: 'cap', back: 'none', tone: 't1', [cat]: id };
+  if (cat === 'trail' && id !== 'none') { for (let i = 0; i < 9; i++) { const col = id === 'sparkle' ? '#FFE066' : id === 'hearts' ? '#FF7AB0' : id === 'fire' ? ['#FF7A2A', '#FFB13B', '#E8402C'][i % 3] : `hsl(${i * 40},90%,62%)`; c.fillStyle = col; c.beginPath(); c.arc(14 + i * 4, 98 - (i % 3) * 5 - i * 1.5, 3.2, 0, 7); c.fill(); } }
+  c.save(); c.translate(56, 102); c.scale(1.2, 1.2); drawKid(0, 0, 1, false, 0, null, look, 0, 0, c); c.restore();
+  return (cosThumbCache[k] = cv2.toDataURL());
+}
+function cosAction(v) {
+  const [cat, id] = String(v).split(':'), it = cosItem(cat, id); if (!it) return;
+  if (!cosOwned(cat, id)) {
+    if (G.money < it.price) { toast('💸', 'Not enough money', `You need $${fmt(it.price)} for the ${it.name}.`, true); return; }
+    G.money -= it.price; G.cos.own.push(cat + ':' + id); sfx.buy();
+    toast('👕', `Bought the ${it.name}!`, 'You are wearing it now.');
+  }
+  G.cos[cat] = id; save(); syncHud(); renderTab(); sendPresence(true);
+}
+function styleHTML() {
+  const card = (cat, it) => {
+    const own = cosOwned(cat, it.id), on = G.cos[cat] === it.id;
+    const btn = on ? '<button class="sell" disabled>Wearing</button>' : own ? `<button class="sell" data-cos="${cat}:${it.id}">Wear</button>` : `<button class="buy" data-cos="${cat}:${it.id}" data-cost="${it.price}">Buy $${fmt(it.price)}</button>`;
+    return `<div class="cos${on ? ' on' : ''}"><img src="${cosThumb(cat, it.id)}" alt="" width="72" height="84"><b>${esc(it.name)}</b>${btn}</div>`;
+  };
+  return `<div class="style-top"><canvas id="stylePrev" width="120" height="140"></canvas><div><h3>Your look</h3><p class="note">Buy clothes and extras with your money, then wear them. Friends in your party see your look too.</p></div></div>` +
+    COS_CATS.map(([cat, title]) => `<div class="cos-sec"><h3>${title}</h3><div class="cos-grid">${COS[cat].map(it => card(cat, it)).join('')}</div></div>`).join('');
+}
+function drawStylePreview() {
+  const cvp = $('stylePrev'); if (!cvp) return; const c = cvp.getContext('2d');
+  c.clearRect(0, 0, 120, 140); c.save(); c.translate(60, 128); c.scale(1.45, 1.45); drawKid(0, 0, 1, false, 0, null, myLook(), performance.now() / 1000, 0, c); c.restore();
+}
+// a friend's look, read defensively from what their page sent
+function friendLook(p) {
+  const lk = p.presence && Array.isArray(p.presence.lk) ? p.presence.lk : null, [shirt, cap] = friendColor(p);
+  if (!lk) return { shirtColor: shirt, capColor: cap, hat: 'cap', back: 'none', tone: 't1' };
+  const pick = (cat, v, d) => cosItem(cat, String(v)) ? String(v) : d;
+  return { shirt: pick('shirt', lk[0], 'orange'), hat: pick('hat', lk[1], 'cap'), back: pick('back', lk[2], 'none'), tone: pick('tone', lk[3], 't1') };
 }
 // ================= MODELS =================
 // Every pet and guardian is drawn in a 110-unit box centred on (0,0), facing right, feet near y=40.
@@ -3197,26 +3559,29 @@ function drawEgg(x, y, w, rarity, base, t = 0) {
   ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.ellipse(8.5, 8.5, 1.8, 3.4, -.4, 0, 7); ctx.fill();
   ctx.restore();
 }
-function drawKid(x, y, fx, moving, step, carry, shirt, cap, t, fade) {
-  const bob = moving ? Math.abs(Math.sin(step)) * 3 : 0;
-  ctx.save();
-  if (fade) ctx.globalAlpha = fade;
-  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 16, 6, 0, 0, 7); ctx.fill();
-  ctx.translate(x, y - bob); ctx.scale(fx, 1);
+function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
+  const L = look || {}, bob = moving ? Math.abs(Math.sin(step)) * 3 : 0;
+  const tone = (cosItem('tone', L.tone) || COS.tone[0]).c;
+  const sh = L.shirtColor || (L.shirt === 'rainbow' ? `hsl(${(t * 120) % 360},85%,60%)` : (cosItem('shirt', L.shirt) || COS.shirt[0]).c);
+  c.save();
+  if (fade) c.globalAlpha = fade;
+  c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(x, y + 4, 16, 6, 0, 0, 7); c.fill();
+  c.translate(x, y - bob); c.scale(fx, 1);
+  drawBack(c, L.back, step, moving, t);
   const leg = Math.sin(step) * (moving ? 5 : 0);
-  ctx.strokeStyle = '#2B3A55'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(-5, -10); ctx.lineTo(-5 + leg, 0); ctx.moveTo(5, -10); ctx.lineTo(5 - leg, 0); ctx.stroke();
-  ctx.fillStyle = shirt; roundRect(ctx, -12, -32, 24, 24, 8); ctx.fill();
-  ctx.strokeStyle = '#F5CBA7'; ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.moveTo(-11, -26); ctx.lineTo(-15, -16 - (carry ? 18 : leg)); ctx.moveTo(11, -26); ctx.lineTo(15, -16 - (carry ? 18 : -leg)); ctx.stroke();
-  ctx.fillStyle = '#F5CBA7'; ctx.beginPath(); ctx.arc(0, -42, 12, 0, 7); ctx.fill();
-  ctx.fillStyle = cap; ctx.beginPath(); ctx.arc(0, -44, 12.5, Math.PI, 0); ctx.fill(); ctx.fillRect(2, -46, 15, 4);
-  ctx.fillStyle = '#1E2A1B'; ctx.beginPath(); ctx.arc(4, -40, 1.8, 0, 7); ctx.arc(-3, -40, 1.8, 0, 7); ctx.fill();
-  ctx.restore();
-  if (carry) drawEgg(x, y - 66 - bob - 6 * (carry.es || 0), 20 * EGG_SIZES[carry.es || 0].scale, carry.r, BIOMES[carry.b].egg, t);
+  c.strokeStyle = '#2B3A55'; c.lineWidth = 6; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(-5, -10); c.lineTo(-5 + leg, 0); c.moveTo(5, -10); c.lineTo(5 - leg, 0); c.stroke();
+  c.fillStyle = sh; roundRect(c, -12, -32, 24, 24, 8); c.fill();
+  c.strokeStyle = tone; c.lineWidth = 5;
+  c.beginPath(); c.moveTo(-11, -26); c.lineTo(-15, -16 - (carry ? 18 : leg)); c.moveTo(11, -26); c.lineTo(15, -16 - (carry ? 18 : -leg)); c.stroke();
+  c.fillStyle = tone; c.beginPath(); c.arc(0, -42, 12, 0, 7); c.fill();
+  drawHat(c, L.hat || 'cap', L.capColor);
+  c.fillStyle = '#1E2A1B'; c.beginPath(); c.arc(4, -40, 1.8, 0, 7); c.arc(-3, -40, 1.8, 0, 7); c.fill();
+  c.restore();
+  if (carry && c === ctx) drawEgg(x, y - 66 - bob - 6 * (carry.es || 0), 20 * EGG_SIZES[carry.es || 0].scale, carry.r, BIOMES[carry.b].egg, t);
 }
 function drawPlayer(t) {
-  drawKid(player.x, player.y, player.fx, player.moving || onTread, player.step, player.carry, '#FF7A3D', '#2E6FD8', t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0);
+  drawKid(player.x, player.y, player.fx, player.moving || onTread, player.step, player.carry, myLook(), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0);
 }
 
 function drawPortal(x, y, color, label, sub, locked, t) {
@@ -3235,6 +3600,7 @@ function drawPortal(x, y, color, label, sub, locked, t) {
   ctx.restore();
 }
 function label(text, x, y, size = 18, color = '#fff') {
+  text = tr(text);
   ctx.textAlign = 'center'; ctx.font = `${size}px "Lilita One", system-ui, sans-serif`; ctx.lineJoin = 'round';
   ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(20,28,18,.8)'; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y);
 }
@@ -3347,9 +3713,9 @@ function drawSign(x, y, B, locked, note = '') {
   ctx.fillStyle = '#4E3421'; ctx.fillRect(x - 4, y + 30, 8, 30);
   ctx.fillStyle = locked ? '#5A3A22' : '#6B4A2F'; roundRect(ctx, x - 100, y - 32, 200, 64, 12); ctx.fill();
   ctx.fillStyle = B.portal; roundRect(ctx, x - 100, y - 32, 200, 9, 4); ctx.fill();
-  ctx.textAlign = 'center'; ctx.fillStyle = '#FFFFFF'; ctx.font = '22px "Lilita One", system-ui, sans-serif'; ctx.fillText(B.name, x, y + 2);
+  ctx.textAlign = 'center'; ctx.fillStyle = '#FFFFFF'; ctx.font = '22px "Lilita One", system-ui, sans-serif'; ctx.fillText(tr(B.name), x, y + 2);
   ctx.font = '700 13px Rubik, system-ui, sans-serif'; ctx.fillStyle = locked ? '#FFC9B8' : '#E8F5DC';
-  ctx.fillText(note || (locked ? `🔒 needs speed ${B.req}` : `${B.guard.name} · pets ×${fmt(B.mult)}`), x, y + 22);
+  ctx.fillText(tr(note || (locked ? `🔒 needs speed ${B.req}` : `${B.guard.name} · pets ×${fmt(B.mult)}`)), x, y + 22);
 }
 function drawGate(i) {
   const B = BIOMES[i], x = ZX(i), night = isNight(), locked = night || G.speed + 1e-6 < B.req;
@@ -3389,8 +3755,8 @@ function drawGrabPrompt(e, t, word = 'grab') {
   const y = e.y - 26 * s - 18;
   ctx.fillStyle = 'rgba(20,28,18,.88)'; roundRect(ctx, e.x - 56, y - 16, 112, 26, 8); ctx.fill();
   ctx.fillStyle = '#FFF9EE'; roundRect(ctx, e.x - 50, y - 11, 48, 16, 4); ctx.fill();
-  ctx.textAlign = 'center'; ctx.font = '800 11px Rubik, system-ui, sans-serif'; ctx.fillStyle = '#1E2A1B'; ctx.fillText('SPACE', e.x - 26, y + 1);
-  ctx.fillStyle = '#FFE066'; ctx.font = '15px "Lilita One", system-ui, sans-serif'; ctx.fillText(word, e.x + 24, y + 2);
+  ctx.textAlign = 'center'; ctx.font = '800 11px Rubik, system-ui, sans-serif'; ctx.fillStyle = '#1E2A1B'; ctx.fillText(tr('SPACE'), e.x - 26, y + 1);
+  ctx.fillStyle = '#FFE066'; ctx.font = '15px "Lilita One", system-ui, sans-serif'; ctx.fillText(tr(word), e.x + 24, y + 2);
 }
 // draws only the stretch of the long world that is on screen
 function drawWorld(t, dt) {
@@ -3487,7 +3853,7 @@ function boot(data) {
   const startMythics = mythicBatch; mythicBatch = null;
   ensureMythic(startMythics);
   setTimeout(() => toastMythic(startMythics), 900);
-  syncMute(); syncSlow(); syncHud();
+  syncMute(); syncSlow(); syncHud(); setLang(G.lang, true);
   new ResizeObserver(() => { resize(); snapCam(); }).observe($('game'));
   document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); cloudPush(); } });
   cloudInit();
