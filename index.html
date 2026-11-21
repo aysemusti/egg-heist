@@ -1590,7 +1590,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1647,10 +1647,14 @@ function applyGift(g, from) {
   } else if (g.kind === 'pet') {
     const i = spIndex(String(g.sid)); if (i < 0) return;
     const sp = SPECIES[i], z = int(g.z, 0, 2, 0), f = int(g.f, 0, 2, 0), n = int(g.n, 1, 10, 1);
-    for (let k = 0; k < n; k++) { const it = { id: G.nextId++, egg: false, sp: i, sid: sp.id, b: sp.b, r: sp.r, z, f }; if (G.pen.length < penSlots(G.pL) || G.inv.length >= BAG_MAX) G.pen.push(it); else G.inv.push(it); }
+    for (let k = 0; k < n; k++) { const it = { id: G.nextId++, egg: false, sp: i, sid: sp.id, b: sp.b, r: sp.r, z, f, mut: MUT[g.m] ? g.m : undefined }; if (G.pen.length < penSlots(G.pL) || G.inv.length >= BAG_MAX) G.pen.push(it); else G.inv.push(it); }
     G.found[sp.id] = (G.found[sp.id] || 0) + n;
     if (f) G.fusedFound[sp.id] = Math.max(G.fusedFound[sp.id] || 0, f);
-    toast(sp.id + '|' + f, `Gift: ${n > 1 ? n + '× ' : ''}${petName({ sp: i, z, f })}`, from, false, !G.found[sp.id]);
+    toast(sp.id + '|' + f, `Gift: ${n > 1 ? n + '× ' : ''}${petName({ sp: i, z, f, mut: g.m })}`, from, false, !G.found[sp.id]);
+  } else if (g.kind === 'mut') {
+    const k = MUT[g.k] ? g.k : null, n = int(g.n, 1, 50, 1); if (!k) return;
+    G.muts = G.muts || {}; G.muts[k] = (G.muts[k] || 0) + n;
+    toast('🧪', `Gift: ${n > 1 ? n + ' ' : 'a '}${MUT[k].name} mutation${n > 1 ? 's' : ''}`, `${from}. Open your Bag to put ${n > 1 ? 'them' : 'it'} on an egg.`, false, false, k === 'dark' || k === 'enchanted' ? 'mythic' : '');
   } else if (g.kind === 'egg') {
     const b = int(g.b, 0, BIOMES.length - 1, -1), es = int(g.es, 0, 2, 0), n = int(g.n, 1, 10, 1), r = RORDER.includes(g.r) ? g.r : null;
     if (b < 0 || !r) return;
@@ -1712,7 +1716,8 @@ async function adminAction(what) {
   const g = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), kind, at: Date.now() };
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
-  else if (kind === 'pet') Object.assign(g, { sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
+  else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
+  else if (kind === 'pet') Object.assign(g, { m: MUT[f.admPetMut] ? f.admPetMut : undefined, sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
   else if (kind === 'egg') Object.assign(g, { m: MUT[f.admGiftMut] ? f.admGiftMut : undefined, b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
   // who gets it: the "Send to" menu (Everyone, Just me, or one friend in your party)
   let toName = '';
@@ -1744,6 +1749,7 @@ async function adminAction(what) {
   } catch (e) { toast('⚠️', 'Could not send the gift', e && e.code === 'quota_exceeded' ? 'The gift list is full. Clear it and try again.' : 'Try again in a moment.', true); }
 }
 function giftText(g) {
+  if (g.kind === 'mut' && MUT[g.k]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${MUT[g.k].name} mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'egg' && RAR[g.r] && BIOMES[g.b]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${RAR[g.r].name} ${BIOMES[g.b].name} egg${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'index') return 'Full Index';
   if (g.kind === 'pen') return 'Max level pen';
@@ -1781,8 +1787,14 @@ function adminHTML() {
       <div class="up"><h3>Pet</h3>
         <label>Animal<select id="admPet">${pets}</select></label>
         <div class="adm-row"><label>Size${sel('admPetSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Fusion${sel('admPetFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
+        <label>Mutation${sel('admPetMut', [['', 'None'], ...MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult])])}</label>
         <label>How many<input id="admPetN" type="number" min="1" max="10" value="${esc(f.admPetN)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="pet:to">Give</button></div></div>
+      <div class="up"><h3>Mutations</h3>
+        <label>Mutation${sel('admMutK', MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult]))}</label>
+        <label>How many<input id="admMutN" type="number" min="1" max="50" value="${esc(f.admMutN)}"></label>
+        <span class="note" style="font-size:12px">They go into the player's Bag, ready to put on an egg.</span>
+        <div class="adm-btns"><button class="buy" data-adm="mut:to">Give</button></div></div>
       <div class="up"><h3>Give eggs</h3>
         <label>Biome${sel('admGiftBiome', BIOMES.map((b, i) => [i, b.name]))}</label>
         <div class="adm-row"><label>Rarity${sel('admGiftRar', RORDER.map(k => [k, RAR[k].name]))}</label><label>Egg size${sel('admGiftSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label></div>
@@ -1797,6 +1809,7 @@ function adminHTML() {
         <div class="adm-btns"><button class="buy" data-adm="spawn">Spawn for everyone</button></div></div>
       <div class="up"><h3>Place in the world</h3>
         <label>What<select id="admPlace"><optgroup label="Guardians (chase anyone carrying an egg)">${BIOMES.map((b, i) => `<option value="g:${i}"${f.admPlace === 'g:' + i ? ' selected' : ''}>${esc(b.guard.name)} (${esc(b.name)})</option>`).join('')}</optgroup><optgroup label="Pets (players walk up and adopt them)">${SPECIES.map(sp => `<option value="p:${sp.id}"${f.admPlace === 'p:' + sp.id ? ' selected' : ''}>${esc(sp.name)} (${RAR[sp.r].name})</option>`).join('')}</optgroup></select></label>
+        <label>Pet mutation${sel('admPlaceMut', [['', 'None'], ...MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult])])}</label>
         <div class="adm-row"><label>Pet size${sel('admPlaceSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Pet fusion${sel('admPlaceFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
         <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
@@ -1811,13 +1824,13 @@ function drawWorldPet(wp, t) {
   const lift = st === 'fly' ? 18 + Math.sin(t * 4 + ph) * 5 : st === 'swim' ? 8 + Math.sin(t * 2 + ph) * 4 : Math.abs(Math.sin(t * 3 + ph)) * 4;
   const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * wp.f) * SIZES[wp.z].scale);
   ctx.fillStyle = 'rgba(255,224,102,.35)'; ctx.beginPath(); ctx.ellipse(wp.x, wp.y + 14, 26 + Math.sin(t * 5) * 3, 9, 0, 0, 7); ctx.fill();
-  drawModel(sp.id, wp.x, wp.y + 14 - lift, size, Math.sin(t * .6 + ph) > 0 ? 1 : -1, sp.r === 'M' ? rainbow(t) : '#FFE066', wp.f, Math.sin(t * 3 + ph) * .06);
+  drawModel(sp.id, wp.x, wp.y + 14 - lift, size, Math.sin(t * .6 + ph) > 0 ? 1 : -1, (mutOf(wp) && mutOf(wp).glow) || (sp.r === 'M' ? rainbow(t) : '#FFE066'), wp.f, Math.sin(t * 3 + ph) * .06, 1, 1, wp.mut);
   if (nearPet === wp) drawGrabPrompt({ x: wp.x, y: wp.y - size * .45, es: 0 }, t, 'adopt');
   else label(petName(wp), wp.x, wp.y - size * .7 - 8, 14, '#FFE066');
 }
 function adoptPet() {
   const wp = nearPet; if (!wp) return;
-  const it = { id: G.nextId++, egg: false, sp: wp.sp, sid: SPECIES[wp.sp].id, b: SPECIES[wp.sp].b, r: SPECIES[wp.sp].r, z: wp.z, f: wp.f };
+  const it = { id: G.nextId++, egg: false, sp: wp.sp, sid: SPECIES[wp.sp].id, b: SPECIES[wp.sp].b, r: SPECIES[wp.sp].r, z: wp.z, f: wp.f, mut: wp.mut };
   if (G.pen.length < penSlots(G.pL)) G.pen.push(it);
   else if (G.inv.length < BAG_MAX) G.inv.push(it);
   else { toast('🚧', 'Your pen and bag are full', 'Make room first, then come back for it.', true); return; }
@@ -1843,7 +1856,7 @@ function onPlace(msg) {
   } else if (d.kind === 'pet') {
     const i = spIndex(String(d.sid)), z = int(d.z, 0, 2), f = int(d.f, 0, 2);
     if (i < 0 || z === null || f === null) return;
-    const wp = { sp: i, z, f, x, y, ph: Math.random() * 6 };
+    const wp = { sp: i, z, f, x, y, ph: Math.random() * 6, mut: MUT[d.m] ? d.m : undefined };
     worldPets.push(wp);
     if (!msg.isMe) toast(SPECIES[i].id + '|' + f, `A ${petName(wp)} is waiting ${zoneAt(x) === 'hub' ? 'at home' : 'in the ' + BIOMES[zoneAt(x)].name}!`, 'Walk up to it and press Space to adopt it.', false, false, SPECIES[i].r === 'M' ? 'mythic' : '');
   }
@@ -1861,8 +1874,8 @@ async function sendPlacement(topic, data) {
 }
 function startPlacing() {
   const [k, v] = String(admForm.admPlace).split(':');
-  placing = k === 'g' ? { kind: 'guard', g: +v } : { kind: 'pet', sid: v, z: +admForm.admPlaceSize || 0, f: +admForm.admPlaceFuse || 0 };
-  const what = k === 'g' ? `the ${BIOMES[+v] ? BIOMES[+v].guard.name.toLowerCase() : 'guardian'}` : `a ${petName({ sp: Math.max(0, spIndex(v)), z: placing.z, f: placing.f })}`;
+  placing = k === 'g' ? { kind: 'guard', g: +v } : { kind: 'pet', sid: v, z: +admForm.admPlaceSize || 0, f: +admForm.admPlaceFuse || 0, m: MUT[admForm.admPlaceMut] ? admForm.admPlaceMut : undefined };
+  const what = k === 'g' ? `the ${BIOMES[+v] ? BIOMES[+v].guard.name.toLowerCase() : 'guardian'}` : `a ${petName({ sp: Math.max(0, spIndex(v)), z: placing.z, f: placing.f, mut: placing.m })}`;
   $('placeTxt').textContent = `Tap anywhere to place ${what}`;
   $('placeBar').hidden = false; cv.classList.add('placing'); closeModal();
 }
