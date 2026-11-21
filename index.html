@@ -1691,6 +1691,10 @@ function applyGift(g, from) {
   } else if (g.kind === 'index') {
     for (const sp of SPECIES) G.found[sp.id] = Math.max(1, G.found[sp.id] || 0);
     toast('📖', 'Gift: the full Index', `All ${SPECIES.length} animals are unlocked`);
+  } else if (g.kind === 'cos') {
+    for (const cat in COS) for (const it of COS[cat]) { const k = cat + ':' + it.id; if (it.price > 0 && !G.cos.own.includes(k)) G.cos.own.push(k); }
+    toast('\ud83d\udc51', 'Gift: every cosmetic', 'Open Style to wear them.');
+    sendPresence(true);
   } else if (g.kind === 'pen') {
     G.pL = PEN_MAX; toast('🏡', 'Gift: max level pen', `${penSlots(G.pL)} slots and +${Math.round((penBonus(G.pL) - 1) * 100)}% income`);
   } else if (g.kind === 'tread') {
@@ -1774,6 +1778,7 @@ function giftText(g) {
   if (g.kind === 'mut' && MUT[g.k]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${MUT[g.k].name} mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'egg' && RAR[g.r] && BIOMES[g.b]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${RAR[g.r].name} ${BIOMES[g.b].name} egg${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'index') return 'Full Index';
+  if (g.kind === 'cos') return 'Every cosmetic';
   if (g.kind === 'pen') return 'Max level pen';
   if (g.kind === 'tread') return 'Max level treadmill';
   const i = spIndex(String(g.sid));
@@ -1805,6 +1810,7 @@ function adminHTML() {
         <div class="unl"><b>Full Index</b><span>All ${SPECIES.length} animals found</span><div class="adm-btns"><button class="buy" data-adm="index:to">Give</button></div></div>
         <div class="unl"><b>Max level pen</b><span>Level ${PEN_MAX}: ${penSlots(PEN_MAX)} slots, +${Math.round((penBonus(PEN_MAX) - 1) * 100)}% income</span><div class="adm-btns"><button class="buy" data-adm="pen:to">Give</button></div></div>
         <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: speed can be trained up to ${treadCap(TREAD_MAX)}</span><div class="adm-btns"><button class="buy" data-adm="tread:to">Give</button></div></div>
+        <div class="unl"><b>Every cosmetic</b><span>All ${Object.values(COS).reduce((a, l) => a + l.filter(i => i.price > 0).length, 0)} shirts, hats, back items and trails from Style</span><div class="adm-btns"><button class="buy" data-adm="cos:to">Give</button></div></div>
       </div>
       <div class="up"><h3>Pet</h3>
         <label>Animal<select id="admPet">${pets}</select></label>
@@ -1993,7 +1999,7 @@ const TR_EXACT = {
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
   'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
-  'Extra speed': 'Ekstra hız', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
+  'Extra speed': 'Ekstra hız', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Every cosmetic': 'Tüm kozmetikler', 'Gift: every cosmetic': 'Hediye: tüm kozmetikler', 'Open Style to wear them.': 'Giymek için Stil\'i aç.', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
   'Pet': 'Hayvan', 'Animal': 'Hayvan', 'Size': 'Boyut', 'Fusion': 'Birleşim', 'Normal': 'Normal', 'How many': 'Kaç tane', 'Give eggs': 'Yumurta ver', 'Biome': 'Biyom',
   'Rarity': 'Nadirlik', 'Egg size': 'Yumurta boyu', 'None': 'Yok', 'Spawn eggs': 'Yumurta çıkar', 'Spawn for everyone': 'Herkes için çıkar', 'Place in the world': 'Dünyaya yerleştir',
   'What': 'Ne', 'Pick a spot': 'Yer seç', 'Remove all placed': 'Yerleştirilenleri kaldır', 'Pet mutation': 'Hayvan mutasyonu', 'Pet size': 'Hayvan boyu', 'Pet fusion': 'Hayvan birleşimi',
@@ -2078,7 +2084,7 @@ const TR_RULES = [
   [/^The (.+) needs speed (\d+)$/, '$1 için hız $2 gerekli'], [/^You have (\d+)\. Run on the treadmill to build it up$/, 'Hızın $1. Koşu bandında koşarak artır'],
   [/^They open again in (\d+) seconds$/, '$1 saniye sonra tekrar açılır'], [/^Night falls in (\d+) seconds$/, '$1 saniye sonra gece oluyor'],
   [/^The biomes are closed for (\d+) seconds and every egg resets\.$/, 'Biyomlar $1 saniye kapalı ve tüm yumurtalar sıfırlanıyor.'],
-  [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
+  [/^All (\d+) shirts, hats, back items and trails from Style$/, 'Stil\'deki $1 tişört, şapka, sırt eşyası ve izin hepsi'], [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
   [/^Sold an? (.+)$/, '$1 satıldı'], [/^You made an? (.+)!$/, '$1 yaptın!'], [/^Earns \$(.+)\/s · freed 2 pen slots$/, '$$$1/sn kazandırır · ağılda 2 yer açıldı'],
