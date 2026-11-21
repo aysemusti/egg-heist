@@ -3036,11 +3036,11 @@ const VAR = {
   krakenqueen: { base: 'octopus', shift: 300, sat: .6 }, spiderqueen: { base: 'g-spider', shift: 0, sat: .45, hue: 300 }, galaxydragon: { base: 'dragon', shift: 240, sat: .6 },
   gumdrophydra: { base: 'hydra', shift: 300, sat: .7 }, thunderbird: { base: 'phoenix', shift: 200, sat: .6 }, ancientbrachio: { base: 'brachio', shift: 160, sat: .5 },
   reaperraven: { base: 'raven', shift: 0, sat: .5, hue: 280 }, spectrumserpent: { base: 'leviathan', shift: 270, sat: .7 },
-  seraphstag: { base: 'spiritstag', divine: true }, divinehydra: { base: 'hydra', divine: true }, pharaohsphinx: { base: 'sphinx', divine: true },
-  suntiger: { base: 'jadetiger', divine: true }, halophoenix: { base: 'icephoenix', divine: true }, solarkraken: { base: 'octopus', divine: true },
-  oceansovereign: { base: 'leviathan', divine: true }, diamondtitan: { base: 'geodetitan', divine: true }, starwhale: { base: 'cosmicwhale', divine: true },
-  heavenlydragon: { base: 'candydragon', divine: true }, archangeldragon: { base: 'celestialdragon', divine: true }, titanrex: { base: 'spino', divine: true },
-  wraithking: { base: 'phantomdragon', divine: true }, radiantphoenix: { base: 'aurorphoenix', divine: true },
+  seraphstag: { base: 'spiritstag', divine: true, acc: [200, .75] }, divinehydra: { base: 'hydra', divine: true, acc: [150, .7] }, pharaohsphinx: { base: 'sphinx', divine: true, acc: [225, .85] },
+  suntiger: { base: 'jadetiger', divine: true, acc: [22, .95] }, halophoenix: { base: 'icephoenix', divine: true, acc: [188, .85], lt: .78 }, solarkraken: { base: 'octopus', divine: true, acc: [12, .92], lt: .86 },
+  oceansovereign: { base: 'leviathan', divine: true, acc: [176, .8] }, diamondtitan: { base: 'geodetitan', divine: true, acc: [200, .9] }, starwhale: { base: 'cosmicwhale', divine: true, acc: [232, .75] },
+  heavenlydragon: { base: 'candydragon', divine: true, acc: [330, .85], lt: .8 }, archangeldragon: { base: 'celestialdragon', divine: true, acc: [212, .5] }, titanrex: { base: 'spino', divine: true, acc: [350, .85] },
+  wraithking: { base: 'phantomdragon', divine: true, acc: [140, .75] }, radiantphoenix: { base: 'aurorphoenix', divine: true, acc: 'rainbow', lt: .84 },
 };
 // recolours a drawn model in place (dark outlines and eyes stay as they are)
 function tintCanvas(x, v) {
@@ -3052,7 +3052,11 @@ function tintCanvas(x, v) {
       const py = (i / 4 / 192) | 0; if (py < top && a[i + 3] > 200) { top = py; topX = (i / 4) % 192; }
       let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
       if (l < .2) continue;
-      if (v.divine) { h = 46; sat = .35 + sat * .4; l = .62 + l * .33; }
+      if (v.divine) {
+        if (l > (v.lt || .58)) { h = 46; sat = .45 + sat * .3; l = .66 + l * .3; }
+        else if (v.acc === 'rainbow') { h = (((i / 4) % 192) * 2.2) % 360; sat = .85; l = .4 + l * .5; }
+        else { h = v.acc[0]; sat = v.acc[1]; l = .3 + l * .58; }
+      }
       else {
         if (sat < .15) { if (v.hue === undefined) continue; h = v.hue; } else h = (h + (v.shift || 0)) % 360;
         sat = Math.max(sat, v.sat || 0);
@@ -3066,7 +3070,7 @@ function tintCanvas(x, v) {
     const cx = clamp(topX, 34, 158), cy = Math.max(16, top - 12);
     x.lineWidth = 5; x.strokeStyle = '#FFD23F'; x.shadowColor = '#FFF6C8'; x.shadowBlur = 10;
     x.beginPath(); x.ellipse(cx, cy, 22, 7, 0, 0, 7); x.stroke(); x.shadowBlur = 0;
-    x.fillStyle = '#FFF1A8';
+    x.fillStyle = v.acc === 'rainbow' ? '#FF9BE8' : v.acc ? `hsl(${v.acc[0]},95%,78%)` : '#FFF1A8';
     [[20, 40, 7], [172, 60, 6], [30, 150, 5], [166, 156, 6]].forEach(([sx, sy, r]) => { x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); });
   }
 }
