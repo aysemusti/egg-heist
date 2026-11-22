@@ -67,6 +67,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 canvas.placing{cursor:crosshair}
 .style-top{display:flex;gap:16px;align-items:center;background:var(--panel-2);border-radius:16px;padding:10px 14px}
 #stylePrev{position:static;inset:auto;width:120px;height:140px;flex:none;background:radial-gradient(circle at 50% 70%,#CFE8B8,#A8D58A);border-radius:14px}
+.chip.mut-mount{background:#8A5A35;color:#fff}.sell.riding{background:#FFE066}
 .cos-sec{display:flex;flex-direction:column;gap:8px}
 .cos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px}
 .cos{background:var(--panel-2);border-radius:14px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;border:2px solid transparent}
@@ -484,6 +485,32 @@ const MUT = {
   dark:      { name: 'Dark',      mult: 10,  w: 2,  egg: '#3A2E48', glow: '#7A2EBA' },
 };
 const MUT_KEYS = Object.keys(MUT), MUT_DROP = 0.25;
+// Mount: a separate mutation you put on a pet so you can ride it (it still earns in the pen)
+const MOUNT_DROP = 0.06, RIDE_MULT = { C: 1.3, R: 1.4, E: 1.5, L: 1.65, M: 1.8, D: 2 };
+const rideP = () => G.ride ? G.pen.concat(G.inv).find(q => q.id === G.ride && q.mt && !q.egg) || null : null;
+function toggleRide(id) {
+  const q = G.pen.concat(G.inv).find(x => x.id === id && x.mt && !x.egg);
+  if (!q || G.ride === id) { G.ride = 0; toast('\ud83d\udc3e', 'You got off', ''); }
+  else { G.ride = id; sfx.buy(); toast(SPECIES[q.sp].id, `Riding your ${petName(q)}!`, `You run ×${RIDE_MULT[SPECIES[q.sp].r]} faster. It still earns money in the pen.`); }
+  save(); sendPresence(true); if (modalOpen) renderTab();
+}
+function applyMount() {
+  const id = +mutForm.mountPet;
+  if (!(G.mounts > 0)) { toast('\ud83d\udc0e', 'You have no Mount mutations', 'You can find them when eggs hatch.', true); return; }
+  const q = G.pen.concat(G.inv).find(x => x.id === id && !x.egg && !x.mt);
+  if (!q) { toast('\ud83d\udc0e', 'Pick a pet first', '', true); return; }
+  G.mounts--; q.mt = 1; mutForm.mountPet = ''; sfx.hatch(true);
+  toast(SPECIES[q.sp].id, `Your ${petName(q)} is now a mount!`, 'Tap Ride next to it in the Pen or Bag to ride it.');
+  save(); renderTab();
+}
+// a pet you ride is drawn under you
+function drawMount(q, x, y, fx, moving, step, t) {
+  const sp = SPECIES[q.sp], size = Math.min(140, Math.max(100, PSIZE[sp.r] * 1.5 * SIZES[q.z || 0].scale * (1 + .1 * (q.f || 0))));
+  const bob = moving ? Math.abs(Math.sin(step)) * 4 : Math.sin(t * 2) * 1;
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(x, y + 8, size * .38, size * .12, 0, 0, 7); ctx.fill();
+  drawModel(sp.id, x, y + 8 - bob, size, fx, (mutOf(q) && mutOf(q).glow) || null, q.f || 0, moving ? Math.sin(step) * .05 : 0, 1, 1, q.mut);
+  return size * .3 + bob;
+}
 const mutOf = p => p && MUT[p.mut] ? MUT[p.mut] : null;
 function pickMut() { let r = Math.random() * MUT_KEYS.reduce((a, k) => a + MUT[k].w, 0); for (const k of MUT_KEYS) { if ((r -= MUT[k].w) < 0) return k; } return 'bronze'; }
 const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
@@ -509,7 +536,7 @@ const pxSpeed = () => G.slow ? 200 : 160 + 2.2 * Math.min(G.speed, 280) + 1.1 * 
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -529,6 +556,7 @@ function loadSave(obj) {
     }
     g.cos = Object.assign(freshSave().cos, g.cos && typeof g.cos === 'object' ? g.cos : {}); if (!Array.isArray(g.cos.own)) g.cos.own = [];
     if (g.lang !== 'tr') g.lang = 'en';
+    g.mounts = Math.max(0, Math.floor(+g.mounts || 0)); g.ride = +g.ride || 0;
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
     g.speed = clamp(+g.speed || 0, 0, treadCap(g.tL)); g.money = Math.max(0, +g.money || 0);
   }
@@ -774,6 +802,12 @@ function buildBg(cvs) {
     // obstacles
     for (const o of biome.obst) {
       c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(o.x + 6, o.y + 8, o.r * 1.02, o.r * .8, 0, 0, 7); c.fill();
+      drawObstacle(c, o, r);
+    }
+  }
+}
+function drawObstacle(c, o, r) {
+  const { x, y } = o, R = o.r;
       if (o.kind === 'tree') {
         c.fillStyle = '#2C5A28'; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill();
         c.fillStyle = '#367030'; c.beginPath(); c.arc(o.x - o.r * .2, o.y - o.r * .2, o.r * .75, 0, 7); c.fill();
@@ -790,14 +824,7 @@ function buildBg(cvs) {
         c.fillStyle = '#3F8A48'; c.beginPath(); c.arc(o.x, o.y, o.r, 0, 7); c.fill();
         c.strokeStyle = '#2F6E38'; c.lineWidth = 2; for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28; c.beginPath(); c.moveTo(o.x, o.y); c.lineTo(o.x + Math.cos(a) * o.r, o.y + Math.sin(a) * o.r); c.stroke(); }
         c.fillStyle = '#FF7FA8'; c.beginPath(); c.arc(o.x, o.y, 4, 0, 7); c.fill();
-      }
-      if (!['tree', 'pool', 'rock', 'cactus'].includes(o.kind)) drawObstacle(c, o, r);
-    }
-  }
-}
-function drawObstacle(c, o, r) {
-  const { x, y } = o, R = o.r;
-  if (o.kind === 'palm') {
+      } else if (o.kind === 'palm') {
     c.fillStyle = '#1F5E33'; c.beginPath(); c.arc(x, y, R * .7, 0, 7); c.fill();
     for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283 + r(); c.fillStyle = k % 2 ? '#2E8A4A' : '#35994F'; c.beginPath(); c.ellipse(x + Math.cos(a) * R * .55, y + Math.sin(a) * R * .55, R * .55, R * .2, a, 0, 7); c.fill(); }
     c.fillStyle = '#8A6A3A'; c.beginPath(); c.arc(x, y, R * .18, 0, 7); c.fill();
@@ -982,7 +1009,7 @@ function update(dt) {
   const [ix, iy] = inputVec();
   player.moving = ix !== 0 || iy !== 0;
   const slow = player.carry ? RAR[player.carry.r].carry * EGG_SIZES[player.carry.es || 0].carry : 1;
-  const v = pxSpeed() * slow;
+  const rq = rideP(), v = pxSpeed() * slow * (rq && !G.slow ? RIDE_MULT[SPECIES[rq.sp].r] : 1);
   if (player.moving && G.cos.trail !== 'none') { trailT -= dt; if (trailT <= 0) { trailT = .045; spawnTrail(player.x, player.y, G.cos.trail, performance.now() / 1000); } }
   if (player.moving) { const n = Math.max(1, Math.ceil(v * dt / 14)); for (let k = 0; k < n; k++) { player.x += ix * v * dt / n; player.y += iy * v * dt / n; pushOut(player, 16); } if (Math.abs(ix) > .1) player.fx = Math.sign(ix); player.step += dt * (6 + v / 40); }
   player.x = clamp(player.x, 20, worldW - 20); player.y = clamp(player.y, 30, worldH - 20);
@@ -1090,7 +1117,7 @@ function storeCarry() {
   toast('🎒', `Stored a ${itemName(it)}`, 'Put it in the pen from your bag when you want it to hatch.');
   save(); syncHud(); renderTab();
 }
-const mutForm = { mutPick: '', mutEgg: '' };
+const mutForm = { mutPick: '', mutEgg: '', mountPet: '' };
 function applyMutation() {
   const k = mutForm.mutPick, id = +mutForm.mutEgg;
   if (!MUT[k] || !((G.muts || {})[k] > 0)) { toast('🧪', 'Pick a mutation you have', '', true); return; }
@@ -1112,6 +1139,15 @@ function mutationsHTML() {
       <label>Egg<select id="mutEgg">${eggs.map(q => `<option value="${q.id}"${String(q.id) === mutForm.mutEgg ? ' selected' : ''}>${esc(eggLabel(q))}</option>`).join('')}</select></label></div>
       <button class="buy" data-mutapply="1">Apply to egg</button>`
       : `<p class="note">${owned.length ? 'Get an egg first, then put a mutation on it here.' : 'You find mutations when your eggs hatch. Put one on an egg and the animal hatches with a new look and more money.'}</p>`}
+  </div>${mountHTML()}`;
+}
+function mountHTML() {
+  const pets = G.pen.concat(G.inv).filter(q => !q.egg && !q.mt), n = G.mounts || 0;
+  if (!pets.some(q => String(q.id) === String(mutForm.mountPet))) mutForm.mountPet = pets[0] ? String(pets[0].id) : '';
+  return `<div class="up mut-box"><h3>Mount mutation <span class="chip mut-mount">${n}</span></h3>
+    ${n && pets.length ? `<div class="adm"><label>Pet<select id="mountPet">${pets.map(q => `<option value="${q.id}"${String(q.id) === mutForm.mountPet ? ' selected' : ''}>${esc(petName(q))} (${RAR[SPECIES[q.sp].r].name}${G.pen.includes(q) ? ', pen' : ', bag'})</option>`).join('')}</select></label></div>
+      <button class="buy" data-mountapply="1">Make it a mount</button>`
+      : `<p class="note">${n ? 'Hatch a pet first, then make it a mount here.' : 'Sometimes a hatching egg drops a Mount mutation. Put it on a pet and you can ride it. Rarer pets run faster.'}</p>`}
   </div>`;
 }
 function bagHTML() {
@@ -1119,7 +1155,7 @@ function bagHTML() {
   const rows = G.inv.slice().reverse().map(p => {
     const sp = SPECIES[p.sp];
     if (p.egg) return `<div class="row"><span class="eggic" style="background:${mutOf(p) ? mutOf(p).egg : BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span>${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">Paused · hatches ${Math.ceil(p.left)}s after it goes in the pen</span></div><button class="sell" data-topen="${p.id}">Put in pen</button></div>`;
-    return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · earns $${fmt(petInc(p))}/s in the pen</span></div><div class="bag-btns"><button class="sell" data-topen="${p.id}">Put in pen</button><button class="sell" data-bagsell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
+    return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}${p.mt ? ' <span class="chip mut-mount">Mount</span>' : ''}</span><span class="sub">${BIOMES[sp.b].name} · earns $${fmt(petInc(p))}/s in the pen</span></div><div class="bag-btns">${p.mt ? `<button class="sell${G.ride === p.id ? ' riding' : ''}" data-ride="${p.id}">${G.ride === p.id ? 'Get off' : 'Ride'}</button>` : ''}<button class="sell" data-topen="${p.id}">Put in pen</button><button class="sell" data-bagsell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
   }).join('');
   return `
     <div><h3>Your bag · ${G.inv.length}/${BAG_MAX}</h3><p class="note">Keep animals and eggs you are not using. In the bag, animals don't earn money and eggs don't hatch, but they don't take up pen slots either. Pen ${G.pen.length}/${penSlots(G.pL)}.</p></div>
@@ -1137,6 +1173,7 @@ function hatch(p) {
     const k = pickMut(); G.muts = G.muts || {}; G.muts[k] = (G.muts[k] || 0) + 1;
     setTimeout(() => toast('\ud83e\uddea', `You found a ${MUT[k].name} mutation!`, `Open your Bag to put it on an egg. ${MUT[k].name} animals earn \u00d7${MUT[k].mult}.`, false, true, k === 'dark' || k === 'enchanted' ? 'mythic' : ''), 900);
   }
+  if (Math.random() < MOUNT_DROP) { G.mounts = (G.mounts || 0) + 1; setTimeout(() => toast('\ud83d\udc0e', 'You found a Mount mutation!', 'Open your Bag and put it on a pet, then ride it.', false, true), 1400); }
   sfx.hatch(sp.r === 'L' || sp.r === 'M' || sp.r === 'D');
   if (scene === 'hub') { const pos = petSpot(p); burst(pos.x, pos.y, RAR[sp.r].color, 22); }
   toast(sp.id, `Hatched a ${petName(p)}!`, `${RAR[sp.r].name}${p.z ? ' · ' + SIZES[p.z].name + ' earns ' + SIZES[p.z].mult + '×' : ''} · $${fmt(petInc(p))}/s`, false, isNew);
@@ -1223,6 +1260,7 @@ function updateGuards(dt) {
   }
 }
 function pushOut(o, r) {
+  for (const ob of worldObjs) { const R = objR(ob), dx = o.x - ob.x, dy = o.y - ob.y, d = Math.hypot(dx, dy), min = R + r; if (d < min && d > 0.001) { o.x = ob.x + dx / d * min; o.y = ob.y + dy / d * min; } }
   const z = zoneAt(o.x); if (z === 'hub' || !zones[z]) return;
   for (const ob of zones[z].obst) {
     const dx = o.x - ob.x, dy = o.y - ob.y, d = Math.hypot(dx, dy), min = ob.r + r;
@@ -1351,6 +1389,8 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.bagsell) sellFromBag(+b.dataset.bagsell);
   else if (b.dataset.bag === 'carry') storeCarry();
   else if (b.dataset.cos) cosAction(b.dataset.cos);
+  else if (b.dataset.ride) toggleRide(+b.dataset.ride);
+  else if (b.dataset.mountapply) applyMount();
   else if (b.dataset.lang) setLang(b.dataset.lang);
   else if (b.dataset.mutapply) applyMutation();
   else if (b.id === 'makeParty') joinParty(newPartyCode(), 'made');
@@ -1442,7 +1482,7 @@ function renderTab() {
       <div class="penlist">${G.pen.length ? G.pen.map(p => {
         const sp = SPECIES[p.sp];
         if (p.egg) return `<div class="row"><span class="eggic" style="background:${mutOf(p) ? mutOf(p).egg : BIOMES[p.b].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${BIOMES[p.b].name} egg <span class="chip ${p.r}">${RAR[p.r].name}</span>${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub" data-left="${p.id}">Hatching in ${Math.ceil(p.left)}s</span></div><button class="sell" data-store="${p.id}">Store</button></div>`;
-        return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}</span><span class="sub">${BIOMES[sp.b].name} · $${fmt(petInc(p))}/s</span></div><div class="bag-btns"><button class="sell" data-store="${p.id}">Store</button><button class="sell" data-sell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
+        return `<div class="row">${modelTag(sp.id, 'em', p.f || 0, p.mut)}<div class="info"><span class="nm">${esc(petName(p))} <span class="chip ${sp.r}">${RAR[sp.r].name}</span>${p.f ? ` <span class="chip F${p.f}">${FUSE[p.f].name}</span>` : ''}${p.z ? ` <span class="chip Z${p.z}">${SIZES[p.z].name}</span>` : ''}${mutOf(p) ? ` <span class="chip mut-${p.mut}">${mutOf(p).name}</span>` : ''}${p.mt ? ' <span class="chip mut-mount">Mount</span>' : ''}</span><span class="sub">${BIOMES[sp.b].name} · $${fmt(petInc(p))}/s</span></div><div class="bag-btns">${p.mt ? `<button class="sell${G.ride === p.id ? ' riding' : ''}" data-ride="${p.id}">${G.ride === p.id ? 'Get off' : 'Ride'}</button>` : ''}<button class="sell" data-store="${p.id}">Store</button><button class="sell" data-sell="${p.id}">Sell $${fmt(petSell(p))}</button></div></div>`;
       }).join('') : '<p class="note">Your pen is empty. Bring an egg back from the Forest to get started.</p>'}</div>`;
   } else {
     const n = SPECIES.filter(s => G.found[s.id]).length;
@@ -1526,7 +1566,7 @@ function onPartyPeers(ch) {
   partyPeers = ch.peers.filter(p => !p.isMe && p.kind === 'viewer');
   const ids = partyPeers.map(p => p.by).filter(Boolean);
   if (meUser && ids.length) meUser.profiles(ids).then(ps => { for (const id of ids) partyNames[id] = (ps[id] && ps[id].name) || ''; partyDirty = true; }).catch(() => {});
-  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); }
+  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); }
   for (const p of ch.left) if (!p.isMe && p.kind === 'viewer') { delete partyViews[p.peer]; delete hatchSeen[p.peer]; toast('👋', `${friendName(p)} left the party`, ''); }
   for (const p of ch.updated) {
     if (p.isMe) continue;
@@ -1543,7 +1583,7 @@ function sendPresence(force) {
   if (!party) return;
   const pres = { x: Math.round(player.x), y: Math.round(player.y), f: player.fx < 0 ? -1 : 1, m: player.moving ? 1 : 0,
     z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null,
-    lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone] };
+    lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone], rd: rideP() ? [rideP().sid, rideP().f || 0, rideP().mut || '', rideP().z || 0] : null };
   const key = JSON.stringify(pres);
   if (!force && key === lastPres) return;
   lastPres = key; party.presence(pres).catch(() => {});
@@ -1563,6 +1603,14 @@ function partyFriends(dt) {
   return out;
 }
 function drawFriend(fr, t) {
+  const rd = fr.p.presence && Array.isArray(fr.p.presence.rd) ? fr.p.presence.rd : null, ri = rd ? spIndex(String(rd[0])) : -1;
+  if (ri >= 0) {
+    const q = { sp: ri, f: [0, 1, 2].includes(rd[1]) ? rd[1] : 0, mut: MUT[rd[2]] ? rd[2] : undefined, z: [0, 1, 2].includes(rd[3]) ? rd[3] : 0 };
+    const lift = drawMount(q, fr.v.x, fr.v.y, fr.st.f, fr.st.m, fr.v.step, t);
+    drawKid(fr.v.x, fr.v.y - lift, fr.st.f, false, 0, fr.st.c, Object.assign(friendLook(fr.p), { ns: 1 }), t, 0);
+    label(friendName(fr.p), fr.v.x, fr.v.y - lift - (fr.st.c ? 100 : 68), 15, '#FFE066');
+    return;
+  }
   drawKid(fr.v.x, fr.v.y, fr.st.f, fr.st.m, fr.v.step, fr.st.c, friendLook(fr.p), t, 0);
   label(friendName(fr.p), fr.v.x, fr.v.y - (fr.st.c ? 100 : 68), 15, '#FFE066');
 }
@@ -1612,7 +1660,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1620,13 +1668,14 @@ async function adminInit() {
     if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
+      db.doc('admin/objects').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setObjs(d.list); }, () => {});
       db.doc('admin/gifts').onSnapshot(snap => {
         const d = snap.exists ? snap.data() : null;
         giftList = d && Array.isArray(d.list) ? d.list : []; giftsLoaded = true;
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1674,7 +1723,8 @@ function applyGift(g, from) {
     if (f) G.fusedFound[sp.id] = Math.max(G.fusedFound[sp.id] || 0, f);
     toast(sp.id + '|' + f, `Gift: ${n > 1 ? n + '× ' : ''}${petName({ sp: i, z, f, mut: g.m })}`, from, false, !G.found[sp.id]);
   } else if (g.kind === 'mut') {
-    const k = MUT[g.k] ? g.k : null, n = int(g.n, 1, 50, 1); if (!k) return;
+    const k = MUT[g.k] || g.k === 'mount' ? g.k : null, n = int(g.n, 1, 50, 1); if (!k) return;
+    if (k === 'mount') { G.mounts = (G.mounts || 0) + n; toast('\ud83d\udc0e', `Gift: ${n > 1 ? n + ' ' : 'a '}Mount mutation${n > 1 ? 's' : ''}`, `${from}. Open your Bag to put ${n > 1 ? 'them' : 'it'} on a pet.`); save(); syncHud(); if (modalOpen) renderTab(); return; }
     G.muts = G.muts || {}; G.muts[k] = (G.muts[k] || 0) + n;
     toast('🧪', `Gift: ${n > 1 ? n + ' ' : 'a '}${MUT[k].name} mutation${n > 1 ? 's' : ''}`, `${from}. Open your Bag to put ${n > 1 ? 'them' : 'it'} on an egg.`, false, false, k === 'dark' || k === 'enchanted' ? 'mythic' : '');
   } else if (g.kind === 'egg') {
@@ -1733,6 +1783,14 @@ async function adminAction(what) {
     return;
   }
   if (kind === 'place') { startPlacing(); return; }
+  if (kind === 'objplace' || kind === 'objerase') {
+    const ok = OBJ_KINDS.find(k => k[0] === f.admObj) || OBJ_KINDS[0];
+    placing = kind === 'objerase' ? { kind: 'erase' } : { kind: 'obj', k: ok[0], s: +f.admObjSize || 1 };
+    $('placeTxt').textContent = kind === 'objerase' ? 'Tap an object to erase it' : `Tap the map to place: ${ok[1]}`;
+    $('placeBar').hidden = false; cv.classList.add('placing'); closeModal(); return;
+  }
+  if (kind === 'objundo') { if (worldObjs.length) { await commitObjs(worldObjs.slice(0, -1)); toast('\u21a9\ufe0f', 'Removed the last object', ''); } renderTab(); return; }
+  if (kind === 'objclear') { await commitObjs([]); toast('\ud83e\uddf9', 'Removed every object', ''); renderTab(); return; }
   if (kind === 'unplace') { await sendPlacement('unplace', {}); toast('\ud83e\uddf9', 'Removed everything you placed', ''); return; }
   if (kind === 'clear') {
     if (!adminDb) return;
@@ -1742,7 +1800,7 @@ async function adminAction(what) {
   const g = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), kind, at: Date.now() };
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
-  else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
+  else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] || f.admMutK === 'mount' ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
   else if (kind === 'pet') Object.assign(g, { m: MUT[f.admPetMut] ? f.admPetMut : undefined, sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
   else if (kind === 'egg') Object.assign(g, { m: MUT[f.admGiftMut] ? f.admGiftMut : undefined, b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
   // who gets it: the "Send to" menu (Everyone, Just me, or one friend in your party)
@@ -1775,6 +1833,7 @@ async function adminAction(what) {
   } catch (e) { toast('⚠️', 'Could not send the gift', e && e.code === 'quota_exceeded' ? 'The gift list is full. Clear it and try again.' : 'Try again in a moment.', true); }
 }
 function giftText(g) {
+  if (g.kind === 'mut' && g.k === 'mount') return `${g.n > 1 ? g.n + '\u00d7 ' : ''}Mount mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'mut' && MUT[g.k]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${MUT[g.k].name} mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'egg' && RAR[g.r] && BIOMES[g.b]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${RAR[g.r].name} ${BIOMES[g.b].name} egg${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'index') return 'Full Index';
@@ -1819,9 +1878,9 @@ function adminHTML() {
         <label>How many<input id="admPetN" type="number" min="1" max="10" value="${esc(f.admPetN)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="pet:to">Give</button></div></div>
       <div class="up"><h3>Mutations</h3>
-        <label>Mutation${sel('admMutK', MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult]))}</label>
+        <label>Mutation${sel('admMutK', [...MUT_KEYS.map(k => [k, MUT[k].name + ' \u00d7' + MUT[k].mult]), ['mount', 'Mount (ride a pet)']])}</label>
         <label>How many<input id="admMutN" type="number" min="1" max="50" value="${esc(f.admMutN)}"></label>
-        <span class="note" style="font-size:12px">They go into the player's Bag, ready to put on an egg.</span>
+        <span class="note" style="font-size:12px">They go into the player's Bag, ready to put on an egg (Mount goes on a pet).</span>
         <div class="adm-btns"><button class="buy" data-adm="mut:to">Give</button></div></div>
       <div class="up"><h3>Give eggs</h3>
         <label>Biome${sel('admGiftBiome', BIOMES.map((b, i) => [i, b.name]))}</label>
@@ -1841,10 +1900,61 @@ function adminHTML() {
         <div class="adm-row"><label>Pet size${sel('admPlaceSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Pet fusion${sel('admPlaceFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
         <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
+      <div class="up"><h3>Place objects</h3>
+        <div class="adm-row"><label>Object${sel('admObj', OBJ_KINDS.map(k => [k[0], k[1]]))}</label><label>Size${sel('admObjSize', OBJ_SIZES.map(z => [z[0], z[1]]))}</label></div>
+        <span class="note" style="font-size:12px">Tap Pick a spot, then tap the map as many times as you like. Objects stay for everyone, even after the game is closed. ${worldObjs.length} placed.</span>
+        <div class="adm-btns"><button class="buy" data-adm="objplace">Pick a spot</button><button class="sell" data-adm="objerase">Erase one</button></div>
+        <div class="adm-btns"><button class="sell" data-adm="objundo">Undo last</button><button class="sell" data-adm="objclear">Remove all objects</button></div></div>
     </div>
     <div hidden><h3>Gifts waiting for players</h3>${giftList.length ? `<ol class="gift-list">${giftList.slice(-8).reverse().map(g => `<li>${esc(giftText(g))}</li>`).join('')}</ol>` : '<p class="note">None yet.</p>'}</div>
     ${giftList.length ? '<button class="reset" data-adm="clear">Clear the gift list (players keep what they already got)</button>' : ''}`;
 }
+// ================= OBJECTS THE OWNER PLACES (trees, rocks, ...) =================
+const OBJ_KINDS = [['tree', 'Tree', 42], ['pine', 'Pine tree', 40], ['palm', 'Palm tree', 44], ['deadtree', 'Spooky tree', 42], ['bush', 'Bush', 34],
+  ['rock', 'Rock', 36], ['cactus', 'Cactus', 30], ['pool', 'Pond', 52], ['ice', 'Ice block', 38], ['lava', 'Lava pool', 46], ['basalt', 'Lava rock', 38],
+  ['coral', 'Coral', 40], ['anemone', 'Anemone', 30], ['crystal', 'Crystal', 36], ['stalag', 'Cave rock', 38], ['crater', 'Crater', 46], ['moonrock', 'Moon rock', 34],
+  ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28]];
+const OBJ_R = Object.fromEntries(OBJ_KINDS.map(k => [k[0], k[2]])), OBJ_SIZES = [[.6, 'Small'], [1, 'Normal'], [1.6, 'Big'], [2.4, 'Giant']];
+const OBJ_MAX = 400, OBJ_KEY = 'egg-heist-objs-v1';
+let worldObjs = [];
+const objCache = new Map();
+function cleanObjs(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const o of list.slice(0, OBJ_MAX)) {
+    if (!o || !OBJ_R[o.k]) continue;
+    const x = +o.x, y = +o.y, sz = +o.s;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > WORLD_W || y < 0 || y > BH || !OBJ_SIZES.some(z => z[0] === sz)) continue;
+    out.push({ id: String(o.id || '').slice(0, 24) || Math.random().toString(36).slice(2, 9), k: o.k, x: Math.round(x), y: Math.round(y), s: sz });
+  }
+  return out;
+}
+const objR = o => OBJ_R[o.k] * o.s;
+function setObjs(list, keep) {
+  worldObjs = cleanObjs(list);
+  if (keep !== false) { try { localStorage.setItem(OBJ_KEY, JSON.stringify(worldObjs)); } catch (e) {} }
+}
+try { setObjs(JSON.parse(localStorage.getItem(OBJ_KEY) || '[]'), false); } catch (e) {}
+function objImg(o) {
+  const key = o.id + o.k + o.s; if (objCache.has(key)) return objCache.get(key);
+  const R = objR(o), pad = Math.ceil(R * 1.35 + 26), c2 = document.createElement('canvas'); c2.width = c2.height = pad * 2;
+  const c = c2.getContext('2d'); let h = 7; for (const ch of String(o.id)) h = (h * 31 + ch.charCodeAt(0)) % 2147483646; const r = seeded(h + 1);
+  const ob = { x: pad, y: pad, r: R, kind: o.k };
+  c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(pad + 6, pad + 8, R * 1.02, R * .8, 0, 0, 7); c.fill();
+  drawObstacle(c, ob, r);
+  if (objCache.size > 600) objCache.clear();
+  objCache.set(key, c2); return c2;
+}
+function drawObjs(xs, xe) {
+  for (const o of worldObjs) { const R = objR(o); if (o.x + R * 1.5 < xs || o.x - R * 1.5 > xe) continue; const im = objImg(o); ctx.drawImage(im, o.x - im.width / 2, o.y - im.height / 2); }
+}
+// the owner saves the list for everyone and tells everyone who is playing right now
+async function commitObjs(list) {
+  setObjs(list);
+  if (adminDb) { try { await adminDb.doc('admin/objects').set({ list: worldObjs }); } catch (e) {} }
+  const r = await getRoom(); if (r) { try { await r.emit('objs', { list: worldObjs }); } catch (e) {} }
+}
+function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list); }
 // ================= PLACED GUARDIANS AND PETS =================
 let worldPets = [], nearPet = null, placing = null, placeSeq = 0;
 function drawWorldPet(wp, t) {
@@ -1911,6 +2021,18 @@ function stopPlacing() { placing = null; $('placeBar').hidden = true; cv.classLi
 async function placeAt(ev) {
   const rc = cv.getBoundingClientRect();
   const x = Math.round(camX + (ev.clientX - rc.left) / Z), y = Math.round(camY + (ev.clientY - rc.top) / Z);
+  if (placing.kind === 'obj' || placing.kind === 'erase') {
+    if (y < 0 || y > BH || x < 0 || x > WORLD_W) return;
+    if (placing.kind === 'erase') {
+      let best = null, bd = 1e9; for (const o of worldObjs) { const d = dist(x, y, o.x, o.y); if (d < objR(o) + 30 && d < bd) { bd = d; best = o; } }
+      if (!best) { toast('\ud83d\udd0d', 'No object there', 'Tap right on the object you want to erase.', true); return; }
+      burst(best.x, best.y, '#FFFFFF', 12); await commitObjs(worldObjs.filter(o => o !== best)); return;
+    }
+    if (worldObjs.length >= OBJ_MAX) { toast('\ud83d\udea7', 'Too many objects', `You can place up to ${OBJ_MAX}. Erase some first.`, true); return; }
+    burst(x, y, '#FFE066', 10);
+    await commitObjs(worldObjs.concat([{ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), k: placing.k, x, y, s: placing.s }]));
+    return;
+  }
   if (placing.kind === 'guard' && zoneAt(x) === 'hub') { toast('🏡', "Guardians can't go in your home", 'Tap somewhere in a biome instead.', true); return; }
   if (y < 0 || y > BH) return;
   burst(x, y, '#FFE066', 14);
@@ -1996,6 +2118,18 @@ const TR_EXACT = {
   'Blue cap': 'Mavi kep', 'No hat': 'Şapkasız', 'Party hat': 'Parti şapkası', 'Cowboy hat': 'Kovboy şapkası', 'Wizard hat': 'Büyücü şapkası', 'Viking helmet': 'Viking miğferi', 'Top hat': 'Silindir şapka', 'Bunny ears': 'Tavşan kulakları', 'Crown': 'Taç', 'Halo': 'Hale',
   'Nothing': 'Hiçbir şey', 'Backpack': 'Sırt çantası', 'Hero cape': 'Kahraman pelerini', 'Jetpack': 'Jetpack', 'Angel wings': 'Melek kanatları',
   'No trail': 'İz yok', 'Sparkle trail': 'Parıltı izi', 'Heart trail': 'Kalp izi', 'Fire trail': 'Ateş izi', 'Rainbow trail': 'Gökkuşağı izi',
+  'Mount': 'Binek', 'Ride': 'Bin', 'Get off': 'İn', 'You got off': 'İndin', 'Mount mutation': 'Binek mutasyonu', 'Make it a mount': 'Binek yap', 'Mount (ride a pet)': 'Binek (hayvana bin)',
+  'You found a Mount mutation!': 'Binek mutasyonu buldun!', 'Open your Bag and put it on a pet, then ride it.': 'Çantanı aç, bir hayvana koy, sonra ona bin.',
+  'You have no Mount mutations': 'Binek mutasyonun yok', 'You can find them when eggs hatch.': 'Yumurtalar çıkınca bulabilirsin.', 'Pick a pet first': 'Önce bir hayvan seç',
+  'Tap Ride next to it in the Pen or Bag to ride it.': 'Binmek için Ağıl ya da Çanta\'da yanındaki Bin\'e dokun.', 'Hatch a pet first, then make it a mount here.': 'Önce bir hayvan çıkar, sonra burada binek yap.',
+  'Sometimes a hatching egg drops a Mount mutation. Put it on a pet and you can ride it. Rarer pets run faster.': 'Bazen çıkan bir yumurtadan Binek mutasyonu düşer. Bir hayvana koyarsan ona binebilirsin. Daha nadir hayvanlar daha hızlı koşar.',
+  "They go into the player's Bag, ready to put on an egg (Mount goes on a pet).": 'Oyuncunun Çantasına gider, bir yumurtaya konmaya hazır (Binek bir hayvana konur).',
+  'Place objects': 'Nesne yerleştir', 'Object': 'Nesne', 'Erase one': 'Birini sil', 'Undo last': 'Sonuncuyu geri al', 'Remove all objects': 'Tüm nesneleri kaldır',
+  'Tap an object to erase it': 'Silmek için bir nesneye dokun', 'Removed the last object': 'Son nesne kaldırıldı', 'Removed every object': 'Tüm nesneler kaldırıldı',
+  'No object there': 'Orada nesne yok', 'Tap right on the object you want to erase.': 'Silmek istediğin nesnenin tam üstüne dokun.', 'Too many objects': 'Çok fazla nesne',
+  'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
+  'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
+  'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
   'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
@@ -2084,7 +2218,12 @@ const TR_RULES = [
   [/^The (.+) needs speed (\d+)$/, '$1 için hız $2 gerekli'], [/^You have (\d+)\. Run on the treadmill to build it up$/, 'Hızın $1. Koşu bandında koşarak artır'],
   [/^They open again in (\d+) seconds$/, '$1 saniye sonra tekrar açılır'], [/^Night falls in (\d+) seconds$/, '$1 saniye sonra gece oluyor'],
   [/^The biomes are closed for (\d+) seconds and every egg resets\.$/, 'Biyomlar $1 saniye kapalı ve tüm yumurtalar sıfırlanıyor.'],
-  [/^All (\d+) shirts, hats, back items and trails from Style$/, 'Stil\'deki $1 tişört, şapka, sırt eşyası ve izin hepsi'], [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
+  [/^All (\d+) shirts, hats, back items and trails from Style$/, 'Stil\'deki $1 tişört, şapka, sırt eşyası ve izin hepsi'], [/^Riding your (.+)!$/, '$1 hayvanına biniyorsun!'], [/^You run ×(.+) faster\. It still earns money in the pen\.$/, '×$1 daha hızlı koşuyorsun. Ağılda para kazandırmaya devam eder.'],
+  [/^Your (.+) is now a mount!$/, '$1 artık bir binek!'], [/^Tap the map to place: (.+)$/, (m, a) => 'Yerleştirmek için haritaya dokun: ' + (TR_EXACT[a] || a)],
+  [/^Tap Pick a spot, then tap the map as many times as you like\. .* (\d+) placed\.$/, 'Yer seç\'e dokun, sonra haritaya istediğin kadar dokun. Nesneler herkes için kalır, oyun kapansa bile. $1 tane yerleştirildi.'],
+  [/^You can place up to (\d+)\. Erase some first\.$/, 'En fazla $1 tane yerleştirebilirsin. Önce birkaçını sil.'],
+  [/^(\d+)× Mount mutations$/, '$1× Binek mutasyonu'], [/^Gift: (an? |\d+ )Mount mutations?$/, 'Hediye: Binek mutasyonu'], [/^(.+)\. Open your Bag to put (it|them) on a pet\.$/, '$1. Bir hayvana koymak için Çantanı aç.'],
+  [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
   [/^Sold an? (.+)$/, '$1 satıldı'], [/^You made an? (.+)!$/, '$1 yaptın!'], [/^Earns \$(.+)\/s · freed 2 pen slots$/, '$$$1/sn kazandırır · ağılda 2 yer açıldı'],
@@ -3571,7 +3710,7 @@ function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
   const sh = L.shirtColor || (L.shirt === 'rainbow' ? `hsl(${(t * 120) % 360},85%,60%)` : (cosItem('shirt', L.shirt) || COS.shirt[0]).c);
   c.save();
   if (fade) c.globalAlpha = fade;
-  c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(x, y + 4, 16, 6, 0, 0, 7); c.fill();
+  if (!L.ns) { c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(x, y + 4, 16, 6, 0, 0, 7); c.fill(); }
   c.translate(x, y - bob); c.scale(fx, 1);
   drawBack(c, L.back, step, moving, t);
   const leg = Math.sin(step) * (moving ? 5 : 0);
@@ -3587,6 +3726,8 @@ function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
   if (carry && c === ctx) drawEgg(x, y - 66 - bob - 6 * (carry.es || 0), 20 * EGG_SIZES[carry.es || 0].scale, carry.r, BIOMES[carry.b].egg, t);
 }
 function drawPlayer(t) {
+  const rq = rideP(), mv = player.moving || onTread;
+  if (rq) { const lift = drawMount(rq, player.x, player.y, player.fx, mv, player.step, t); drawKid(player.x, player.y - lift, player.fx, false, 0, player.carry, Object.assign(myLook(), { ns: 1 }), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0); return; }
   drawKid(player.x, player.y, player.fx, player.moving || onTread, player.step, player.carry, myLook(), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0);
 }
 
@@ -3661,7 +3802,7 @@ function drawHub(t, dt) {
       const frac = 1 - p.left / RAR[p.r].hatch;
       ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, 0, 7); ctx.stroke();
       ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
-    } else pets.push(p);
+    } else if (p.id !== G.ride || !p.mt) pets.push(p);
   }
   const night = isNight();
   for (const p of pets) {
@@ -3771,6 +3912,7 @@ function drawWorld(t, dt) {
   if (xe > HOME_W) for (let i = zoneAt(Math.max(xs, HOME_W)); i <= zoneAt(xe); i++) vis.push(i);
   for (const z of vis) ctx.drawImage(getTile(z), z === 'hub' ? 0 : ZX(z), 0, z === 'hub' ? HOME_W : BW, BH);
   if (vis.includes('hub')) drawHub(t, dt);
+  drawObjs(xs, xe);
   const ents = [{ y: player.y, p: true }];
   for (const z of vis) if (z !== 'hub') {
     const zd = getZone(z), B = BIOMES[z];
