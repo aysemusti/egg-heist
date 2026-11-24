@@ -422,6 +422,8 @@ const BIOMES = [
     obs: { n: 16, kinds: [['tomb', 20, 28], ['deadtree', 28, 40]] }, guard: { name: 'Giant Ghost', m: 'g-ghost', speed: 2750, see: 260, seeCarry: 400 }, nests: [[1200, 250], [1200, 650]] },
   { name: 'Rainbow Realm',    req: 2900, mult: 200e6, portal: '#FF7AD9', egg: '#FFFFFF', frame: '#C8B8F0', pal: { g: '#F4F0FF', p: '#ECE4FF', p2: '#FFF4FA' },
     obs: { n: 14, kinds: [['crystal', 26, 40], ['cloud', 34, 50]] }, guard: { name: 'Prism Golem', m: 'g-prism', speed: 3350, see: 250, seeCarry: 380 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Mushroom Grove',   req: 3600, mult: 900e6, portal: '#9B5AE8', egg: '#EDE0FF', frame: '#2A2036', pal: { g: '#34503A', p: '#2E4834', p2: '#3E5C42' },
+    obs: { n: 16, kinds: [['mushroom', 26, 44], ['tree', 30, 44]] }, guard: { name: 'Toadstool Troll', m: 'g-toadstool', speed: 3900, see: 250, seeCarry: 390 }, nests: [[1200, 250], [1200, 650]] },
 ];
 // Biomes were designed on a 1400x900 map; they are now this much bigger.
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
@@ -444,16 +446,17 @@ const SPECIES = [
   ['nightbat', 'Night Bat', '', 12, 'C'], ['pumpkinsnail', 'Pumpkin Snail', '', 12, 'C'], ['blackcat', 'Black Cat', '', 12, 'R'], ['zombiebunny', 'Zombie Bunny', '', 12, 'R'], ['raven', 'Raven', '', 12, 'E'], ['ghostunicorn', 'Ghost Unicorn', '', 12, 'L'], ['phantomdragon', 'Phantom Dragon', '', 12, 'M'],
   ['rainbowfrog', 'Rainbow Frog', '', 13, 'C'], ['butterfly', 'Prism Butterfly', '', 13, 'C'], ['rainbowcobra', 'Rainbow Cobra', '', 13, 'R'], ['glitterowl', 'Glitter Owl', '', 13, 'R'], ['lion', 'Rainbow Lion', '', 13, 'E'], ['prismunicorn', 'Prism Unicorn', '', 13, 'L'], ['aurorphoenix', 'Aurora Phoenix', '', 13, 'M'],
   ['moonfox', 'Moon Fox', '', 0, 'L'], ['jadefrog', 'Jade Frog Lord', '', 1, 'L'], ['goldcamel', 'Golden Camel', '', 2, 'L'], ['emeraldtoucan', 'Emerald Toucan', '', 3, 'L'], ['snowlion', 'Snow Lion', '', 4, 'L'], ['emberwolf', 'Ember Wolf', '', 5, 'L'], ['pearldolphin', 'Pearl Dolphin', '', 6, 'L'], ['opalaxolotl', 'Opal Axolotl', '', 7, 'L'], ['lunarpup', 'Lunar Pup', '', 8, 'L'], ['candyunicorn', 'Cotton Candy Unicorn', '', 9, 'L'], ['stormeagle', 'Storm Eagle', '', 10, 'L'], ['goldraptor', 'Golden Raptor', '', 11, 'L'], ['ghostfox', 'Ghost Fox', '', 12, 'L'], ['rainbowpegasus', 'Rainbow Pegasus', '', 13, 'L'], ['elderowl', 'Elder Owl King', '', 0, 'M'], ['bogdragon', 'Bog Dragon', '', 1, 'M'], ['miragecobra', 'Mirage Cobra', '', 2, 'M'], ['silverback', 'Silverback King', '', 3, 'M'], ['blizzardmammoth', 'Blizzard Mammoth', '', 4, 'M'], ['lavaphoenix', 'Lava Phoenix', '', 5, 'M'], ['krakenqueen', 'Kraken Queen', '', 6, 'M'], ['spiderqueen', 'Crystal Spider Queen', '', 7, 'M'], ['galaxydragon', 'Galaxy Dragon', '', 8, 'M'], ['gumdrophydra', 'Gumdrop Hydra', '', 9, 'M'], ['thunderbird', 'Thunderbird', '', 10, 'M'], ['ancientbrachio', 'Ancient Brachio', '', 11, 'M'], ['reaperraven', 'Reaper Raven', '', 12, 'M'], ['spectrumserpent', 'Spectrum Serpent', '', 13, 'M'], ['seraphstag', 'Seraph Stag', '', 0, 'D'], ['divinehydra', 'Divine Hydra', '', 1, 'D'], ['pharaohsphinx', 'Pharaoh Sphinx', '', 2, 'D'], ['suntiger', 'Sun Tiger', '', 3, 'D'], ['halophoenix', 'Halo Phoenix', '', 4, 'D'], ['solarkraken', 'Solar Kraken', '', 5, 'D'], ['oceansovereign', 'Ocean Sovereign', '', 6, 'D'], ['diamondtitan', 'Diamond Titan', '', 7, 'D'], ['starwhale', 'Star Whale', '', 8, 'D'], ['heavenlydragon', 'Heavenly Candy Dragon', '', 9, 'D'], ['archangeldragon', 'Archangel Dragon', '', 10, 'D'], ['titanrex', 'Titan Rex', '', 11, 'D'], ['wraithking', 'Wraith King', '', 12, 'D'], ['radiantphoenix', 'Radiant Phoenix', '', 13, 'D'],
+  ['shroomhog', 'Mushroom Hedgehog', '', 14, 'C'], ['glowworm', 'Glow Worm', '', 14, 'C'], ['sporefrog', 'Spore Frog', '', 14, 'R'], ['mossturtle', 'Moss Turtle', '', 14, 'R'], ['fairyfox', 'Fairy Fox', '', 14, 'E'], ['shroomstag', 'Glowcap Stag', '', 14, 'L'], ['mothqueen', 'Moon Moth', '', 14, 'L'], ['fungaldragon', 'Fungal Dragon', '', 14, 'M'], ['mycowyrm', 'Myco Wyrm', '', 14, 'M'], ['sporeemperor', 'Spore Emperor', '', 14, 'D'],
 ].map(([id, name, e, b, r]) => ({ id, name, e, b, r }));
 // Always add new animals at the END of this list. Version 5 briefly had Reef/Cave/Moon (36-53)
 // inserted before the Volcano animals (30-35); this is that order, used only to repair those saves.
 const V5_ORDER = [...SPECIES.slice(0, 30), ...SPECIES.slice(36, 54), ...SPECIES.slice(30, 36)];
 const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72, D: 80 };
 const STYLE_IDS = {
-  fly: 'owl parrot toucan eagle emberbat phoenix ptero butterfly crystalbat nightbat raven bluebird thunderowl snowyowl glitterowl icephoenix aurorphoenix dragon crystaldragon candydragon celestialdragon phantomdragon',
-  hop: 'bunny frog moonbunny chocobunny cloudbunny zombiebunny rainbowfrog gummybear marshchick squirrel seal',
+  fly: 'mothqueen fairyfox owl parrot toucan eagle emberbat phoenix ptero butterfly crystalbat nightbat raven bluebird thunderowl snowyowl glitterowl icephoenix aurorphoenix dragon crystaldragon candydragon celestialdragon phantomdragon',
+  hop: 'sporefrog bunny frog moonbunny chocobunny cloudbunny zombiebunny rainbowfrog gummybear marshchick squirrel seal',
   swim: 'clownfish seahorse octopus dolphin narwhal leviathan cosmicwhale skywhale magmakraken starjelly',
-  slither: 'snail lollisnail pumpkinsnail cobra rainbowcobra starfish',
+  slither: 'glowworm snail lollisnail pumpkinsnail cobra rainbowcobra starfish',
 };
 const STYLE_OF = {};
 for (const [st, ids] of Object.entries(STYLE_IDS)) for (const id of ids.split(' ')) STYLE_OF[id] = st;
@@ -791,6 +794,8 @@ function buildBg(cvs) {
       for (let i = 0; i < 40 * A; i++) { c.fillStyle = '#5AE8A8'; c.globalAlpha = .5; c.beginPath(); c.arc(r() * worldW, r() * worldH, 2, 0, 7); c.fill(); c.globalAlpha = 1; } }
     if (scene === 13) { for (let i = 0; i < 14 * A; i++) { const x = r() * worldW, y = r() * worldH; ['#FF5A5A', '#FF9F3A', '#FFE066', '#7FE07A', '#5AC8FF', '#9B7AFF'].forEach((col, k) => { c.strokeStyle = col; c.globalAlpha = .35; c.lineWidth = 5; c.beginPath(); c.arc(x, y, 60 - k * 5, Math.PI, 0); c.stroke(); }); c.globalAlpha = 1; }
       for (let i = 0; i < 80 * A; i++) { c.fillStyle = ['#FF7AD9', '#7FD8F5', '#FFE066'][i % 3]; c.beginPath(); c.arc(r() * worldW, r() * worldH, 2, 0, 7); c.fill(); } }
+    if (scene === 14) { for (let i = 0; i < 70 * A; i++) { const x = r() * worldW, y = r() * worldH, col = ['#9B5AE8', '#5FE0E8', '#B6F07A'][i % 3]; c.fillStyle = col; c.globalAlpha = .16; c.beginPath(); c.arc(x, y, 10, 0, 7); c.fill(); c.globalAlpha = .8; c.beginPath(); c.arc(x, y, 2.2, 0, 7); c.fill(); c.globalAlpha = 1; }
+      for (let i = 0; i < 40 * A; i++) { const x = r() * worldW, y = r() * worldH, col = ['#E8402C', '#9B5AE8', '#F2A33A'][i % 3]; c.fillStyle = '#F3E3C3'; c.fillRect(x - 1.5, y, 3, 6); c.fillStyle = col; c.beginPath(); c.ellipse(x, y, 6, 4.5, 0, Math.PI, 0); c.fill(); } }
     // nests
     for (const [nx, ny] of BIOMES[scene].nests) {
       c.fillStyle = 'rgba(0,0,0,.15)'; c.beginPath(); c.ellipse(nx, ny + 6, 62, 34, 0, 0, 7); c.fill();
@@ -894,6 +899,13 @@ function drawObstacle(c, o, r) {
     c.strokeStyle = '#241E2C'; c.lineCap = 'round';
     for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + r(), l = R * (.7 + r() * .4); c.lineWidth = 7; c.beginPath(); c.moveTo(x, y); const mx = x + Math.cos(a) * l * .6, my = y + Math.sin(a) * l * .6; c.lineTo(mx, my); c.lineTo(x + Math.cos(a + .4) * l, y + Math.sin(a + .4) * l); c.stroke(); c.lineWidth = 3; c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(a - .7) * l * .35, my + Math.sin(a - .7) * l * .35); c.stroke(); }
     c.fillStyle = '#2E2638'; c.beginPath(); c.arc(x, y, R * .3, 0, 7); c.fill();
+  } else if (o.kind === 'mushroom') {
+    const col = ['#E8402C', '#9B5AE8', '#F2A33A', '#5FC8E8'][Math.floor(r() * 4)];
+    c.fillStyle = 'rgba(155,90,232,.16)'; c.beginPath(); c.arc(x, y, R + 14, 0, 7); c.fill();
+    c.fillStyle = col; c.beginPath(); c.arc(x, y, R, 0, 7); c.fill();
+    c.strokeStyle = 'rgba(0,0,0,.22)'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, R, 0, 7); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.25)'; c.beginPath(); c.ellipse(x - R * .3, y - R * .35, R * .45, R * .25, -.5, 0, 7); c.fill();
+    c.fillStyle = '#FFF6E6'; for (let k = 0; k < 6; k++) { const a = r() * 6.283, d = r() * R * .7; c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, R * (.1 + r() * .08), 0, 7); c.fill(); }
   } else if (o.kind === 'basalt') {
     c.beginPath(); for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283, rr = R * (.8 + r() * .25); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * .85); } c.closePath();
     c.fillStyle = '#211A1D'; c.fill(); c.fillStyle = '#4A3E42'; c.beginPath(); c.ellipse(x - R * .25, y - R * .25, R * .4, R * .25, -.4, 0, 7); c.fill();
@@ -1913,7 +1925,7 @@ function adminHTML() {
 const OBJ_KINDS = [['tree', 'Tree', 42], ['pine', 'Pine tree', 40], ['palm', 'Palm tree', 44], ['deadtree', 'Spooky tree', 42], ['bush', 'Bush', 34],
   ['rock', 'Rock', 36], ['cactus', 'Cactus', 30], ['pool', 'Pond', 52], ['ice', 'Ice block', 38], ['lava', 'Lava pool', 46], ['basalt', 'Lava rock', 38],
   ['coral', 'Coral', 40], ['anemone', 'Anemone', 30], ['crystal', 'Crystal', 36], ['stalag', 'Cave rock', 38], ['crater', 'Crater', 46], ['moonrock', 'Moon rock', 34],
-  ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28]];
+  ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28], ['mushroom', 'Giant mushroom', 38]];
 const OBJ_R = Object.fromEntries(OBJ_KINDS.map(k => [k[0], k[2]])), OBJ_SIZES = [[.6, 'Small'], [1, 'Normal'], [1.6, 'Big'], [2.4, 'Giant']];
 const OBJ_MAX = 400, OBJ_KEY = 'egg-heist-objs-v1';
 let worldObjs = [];
@@ -2046,7 +2058,7 @@ const TR_NAMES = {
   // biomes, places and guardians
   'Forest': 'Orman', 'Swamp': 'Bataklık', 'Desert': 'Çöl', 'Jungle': 'Cangıl', 'Tundra': 'Tundra', 'Volcano': 'Volkan',
   'Coral Reef': 'Mercan Resifi', 'Crystal Cave': 'Kristal Mağara', 'Moon': 'Ay', 'Candy Land': 'Şeker Diyarı', 'Sky Kingdom': 'Gökyüzü Krallığı',
-  'Dino Valley': 'Dino Vadisi', 'Haunted Graveyard': 'Perili Mezarlık', 'Rainbow Realm': 'Gökkuşağı Diyarı',
+  'Dino Valley': 'Dino Vadisi', 'Haunted Graveyard': 'Perili Mezarlık', 'Rainbow Realm': 'Gökkuşağı Diyarı', 'Mushroom Grove': 'Mantar Korusu', 'Toadstool Troll': 'Mantar Trolü', 'Giant mushroom': 'Dev mantar',
   'Chicken': 'Tavuk', 'Swan': 'Kuğu', 'Scorpion': 'Akrep', 'Gorilla': 'Goril', 'Polar Bear': 'Kutup Ayısı', 'Magma Golem': 'Magma Golemi',
   'Shark': 'Köpekbalığı', 'Giant Spider': 'Dev Örümcek', 'Alien': 'Uzaylı', 'Gingerbread Giant': 'Zencefilli Dev', 'Storm Griffin': 'Fırtına Grifonu',
   'T-Rex': 'T-Rex', 'Giant Ghost': 'Dev Hayalet', 'Prism Golem': 'Prizma Golemi',
@@ -2080,6 +2092,8 @@ const TR_ANIMALS = {
   ancientbrachio: 'Kadim Brakiyozor', reaperraven: 'Azrail Kuzgun', spectrumserpent: 'Tayf Yılanı',
   seraphstag: 'Melek Geyik', divinehydra: 'İlahi Hidra', pharaohsphinx: 'Firavun Sfenks', suntiger: 'Güneş Kaplanı', halophoenix: 'Hale Anka Kuşu', solarkraken: 'Güneş Krakeni',
   oceansovereign: 'Okyanus Hükümdarı', diamondtitan: 'Elmas Titan', starwhale: 'Yıldız Balina', heavenlydragon: 'Cennet Şeker Ejderhası', archangeldragon: 'Başmelek Ejderha',
+  shroomhog: 'Mantar Kirpi', glowworm: 'Ateş Böceği Kurdu', sporefrog: 'Spor Kurbağa', mossturtle: 'Yosun Kaplumbağa', fairyfox: 'Peri Tilki', shroomstag: 'Işıltılı Mantar Geyik',
+  mothqueen: 'Ay Güvesi', fungaldragon: 'Mantar Ejderhası', mycowyrm: 'Miko Solucan Ejderi', sporeemperor: 'Spor İmparatoru',
   titanrex: 'Titan Rex', wraithking: 'Hayalet Kral', radiantphoenix: 'Işıltılı Anka Kuşu',
 };
 const TR_EXACT = {
@@ -3468,6 +3482,77 @@ const MODELS = {
     h.E(22, -12, 13, 10, 0.2, '#4A3A6E'); h.E(33, -7, 8, 5.5, 0.2, '#4A3A6E');
     h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
   },
+  'g-toadstool': (h) => {
+    h.E(-12, 40, 10, 5, 0, '#6B4A2E'); h.E(12, 40, 10, 5, 0, '#6B4A2E');
+    h.P([[-12, 24], [-4, 24], [-5, 38], [-13, 38]], '#E8D6B0'); h.P([[4, 24], [12, 24], [13, 38], [5, 38]], '#E8D6B0');
+    h.L([[-20, 4], [-36, 16], [-40, 28]], '#E8D6B0', 7); h.L([[20, 4], [36, 14], [42, 4]], '#E8D6B0', 7);
+    h.C(-40, 30, 6, '#E8D6B0'); h.C(42, 2, 6, '#E8D6B0');
+    h.B(c => { c.moveTo(-20, -8); c.quadraticCurveTo(-24, 26, -14, 28); c.lineTo(14, 28); c.quadraticCurveTo(24, 26, 20, -8); }, '#F3E3C3');
+    h.F(0, 22, 14, 4, 0, '#D9C49A');
+    h.eye(-8, 4, 3.6); h.eye(8, 4, 3.6); h.brow(-13, -3, -4, 0); h.brow(13, -3, 4, 0);
+    h.arc(0, 18, 6, 3.6, 5.8, 2.5);
+    h.B(c => { c.ellipse(0, -10, 44, 30, 0, Math.PI, 0); c.quadraticCurveTo(0, -2, -44, -10); }, '#D9443A');
+    [[-26, -20, 6], [-6, -32, 7], [16, -26, 6], [32, -14, 4], [-36, -12, 3.5], [4, -18, 4]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  shroomhog: (h) => {
+    h.E(-14, 36, 6, 4, 0, '#5A3A22'); h.E(10, 36, 6, 4, 0, '#5A3A22');
+    for (let k = 0; k < 7; k++) { const a = Math.PI + k / 6 * Math.PI * .9 + .15; h.P([[-6 + Math.cos(a) * 18, 20 + Math.sin(a) * 12], [-6 + Math.cos(a) * 32, 20 + Math.sin(a) * 22], [-6 + Math.cos(a + .25) * 18, 20 + Math.sin(a + .25) * 12]], '#6B4A2E'); }
+    h.E(-4, 22, 28, 16, 0, '#A8774A');
+    h.E(20, 24, 12, 10, 0, '#F2D2A8'); h.C(32, 24, 3.5, '#2B2219'); h.eye(22, 19, 2.8); h.F(20, 28, 3.5, 2, 0, '#FF9AA8');
+    h.P([[-12, 8], [-8, 8], [-9, -4], [-11, -4]], '#F3E3C3');
+    h.B(c => { c.ellipse(-10, -4, 16, 12, 0, Math.PI, 0); c.quadraticCurveTo(-10, 0, -26, -4); }, '#E8402C');
+    [[-16, -9, 2.6], [-6, -12, 3], [0, -6, 2]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  glowworm: (h) => {
+    h.L([[24, 6], [20, -10]], '#7FD06A', 2); h.L([[30, 8], [34, -8]], '#7FD06A', 2);
+    h.dot(20, -12, 4.5, '#FFF27A'); h.dot(34, -10, 4.5, '#FFF27A');
+    [[-34, 30, 9, '#FFF27A'], [-22, 28, 11, '#B6F07A'], [-8, 26, 12, '#9BE86A'], [6, 26, 12, '#B6F07A']].forEach(([x, y, r, col]) => h.C(x, y, r, col));
+    h.dot(-34, 30, 13, 'rgba(255,242,122,.25)');
+    h.C(24, 20, 14, '#9BE86A'); h.eye(28, 16, 3); h.arc(28, 24, 4, 0.3, 2.6, 2); h.F(20, 24, 3, 2, 0, '#FF9AA8');
+  },
+  sporefrog: (h, c) => {
+    MODELS.frog(h, c);
+    h.P([[-3, -16], [3, -16], [3, -26], [-3, -26]], '#F3E3C3');
+    h.B(c2 => { c2.ellipse(0, -26, 15, 11, 0, Math.PI, 0); c2.quadraticCurveTo(0, -22, -15, -26); }, '#9B5AE8');
+    [[-7, -30, 2.4], [4, -33, 2.8], [9, -27, 1.8]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  mossturtle: (h, c) => {
+    MODELS.turtle(h, c);
+    [[-20, -10], [-6, -16], [8, -12], [-14, 4], [10, 2]].forEach(([x, y]) => h.dot(x, y, 4, '#4FA040'));
+    for (const [x, y, r, col] of [[-18, -16, 8, '#E8402C'], [2, -22, 10, '#F2A33A']]) {
+      h.P([[x - 2.5, y], [x + 2.5, y], [x + 2.5, y + r * .8], [x - 2.5, y + r * .8]], '#F3E3C3');
+      h.B(c2 => { c2.ellipse(x, y, r, r * .72, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 3, x - r, y); }, col);
+      h.dot(x - r * .35, y - r * .35, 1.8, '#FFF6E6'); h.dot(x + r * .3, y - r * .2, 1.5, '#FFF6E6');
+    }
+  },
+  fairyfox: (h, c) => {
+    c.globalAlpha = .85; h.E(-14, -14, 20, 9, -0.7, '#BFF2FF'); h.E(-4, -18, 18, 8, -1.1, '#E2C8FF'); c.globalAlpha = 1;
+    MODELS.fox(h, c);
+    [[-30, -30], [30, -34], [-40, 0], [40, 4], [6, -40]].forEach(([x, y], i) => h.dot(x, y, i % 2 ? 2 : 3, '#FFF27A'));
+  },
+  shroomstag: (h, c) => {
+    [[9, -40], [34, -42]].forEach(([x, y]) => h.dot(x, y, 11, 'rgba(95,224,232,.35)'));
+    MODELS.deer(h, c);
+    for (const [x, y, r] of [[9, -40, 7], [34, -42, 7]]) h.B(c2 => { c2.ellipse(x, y, r, r * .75, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 2, x - r, y); }, '#5FE0E8');
+    [[-24, 6], [-10, 4], [2, 10]].forEach(([x, y]) => h.dot(x, y, 2.5, '#5FE0E8'));
+  },
+  mothqueen: (h) => {
+    h.E(-20, -10, 24, 18, -0.4, '#C8B4F2'); h.E(20, -10, 24, 18, 0.4, '#C8B4F2');
+    h.E(-16, 18, 15, 12, 0.5, '#9FE0B8'); h.E(16, 18, 15, 12, -0.5, '#9FE0B8');
+    h.C(-22, -10, 7, '#7F5BFF'); h.C(22, -10, 7, '#7F5BFF'); h.dot(-22, -10, 3, '#FFF27A'); h.dot(22, -10, 3, '#FFF27A');
+    h.E(0, 10, 7, 24, 0, '#F3EAD6'); [0, 8, 16].forEach(y => h.line([[-6, y + 6], [6, y + 6]], '#C8B89A', 2));
+    h.C(0, -16, 9, '#F3EAD6'); h.eye(-3.5, -16, 2.4); h.eye(3.5, -16, 2.4);
+    h.Q(c => { c.moveTo(-3, -24); c.quadraticCurveTo(-10, -40, -18, -40); }, '#C8B89A', 2); h.Q(c => { c.moveTo(3, -24); c.quadraticCurveTo(10, -40, 18, -40); }, '#C8B89A', 2);
+    h.P([[-6, -25], [-6, -32], [-3, -28], [0, -34], [3, -28], [6, -32], [6, -25]], '#FFD23F');
+  },
+  shroomdragonbase: (h, c) => {
+    MODELS.dragon(h, c);
+    for (const [x, y, r, col] of [[22, -30, 9, '#9B5AE8'], [-8, 0, 8, '#E8402C'], [-24, 14, 6, '#9B5AE8']]) {
+      h.P([[x - 2.5, y], [x + 2.5, y], [x + 2.5, y + r * .8], [x - 2.5, y + r * .8]], '#F3E3C3');
+      h.B(c2 => { c2.ellipse(x, y, r, r * .72, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 3, x - r, y); }, col);
+      h.dot(x - r * .35, y - r * .35, 2, '#FFF6E6'); h.dot(x + r * .3, y - r * .2, 1.6, '#FFF6E6');
+    }
+  },
   'g-prism': (h) => {
     h.P([[-20, 18], [-6, 18], [-8, 40], [-22, 40]], '#B07AF2'); h.P([[6, 18], [20, 18], [22, 40], [8, 40]], '#B07AF2');
     h.C(-34, 4, 11, '#7FD8F5'); h.C(34, 4, 11, '#7FD8F5');
@@ -3547,6 +3632,7 @@ const VAR = {
   suntiger: { base: 'jadetiger', divine: true, acc: [22, .95] }, halophoenix: { base: 'icephoenix', divine: true, acc: [188, .85], lt: .78 }, solarkraken: { base: 'octopus', divine: true, acc: [12, .92], lt: .86 },
   oceansovereign: { base: 'leviathan', divine: true, acc: [176, .8] }, diamondtitan: { base: 'geodetitan', divine: true, acc: [200, .9] }, starwhale: { base: 'cosmicwhale', divine: true, acc: [232, .75] },
   heavenlydragon: { base: 'candydragon', divine: true, acc: [330, .85], lt: .8 }, archangeldragon: { base: 'celestialdragon', divine: true, acc: [212, .5] }, titanrex: { base: 'spino', divine: true, acc: [350, .85] },
+  fungaldragon: { base: 'shroomdragonbase', shift: 130, sat: .65 }, mycowyrm: { base: 'leviathan', shift: 95, sat: .6 }, sporeemperor: { base: 'shroomdragonbase', divine: true, acc: [285, .8] },
   wraithking: { base: 'phantomdragon', divine: true, acc: [140, .75] }, radiantphoenix: { base: 'aurorphoenix', divine: true, acc: 'rainbow', lt: .84 },
 };
 // recolours a drawn model in place (dark outlines and eyes stay as they are)
