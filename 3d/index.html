@@ -1,0 +1,2230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Egg Heist 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;700;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --ink:#1E2A1B; --panel:#FFF9EE; --panel-2:#F3EAD8; --line:#E2D4BA; --muted:#6F6656;
+  --accent:#FF8A3D; --accent-dark:#D2601A; --money:#3DBB5C; --speed:#3B95F0; --hud:rgba(22,30,20,.78);
+  --display:"Lilita One","Arial Rounded MT Bold",ui-rounded,system-ui,sans-serif;
+  --body:"Rubik",ui-rounded,system-ui,sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%;margin:0}
+[hidden]{display:none!important}
+body{background:#8FD3F5;color:var(--ink);font-family:var(--body);overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:none}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;left:12px;right:12px;top:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:5}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.pill{pointer-events:auto;background:var(--hud);color:#fff;border-radius:14px;padding:7px 12px;display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px}
+.pill b{font-family:var(--display);font-weight:400;font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.pill small{opacity:.8;font-weight:700}
+.coin{width:22px;height:22px;border-radius:50%;background:#FFD23F;color:#8A5A00;display:grid;place-items:center;font-family:var(--display);font-size:14px}
+.where{font-family:var(--display);font-size:16px}
+.mythic{background:linear-gradient(90deg,#C83FFF,#FF3FD0);}
+.btn{pointer-events:auto;border:0;border-radius:14px;padding:9px 14px;font-family:var(--display);font-size:17px;background:var(--panel);color:var(--ink);box-shadow:0 3px 0 rgba(0,0,0,.25);cursor:pointer}
+.btn.main{background:var(--accent);color:#fff}
+.btn .cnt{background:var(--panel-2);border-radius:8px;padding:1px 7px;font-size:13px;margin-left:4px;font-family:var(--body);font-weight:800}
+.hint{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);background:var(--hud);color:#fff;border-radius:12px;padding:9px 16px;font-weight:700;font-size:14px;max-width:min(560px,calc(100vw - 150px));text-align:center;z-index:5;pointer-events:none}
+#grab{position:fixed;right:18px;bottom:18px;width:96px;height:96px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-family:var(--display);font-size:24px;box-shadow:0 5px 0 var(--accent-dark);z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+#grab small{font-family:var(--body);font-size:11px;font-weight:700;opacity:.9}
+#toasts{position:fixed;top:64px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;z-index:8;pointer-events:none;width:min(420px,calc(100vw - 24px))}
+.toast{background:var(--panel);border-radius:14px;padding:9px 14px;box-shadow:0 4px 14px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center;animation:pop .25s ease-out}
+.toast img{width:40px;height:40px}.toast .em{font-size:26px;width:40px;text-align:center}
+.toast b{display:block;font-size:15px}.toast span{font-size:12.5px;color:var(--muted)}
+.toast.bad{background:#FFE3DC}.toast.myth{background:linear-gradient(90deg,#F7E3FF,#FFE3F6);border:2px solid #FF3FD0}
+@keyframes pop{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+.modal{position:fixed;inset:0;background:rgba(10,14,10,.45);display:grid;place-items:center;z-index:10;padding:12px}
+.sheet{background:var(--panel);border-radius:22px;width:min(680px,100%);max-height:min(720px,calc(100vh - 24px));display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:12px 12px 0;align-items:center}
+.tab{border:0;background:transparent;font-family:var(--display);font-size:17px;padding:8px 12px;border-radius:12px;cursor:pointer;color:var(--muted)}
+.tab[aria-selected=true]{background:var(--panel-2);color:var(--ink)}
+.close{margin-left:auto;border:0;width:38px;height:38px;border-radius:50%;background:var(--panel-2);font-size:22px;cursor:pointer}
+.body{overflow:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:12px}
+h3{font-family:var(--display);font-weight:400;font-size:20px;margin:0}
+.note{color:var(--muted);font-size:13.5px;margin:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.up{background:var(--panel-2);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.up ul{list-style:none;margin:0;padding:0;font-size:13.5px;display:flex;flex-direction:column;gap:4px}
+.up li{display:flex;justify-content:space-between}.up em{color:var(--money);font-style:normal}
+.buy{border:0;border-radius:12px;padding:10px;background:var(--money);color:#fff;font-family:var(--display);font-size:17px;cursor:pointer;box-shadow:0 3px 0 #2A8A42}
+.buy:disabled{background:#C9C2B2;box-shadow:none;cursor:default}
+.sell{border:0;border-radius:10px;padding:7px 12px;background:#fff;font-weight:800;cursor:pointer;box-shadow:0 2px 0 rgba(0,0,0,.15);font-family:var(--body)}
+.list{display:flex;flex-direction:column;gap:6px}
+.item{display:flex;align-items:center;gap:10px;background:var(--panel-2);border-radius:14px;padding:6px 10px}
+.item img{width:48px;height:48px}.item .info{flex:1;display:flex;flex-direction:column}.item .nm{font-weight:800}.item .sub{font-size:12.5px;color:var(--muted)}
+.eggic{width:30px;height:38px;border-radius:50% 50% 46% 46%/60% 60% 40% 40%;margin:0 9px}
+.chip{font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:8px;color:#fff;text-transform:uppercase;letter-spacing:.04em;margin-left:4px}
+.reqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.req{background:var(--panel-2);border-radius:12px;padding:7px 10px;font-size:12.5px;display:flex;flex-direction:column}
+.req b{font-family:var(--display);font-weight:400;font-size:16px}.req.ok b::after{content:" ✓";color:var(--money)}
+.idx{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.cell{background:var(--panel-2);border-radius:12px;padding:6px;text-align:center;font-size:11.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cell img{width:64px;height:64px}.cell.no img{filter:brightness(0) opacity(.22)}
+#stick{position:fixed;width:90px;height:90px;border-radius:50%;border:3px solid rgba(255,255,255,.6);background:rgba(255,255,255,.12);z-index:4;pointer-events:none;transform:translate(-50%,-50%)}
+#stick i{position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px;border-radius:50%;background:rgba(255,255,255,.75)}
+#loading{position:fixed;inset:0;display:grid;place-items:center;background:#8FD3F5;z-index:20;font-family:var(--display);font-size:28px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+@media (max-width:640px){.top{flex-direction:column;gap:6px}.top .row{justify-content:flex-start!important}#toasts{top:118px}.pill{padding:5px 9px}.where{display:none!important}.pill b{font-size:18px}.btn{font-size:15px;padding:8px 10px}#grab{width:80px;height:80px;font-size:20px}}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="loading">Loading Egg Heist 3D…</div>
+<div class="top">
+  <div class="row">
+    <div class="pill"><span class="coin">$</span><b id="money">0</b><small id="rate">+0/s</small></div>
+    <div class="pill"><small>SPEED</small><b id="spd">0</b><small id="gain">+1/s</small></div>
+    <div class="pill"><span id="sun">☀️</span><b id="clockT">3:00</b><small id="clockL">until night</small></div>
+    <div class="pill where" id="where">Home</div>
+    <div class="pill mythic" id="mythicPill" hidden></div>
+  </div>
+  <div class="row" style="justify-content:flex-end">
+    <button class="btn main" id="shopBtn">Shop</button>
+    <button class="btn" id="penBtn">Pen <span class="cnt" id="penCnt">0/3</span></button>
+    <button class="btn" id="idxBtn">Index <span class="cnt" id="idxCnt">0</span></button>
+  </div>
+</div>
+<div class="hint" id="hint"></div>
+<button id="grab" hidden>GRAB<small>or Space</small></button>
+<div id="stick" hidden><i></i></div>
+<div id="toasts"></div>
+<div class="modal" id="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="tabs">
+      <button class="tab" data-tab="shop">Shop</button>
+      <button class="tab" data-tab="pen">Pen</button>
+      <button class="tab" data-tab="index">Index</button>
+      <button class="close" id="closeBtn" aria-label="Close">×</button>
+    </div>
+    <div class="body" id="body"></div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+// ---- shared with Egg Heist (2D): data and animal drawings ----
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
+const EGG = new Path2D("M12 1.5C18.5 1.5 20.5 13 20.5 17C20.5 21.5 16.8 24.5 12 24.5C7.2 24.5 3.5 21.5 3.5 17C3.5 13 5.5 1.5 12 1.5Z");
+function seeded(s) { return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function fmt(n) {
+  n = Math.floor(n);
+  if (n < 1000) return String(n);
+  if (n < 1e6) return (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'k';
+  if (n < 1e9) return (n / 1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.?0+$/, '') + 'M';
+  if (n < 1e12) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (n < 1e15) return (n / 1e12).toFixed(2).replace(/\.?0+$/, '') + 'T';
+  if (n < 1e18) return (n / 1e15).toFixed(2).replace(/\.?0+$/, '') + 'Qa';
+  const SUF = ['Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd'];
+  for (let k = 0; k < SUF.length; k++) if (n < 1e21 * 1000 ** k) return (n / (1e18 * 1000 ** k)).toFixed(2).replace(/\.?0+$/, '') + SUF[k];
+  return n.toExponential(2).replace('e+', 'e');
+}
+
+// ================= DATA =================
+const RAR = {
+  C: { name: 'Common',    inc: 1,  hatch: 4,  carry: 1.00, color: '#9AA58F', w: 52 },
+  R: { name: 'Rare',      inc: 3,  hatch: 8,  carry: 0.92, color: '#3B95F0', w: 28 },
+  E: { name: 'Epic',      inc: 10, hatch: 15, carry: 0.85, color: '#A85FE8', w: 14 },
+  L: { name: 'Legendary', inc: 40, hatch: 30, carry: 0.75, color: '#F2B418', w: 5 },
+  M: { name: 'Mythic',    inc: 150, hatch: 60, carry: 0.68, color: '#FF3FD0', w: 0.8 },
+  D: { name: 'Divine',    inc: 600, hatch: 120, carry: 0.6, color: '#F2C230', w: 0.15 },   // about 1 egg in 670   // 0.8 out of 99.8 total = 1 egg in 125
+};
+const BIOMES = [
+  { name: 'Forest',  req: 0,   mult: 1,    portal: '#5FD068', egg: '#F4EBD6', frame: '#3E7431', pal: { g: '#4C8A3C', p: '#447E35', p2: '#5A9848' },
+    obs: { n: 16, kinds: [['tree', 30, 48]] }, guard: { name: 'Chicken', m: 'g-chicken', speed: 175, see: 230, seeCarry: 360 }, nests: [[1220, 450]] },
+  { name: 'Swamp',   req: 35,  mult: 6,    portal: '#3FB8A8', egg: '#D3E6C9', frame: '#4F6847', pal: { g: '#5F7A54', p: '#6B6E4A', p2: '#557048' },
+    obs: { n: 10, kinds: [['pool', 46, 80]] }, guard: { name: 'Swan', m: 'g-swan', speed: 255, see: 250, seeCarry: 390 }, nests: [[1210, 250], [1210, 650]] },
+  { name: 'Desert',  req: 100, mult: 30,   portal: '#F2A33A', egg: '#F3D6A2', frame: '#D9B26A', pal: { g: '#E8C47F', p: '#DDB46C', p2: '#F0D193' },
+    obs: { n: 15, kinds: [['cactus', 17, 17], ['rock', 26, 42]] }, guard: { name: 'Scorpion', m: 'g-scorpion', speed: 375, see: 190, seeCarry: 320 }, nests: [[1190, 240], [1230, 660]] },
+  { name: 'Jungle',  req: 180, mult: 120,  portal: '#22A85A', egg: '#D8F0B0', frame: '#1F5E36', pal: { g: '#2F7A45', p: '#28703E', p2: '#3A8C50' },
+    obs: { n: 18, kinds: [['palm', 34, 50], ['bush', 24, 32]] }, guard: { name: 'Gorilla', m: 'g-gorilla', speed: 480, see: 230, seeCarry: 360 }, nests: [[1200, 260], [1200, 640]] },
+  { name: 'Tundra',  req: 280, mult: 500,  portal: '#8FD3F5', egg: '#E4F3FB', frame: '#C9DCE8', pal: { g: '#E9F1F6', p: '#DCE8F0', p2: '#F6FAFC' },
+    obs: { n: 15, kinds: [['ice', 28, 44], ['pine', 26, 36]] }, guard: { name: 'Polar Bear', m: 'g-polarbear', speed: 660, see: 220, seeCarry: 350 }, nests: [[1210, 240], [1210, 660]] },
+  { name: 'Volcano', req: 400, mult: 2000, portal: '#FF5A2A', egg: '#4E3E3C', frame: '#2A1F1F', pal: { g: '#3B2C2C', p: '#33262A', p2: '#4A3634' },
+    obs: { n: 12, kinds: [['lava', 40, 70], ['basalt', 24, 38]] }, guard: { name: 'Magma Golem', m: 'g-golem', speed: 820, see: 200, seeCarry: 330 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Coral Reef',   req: 520, mult: 8000,   portal: '#3FD0E0', egg: '#FFE4D2', frame: '#2A7E92', pal: { g: '#4AAFC2', p: '#3E9CB0', p2: '#7FD0DC' },
+    obs: { n: 14, kinds: [['coral', 28, 44], ['anemone', 22, 30]] }, guard: { name: 'Shark', m: 'g-shark', speed: 960, see: 230, seeCarry: 360 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Crystal Cave', req: 700, mult: 35000,  portal: '#B07AF2', egg: '#D6C8F5', frame: '#1A1726', pal: { g: '#2E2A3E', p: '#28243A', p2: '#3A3550' },
+    obs: { n: 16, kinds: [['crystal', 26, 40], ['stalag', 22, 34]] }, guard: { name: 'Giant Spider', m: 'g-spider', speed: 1150, see: 210, seeCarry: 340 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Moon',         req: 900, mult: 150000, portal: '#E8E8F2', egg: '#F0F0FA', frame: '#14122A', pal: { g: '#B8B8C8', p: '#A8A8BA', p2: '#C8C8D6' },
+    obs: { n: 14, kinds: [['crater', 36, 60], ['moonrock', 22, 34]] }, guard: { name: 'Alien', m: 'g-alien', speed: 1350, see: 210, seeCarry: 340 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Candy Land',   req: 1100, mult: 600000, portal: '#FF8AC8', egg: '#FFF0F6', frame: '#C9708F', pal: { g: '#F7C6DA', p: '#F2B3CC', p2: '#FBD9E6' },
+    obs: { n: 15, kinds: [['lollipop', 26, 38], ['gumdrop', 22, 32]] }, guard: { name: 'Gingerbread Giant', m: 'g-gingerbread', speed: 1550, see: 220, seeCarry: 350 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Sky Kingdom',  req: 1400, mult: 2500000, portal: '#DFF3FF', egg: '#FFFFFF', frame: '#7FB8E0', pal: { g: '#BFE3FA', p: '#AED8F5', p2: '#D6EEFC' },
+    obs: { n: 14, kinds: [['cloud', 34, 52], ['pillar', 22, 30]] }, guard: { name: 'Storm Griffin', m: 'g-griffin', speed: 1850, see: 220, seeCarry: 350 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Dino Valley',      req: 1800, mult: 10e6,  portal: '#8FBF4A', egg: '#E8DCC0', frame: '#5E7A34', pal: { g: '#9CB85A', p: '#8FAA4F', p2: '#B0C870' },
+    obs: { n: 15, kinds: [['palm', 34, 50], ['rock', 26, 42]] }, guard: { name: 'T-Rex', m: 'g-trex', speed: 2250, see: 240, seeCarry: 370 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Haunted Graveyard', req: 2300, mult: 45e6, portal: '#7A5AA8', egg: '#B8B0C8', frame: '#1E1A28', pal: { g: '#3A3448', p: '#332E40', p2: '#46405A' },
+    obs: { n: 16, kinds: [['tomb', 20, 28], ['deadtree', 28, 40]] }, guard: { name: 'Giant Ghost', m: 'g-ghost', speed: 2750, see: 260, seeCarry: 400 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Rainbow Realm',    req: 2900, mult: 200e6, portal: '#FF7AD9', egg: '#FFFFFF', frame: '#C8B8F0', pal: { g: '#F4F0FF', p: '#ECE4FF', p2: '#FFF4FA' },
+    obs: { n: 14, kinds: [['crystal', 26, 40], ['cloud', 34, 50]] }, guard: { name: 'Prism Golem', m: 'g-prism', speed: 3350, see: 250, seeCarry: 380 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Mushroom Grove',   req: 3600, mult: 900e6, portal: '#9B5AE8', egg: '#EDE0FF', frame: '#2A2036', pal: { g: '#34503A', p: '#2E4834', p2: '#3E5C42' },
+    obs: { n: 16, kinds: [['mushroom', 26, 44], ['tree', 30, 44]] }, guard: { name: 'Toadstool Troll', m: 'g-toadstool', speed: 3900, see: 250, seeCarry: 390 }, nests: [[1200, 250], [1200, 650]] },
+];
+// Biomes were designed on a 1400x900 map; they are now this much bigger.
+const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
+// guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
+const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
+const speedPx = sp => 160 + 2.2 * Math.min(sp, 280) + 1.1 * Math.max(0, sp - 280);
+// the same numbers are also the smallest speed you need to take eggs in that biome
+BIOMES.forEach((b, i) => { b.req = GUARD_SPEED[i] || 0; b.guard.lv = GUARD_SPEED[i] || 0; b.guard.speed = Math.round(speedPx(b.guard.lv)); });
+BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
+const SPECIES = [
+  ['bunny', 'Bunny', '🐰', 0, 'C'], ['squirrel', 'Squirrel', '🐿️', 0, 'C'], ['fox', 'Fox', '🦊', 0, 'R'], ['owl', 'Owl', '🦉', 0, 'R'], ['deer', 'Deer', '🦌', 0, 'E'], ['rooster', 'Golden Rooster', '🐓', 0, 'L'],
+  ['frog', 'Frog', '🐸', 1, 'C'], ['snail', 'Snail', '🐌', 1, 'C'], ['turtle', 'Turtle', '🐢', 1, 'R'], ['flamingo', 'Flamingo', '🦩', 1, 'R'], ['croc', 'Crocodile', '🐊', 1, 'E'], ['bogrex', 'Bog Rex', '🦖', 1, 'L'],
+  ['lizard', 'Lizard', '🦎', 2, 'C'], ['beetle', 'Dung Beetle', '🪲', 2, 'C'], ['camel', 'Camel', '🐫', 2, 'R'], ['eagle', 'Eagle', '🦅', 2, 'R'], ['cobra', 'Cobra', '🐍', 2, 'E'], ['dragon', 'Sun Dragon', '🐉', 2, 'L'],
+  ['monkey', 'Monkey', '', 3, 'C'], ['parrot', 'Parrot', '', 3, 'C'], ['toucan', 'Toucan', '', 3, 'R'], ['sloth', 'Sloth', '', 3, 'R'], ['tiger', 'Tiger', '', 3, 'E'], ['chameleon', 'Rainbow Chameleon', '', 3, 'L'],
+  ['penguin', 'Penguin', '', 4, 'C'], ['seal', 'Seal', '', 4, 'C'], ['arcticfox', 'Arctic Fox', '', 4, 'R'], ['snowyowl', 'Snowy Owl', '', 4, 'R'], ['walrus', 'Walrus', '', 4, 'E'], ['mammoth', 'Frost Mammoth', '', 4, 'L'],
+  ['salamander', 'Fire Salamander', '', 5, 'C'], ['emberbat', 'Ember Bat', '', 5, 'C'], ['lavacrab', 'Lava Crab', '', 5, 'R'], ['firehound', 'Fire Hound', '', 5, 'R'], ['rhino', 'Obsidian Rhino', '', 5, 'E'], ['phoenix', 'Phoenix', '', 5, 'L'],
+  ['clownfish', 'Clownfish', '', 6, 'C'], ['starfish', 'Starfish', '', 6, 'C'], ['seahorse', 'Seahorse', '', 6, 'R'], ['octopus', 'Octopus', '', 6, 'R'], ['dolphin', 'Dolphin', '', 6, 'E'], ['narwhal', 'Pearl Narwhal', '', 6, 'L'],
+  ['mole', 'Mole', '', 7, 'C'], ['gembeetle', 'Gem Beetle', '', 7, 'C'], ['axolotl', 'Axolotl', '', 7, 'R'], ['crystalbat', 'Crystal Bat', '', 7, 'R'], ['cavebear', 'Amethyst Bear', '', 7, 'E'], ['crystaldragon', 'Crystal Dragon', '', 7, 'L'],
+  ['moonbunny', 'Moon Bunny', '', 8, 'C'], ['starjelly', 'Star Jelly', '', 8, 'C'], ['astropup', 'Astro Pup', '', 8, 'R'], ['cometfox', 'Comet Fox', '', 8, 'R'], ['saturnturtle', 'Saturn Turtle', '', 8, 'E'], ['unicorn', 'Galaxy Unicorn', '', 8, 'L'],
+  ['spiritstag', 'Spirit Stag', '', 0, 'M'], ['hydra', 'Swamp Hydra', '', 1, 'M'], ['sphinx', 'Golden Sphinx', '', 2, 'M'], ['jadetiger', 'Jade Tiger', '', 3, 'M'], ['icephoenix', 'Ice Phoenix', '', 4, 'M'],
+  ['magmakraken', 'Magma Kraken', '', 5, 'M'], ['leviathan', 'Leviathan', '', 6, 'M'], ['geodetitan', 'Geode Titan', '', 7, 'M'], ['cosmicwhale', 'Cosmic Whale', '', 8, 'M'],
+  ['gummybear', 'Gummy Bear', '', 9, 'C'], ['marshchick', 'Marshmallow Chick', '', 9, 'C'], ['lollisnail', 'Lollipop Snail', '', 9, 'R'], ['cottonsheep', 'Cotton Candy Sheep', '', 9, 'R'], ['chocobunny', 'Chocolate Bunny', '', 9, 'E'], ['sprinkleunicorn', 'Sprinkle Unicorn', '', 9, 'L'], ['candydragon', 'Candy Dragon', '', 9, 'M'],
+  ['cloudbunny', 'Cloud Bunny', '', 10, 'C'], ['bluebird', 'Bluebird', '', 10, 'C'], ['skyfox', 'Sky Fox', '', 10, 'R'], ['thunderowl', 'Thunder Owl', '', 10, 'R'], ['skyunicorn', 'Sky Unicorn', '', 10, 'E'], ['skywhale', 'Sky Whale', '', 10, 'L'], ['celestialdragon', 'Celestial Dragon', '', 10, 'M'],
+  ['triceratops', 'Triceratops', '', 11, 'C'], ['ptero', 'Pterodactyl', '', 11, 'C'], ['stego', 'Stegosaurus', '', 11, 'R'], ['raptor', 'Raptor', '', 11, 'R'], ['brachio', 'Brachiosaurus', '', 11, 'E'], ['spino', 'Spinosaurus', '', 11, 'L'], ['primalrex', 'Primal Rex', '', 11, 'M'],
+  ['nightbat', 'Night Bat', '', 12, 'C'], ['pumpkinsnail', 'Pumpkin Snail', '', 12, 'C'], ['blackcat', 'Black Cat', '', 12, 'R'], ['zombiebunny', 'Zombie Bunny', '', 12, 'R'], ['raven', 'Raven', '', 12, 'E'], ['ghostunicorn', 'Ghost Unicorn', '', 12, 'L'], ['phantomdragon', 'Phantom Dragon', '', 12, 'M'],
+  ['rainbowfrog', 'Rainbow Frog', '', 13, 'C'], ['butterfly', 'Prism Butterfly', '', 13, 'C'], ['rainbowcobra', 'Rainbow Cobra', '', 13, 'R'], ['glitterowl', 'Glitter Owl', '', 13, 'R'], ['lion', 'Rainbow Lion', '', 13, 'E'], ['prismunicorn', 'Prism Unicorn', '', 13, 'L'], ['aurorphoenix', 'Aurora Phoenix', '', 13, 'M'],
+  ['moonfox', 'Moon Fox', '', 0, 'L'], ['jadefrog', 'Jade Frog Lord', '', 1, 'L'], ['goldcamel', 'Golden Camel', '', 2, 'L'], ['emeraldtoucan', 'Emerald Toucan', '', 3, 'L'], ['snowlion', 'Snow Lion', '', 4, 'L'], ['emberwolf', 'Ember Wolf', '', 5, 'L'], ['pearldolphin', 'Pearl Dolphin', '', 6, 'L'], ['opalaxolotl', 'Opal Axolotl', '', 7, 'L'], ['lunarpup', 'Lunar Pup', '', 8, 'L'], ['candyunicorn', 'Cotton Candy Unicorn', '', 9, 'L'], ['stormeagle', 'Storm Eagle', '', 10, 'L'], ['goldraptor', 'Golden Raptor', '', 11, 'L'], ['ghostfox', 'Ghost Fox', '', 12, 'L'], ['rainbowpegasus', 'Rainbow Pegasus', '', 13, 'L'], ['elderowl', 'Elder Owl King', '', 0, 'M'], ['bogdragon', 'Bog Dragon', '', 1, 'M'], ['miragecobra', 'Mirage Cobra', '', 2, 'M'], ['silverback', 'Silverback King', '', 3, 'M'], ['blizzardmammoth', 'Blizzard Mammoth', '', 4, 'M'], ['lavaphoenix', 'Lava Phoenix', '', 5, 'M'], ['krakenqueen', 'Kraken Queen', '', 6, 'M'], ['spiderqueen', 'Crystal Spider Queen', '', 7, 'M'], ['galaxydragon', 'Galaxy Dragon', '', 8, 'M'], ['gumdrophydra', 'Gumdrop Hydra', '', 9, 'M'], ['thunderbird', 'Thunderbird', '', 10, 'M'], ['ancientbrachio', 'Ancient Brachio', '', 11, 'M'], ['reaperraven', 'Reaper Raven', '', 12, 'M'], ['spectrumserpent', 'Spectrum Serpent', '', 13, 'M'], ['seraphstag', 'Seraph Stag', '', 0, 'D'], ['divinehydra', 'Divine Hydra', '', 1, 'D'], ['pharaohsphinx', 'Pharaoh Sphinx', '', 2, 'D'], ['suntiger', 'Sun Tiger', '', 3, 'D'], ['halophoenix', 'Halo Phoenix', '', 4, 'D'], ['solarkraken', 'Solar Kraken', '', 5, 'D'], ['oceansovereign', 'Ocean Sovereign', '', 6, 'D'], ['diamondtitan', 'Diamond Titan', '', 7, 'D'], ['starwhale', 'Star Whale', '', 8, 'D'], ['heavenlydragon', 'Heavenly Candy Dragon', '', 9, 'D'], ['archangeldragon', 'Archangel Dragon', '', 10, 'D'], ['titanrex', 'Titan Rex', '', 11, 'D'], ['wraithking', 'Wraith King', '', 12, 'D'], ['radiantphoenix', 'Radiant Phoenix', '', 13, 'D'],
+  ['shroomhog', 'Mushroom Hedgehog', '', 14, 'C'], ['glowworm', 'Glow Worm', '', 14, 'C'], ['sporefrog', 'Spore Frog', '', 14, 'R'], ['mossturtle', 'Moss Turtle', '', 14, 'R'], ['fairyfox', 'Fairy Fox', '', 14, 'E'], ['shroomstag', 'Glowcap Stag', '', 14, 'L'], ['mothqueen', 'Moon Moth', '', 14, 'L'], ['fungaldragon', 'Fungal Dragon', '', 14, 'M'], ['mycowyrm', 'Myco Wyrm', '', 14, 'M'], ['sporeemperor', 'Spore Emperor', '', 14, 'D'],
+].map(([id, name, e, b, r]) => ({ id, name, e, b, r }));
+// Always add new animals at the END of this list. Version 5 briefly had Reef/Cave/Moon (36-53)
+// inserted before the Volcano animals (30-35); this is that order, used only to repair those saves.
+const V5_ORDER = [...SPECIES.slice(0, 30), ...SPECIES.slice(36, 54), ...SPECIES.slice(30, 36)];
+const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72, D: 80 };
+const STYLE_IDS = {
+  fly: 'mothqueen fairyfox owl parrot toucan eagle emberbat phoenix ptero butterfly crystalbat nightbat raven bluebird thunderowl snowyowl glitterowl icephoenix aurorphoenix dragon crystaldragon candydragon celestialdragon phantomdragon',
+  hop: 'sporefrog bunny frog moonbunny chocobunny cloudbunny zombiebunny rainbowfrog gummybear marshchick squirrel seal',
+  swim: 'clownfish seahorse octopus dolphin narwhal leviathan cosmicwhale skywhale magmakraken starjelly',
+  slither: 'glowworm snail lollisnail pumpkinsnail cobra rainbowcobra starfish',
+};
+const STYLE_OF = {};
+for (const [st, ids] of Object.entries(STYLE_IDS)) for (const id of ids.split(' ')) STYLE_OF[id] = st;
+const moveStyle = id => STYLE_OF[id] || (typeof VAR !== 'undefined' && VAR[id] ? moveStyle(VAR[id].base) : 'walk');
+const MOVE_SPEED = { walk: 40, hop: 46, fly: 55, swim: 34, slither: 18 };
+const rainbow = t => `hsl(${(t * 140) % 360},95%,62%)`;
+const spIndex = id => SPECIES.findIndex(s => s.id === id);
+
+// upgrades
+const TREAD_MAX = 30, PEN_MAX = 22;
+// speed you gain every second while standing on the treadmill (no limit on how high it goes)
+const TREAD_GAIN = [0, 1, 5, 10, 15, 20, 30, 40, 50, 65, 80, 100, 120, 145, 170, 200, 240, 280, 330, 380, 450, 520, 600, 700, 800, 950, 1100, 1300, 1500, 1750, 2000];
+const treadIdle = L => TREAD_GAIN[L] || 1;
+const treadCost = L => [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
+  500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
+// how running moves you: more speed is faster, but it levels off very high up
+const MOVE_SPEED_CAP = 100000;
+const penSlots = L => 2 + L;
+const penCost = L => Math.round(25 * Math.pow(2.6, L - 1));
+const penBonus = L => 1 + 0.15 * (L - 1);
+const petIncome = sp => RAR[sp.r].inc * BIOMES[sp.b].mult * penBonus(G.pL);
+const sellValue = sp => Math.round(RAR[sp.r].inc * BIOMES[sp.b].mult * 25);
+// Fusion: 3 of the same animal (same tier) -> 1 of the next tier
+const FUSE = [{ name: '', mult: 1 }, { name: 'Fused', mult: 4 }, { name: 'Mega', mult: 16 }];
+// Mutations: found when eggs hatch, put on an egg from the Bag; the animal hatches with a new look and earns more.
+const MUT = {
+  bronze:    { name: 'Bronze',    mult: 1.5, w: 40, egg: '#D08A4E', glow: null },
+  silver:    { name: 'Silver',    mult: 2,   w: 28, egg: '#D9DEE6', glow: '#F4F7FB' },
+  golden:    { name: 'Golden',    mult: 3,   w: 16, egg: '#F2C230', glow: '#FFD23F' },
+  singer:    { name: 'Singer',    mult: 4,   w: 9,  egg: '#FF9AD5', glow: '#FF7AD9' },
+  enchanted: { name: 'Enchanted', mult: 6,   w: 5,  egg: '#B07AF2', glow: '#C86AFF' },
+  dark:      { name: 'Dark',      mult: 10,  w: 2,  egg: '#3A2E48', glow: '#7A2EBA' },
+};
+const MUT_KEYS = Object.keys(MUT), MUT_DROP = 0.25;
+// Mount: a separate mutation you put on a pet so you can ride it (it still earns in the pen)
+const MOUNT_DROP = 0.06, RIDE_MULT = { C: 1.3, R: 1.4, E: 1.5, L: 1.65, M: 1.8, D: 2 };
+const rideP = () => G.ride ? G.pen.concat(G.inv).find(q => q.id === G.ride && q.mt && !q.egg) || null : null;
+function toggleRide(id) {
+  const q = G.pen.concat(G.inv).find(x => x.id === id && x.mt && !x.egg);
+  if (!q || G.ride === id) { G.ride = 0; toast('\ud83d\udc3e', 'You got off', ''); }
+  else { G.ride = id; sfx.buy(); toast(SPECIES[q.sp].id, `Riding your ${petName(q)}!`, `You run ×${RIDE_MULT[SPECIES[q.sp].r]} faster. It still earns money in the pen.`); }
+  save(); sendPresence(true); if (modalOpen) renderTab();
+}
+function applyMount() {
+  const id = +mutForm.mountPet;
+  if (!(G.mounts > 0)) { toast('\ud83d\udc0e', 'You have no Mount mutations', 'You can find them when eggs hatch.', true); return; }
+  const q = G.pen.concat(G.inv).find(x => x.id === id && !x.egg && !x.mt);
+  if (!q) { toast('\ud83d\udc0e', 'Pick a pet first', '', true); return; }
+  G.mounts--; q.mt = 1; mutForm.mountPet = ''; sfx.hatch(true);
+  toast(SPECIES[q.sp].id, `Your ${petName(q)} is now a mount!`, 'Tap Ride next to it in the Pen or Bag to ride it.');
+  save(); renderTab();
+}
+// a pet you ride is drawn under you
+function drawMount(q, x, y, fx, moving, step, t) {
+  const sp = SPECIES[q.sp], size = Math.min(140, Math.max(100, PSIZE[sp.r] * 1.5 * SIZES[q.z || 0].scale * (1 + .1 * (q.f || 0))));
+  const bob = moving ? Math.abs(Math.sin(step)) * 4 : Math.sin(t * 2) * 1;
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(x, y + 8, size * .38, size * .12, 0, 0, 7); ctx.fill();
+  drawModel(sp.id, x, y + 8 - bob, size, fx, (mutOf(q) && mutOf(q).glow) || null, q.f || 0, moving ? Math.sin(step) * .05 : 0, 1, 1, q.mut);
+  return size * .3 + bob;
+}
+const mutOf = p => p && MUT[p.mut] ? MUT[p.mut] : null;
+function pickMut() { let r = Math.random() * MUT_KEYS.reduce((a, k) => a + MUT[k].w, 0); for (const k of MUT_KEYS) { if ((r -= MUT[k].w) < 0) return k; } return 'bronze'; }
+const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
+const petSell = p => sellValue(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
+const petName = p => [SIZES[p.z || 0].name, mutOf(p) ? mutOf(p).name : '', FUSE[p.f || 0].name, SPECIES[p.sp].name].filter(Boolean).join(' ');
+const FUSER = { x: 175, y: 640 };
+// Animal sizes: bigger animals look bigger and earn more
+const SIZES = [{ name: '', mult: 1, scale: 1 }, { name: 'Big', mult: 2, scale: 1.3 }, { name: 'Huge', mult: 5, scale: 1.65 }];
+// Egg sizes: bigger eggs are heavier, but give bigger animals and can upgrade the rarity
+const EGG_SIZES = [
+  { name: '',     w: 85, scale: 1,   carry: 1,   up: 0,   big: [.92, .07, .01] },
+  { name: 'Big',  w: 12, scale: 1.4, carry: .92, up: .15, big: [.42, .5, .08] },
+  { name: 'Huge', w: 3,  scale: 1.8, carry: .84, up: .35, big: [0, .55, .45] },
+];
+const RORDER = ['C', 'R', 'E', 'L', 'M', 'D'];
+// Day and night: 3 minutes of day, then 10 seconds of night when the biomes close and eggs reset
+const DAY = 180, NIGHT = 10;
+const isNight = () => G.clock >= DAY;
+let dawnT = 0;
+// slow mode walks at a normal pace; your trained speed (and the biome gates) stay the same
+const pxSpeed = () => G.slow ? 200 : speedPx(Math.min(G.speed, MOVE_SPEED_CAP));
+
+
+const TREAD_SKINS = [null,
+  ['#4A525C', '#23272C', '#343A42', ''], ['#5C6B7A', '#252B33', '#3E4A57', ''], ['#8A5A35', '#3A2A1E', '#5A3E28', 'wood'], ['#3F8A48', '#1E3A22', '#2F6E38', ''],
+  ['#2E6FD8', '#162A4E', '#24539E', ''], ['#D9443A', '#3A1A18', '#8A2A24', ''], ['#8A5CF0', '#2A1E48', '#5A3EA0', ''], ['#FF7AB8', '#4A1E34', '#B04A80', 'hearts'],
+  ['#F2A33A', '#3E2A12', '#A86A20', ''], ['#F2C230', '#4A3A10', '#C89A20', 'gold'], ['#3FD0E0', '#103A40', '#2A9AA8', 'bubbles'], ['#7FE07A', '#1E3A1E', '#4FA04A', ''],
+  ['#B07AF2', '#2A1A40', '#7F5BC8', 'gems'], ['#D8D8E6', '#2A2A3A', '#A8A8C0', 'gold'], ['#FF5A2A', '#2A100A', '#C8401A', 'fire'], ['#2A2238', '#0E0C14', '#3A3048', 'stars'],
+  ['#8FD3F5', '#0E2A40', '#5AB0E0', 'snow'], ['#FF8AC8', '#3A1A30', '#E86AB0', 'candy'], ['#7A5AA8', '#1A1428', '#5A4080', 'ghost'], ['rainbow', '#1A1A2A', 'rainbow', 'rainbow'],
+  ['#1FA86A', '#0A2A1C', '#2FD08A', 'gems'], ['#C81E3A', '#2A0810', '#FF3A5A', 'gems'], ['#1E4AD8', '#0A1440', '#3A7AFF', 'gems'], ['#9A2AD8', '#1E0A30', '#C85AFF', 'gems'],
+  ['#E8F6FF', '#1A2A3A', '#BFE6FF', 'diamond'], ['#FFB13B', '#3A1A00', '#FFE066', 'sun'], ['#C8C8F0', '#10102A', '#8A8AD8', 'moon'], ['#3A2A7A', '#0A0820', '#6A5AC8', 'galaxy'],
+  ['rainbow', '#F4F0FF', 'rainbow', 'prism'], ['#FFD23F', '#2A1A00', 'rainbow', 'legend'],
+];
+function kit(c) {
+  const O = '#2B2219';
+  c.lineJoin = 'round'; c.lineCap = 'round'; c.strokeStyle = O; c.lineWidth = 3;
+  const fs = fill => { c.fillStyle = fill; c.fill(); c.lineWidth = 3; c.strokeStyle = O; c.stroke(); };
+  const path = pts => { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); };
+  return {
+    E: (x, y, rx, ry, rot, fill) => { c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, 7); fs(fill); },
+    F: (x, y, rx, ry, rot, fill) => { c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, 7); c.fillStyle = fill; c.fill(); },
+    C: (x, y, r, fill) => { c.beginPath(); c.arc(x, y, r, 0, 7); fs(fill); },
+    P: (pts, fill) => { path(pts); c.closePath(); fs(fill); },
+    PF: (pts, fill) => { path(pts); c.closePath(); c.fillStyle = fill; c.fill(); },
+    B: (fn, fill) => { c.beginPath(); fn(c); c.closePath(); fs(fill); },
+    L: (pts, col, w) => { path(pts); c.lineWidth = w + 5; c.strokeStyle = O; c.stroke(); c.lineWidth = w; c.strokeStyle = col; c.stroke(); c.lineWidth = 3; c.strokeStyle = O; },
+    Q: (fn, col, w) => { c.beginPath(); fn(c); c.lineWidth = w + 5; c.strokeStyle = O; c.stroke(); c.lineWidth = w; c.strokeStyle = col; c.stroke(); c.lineWidth = 3; c.strokeStyle = O; },
+    line: (pts, col = O, w = 2.5) => { path(pts); c.lineWidth = w; c.strokeStyle = col; c.stroke(); c.lineWidth = 3; c.strokeStyle = O; },
+    arc: (x, y, r, a0, a1, w = 2.5) => { c.beginPath(); c.arc(x, y, r, a0, a1); c.lineWidth = w; c.strokeStyle = O; c.stroke(); c.lineWidth = 3; },
+    dot: (x, y, r, col) => { c.beginPath(); c.arc(x, y, r, 0, 7); c.fillStyle = col; c.fill(); },
+    eye: (x, y, r = 3.4) => { c.beginPath(); c.arc(x, y, r, 0, 7); c.fillStyle = '#1E1A16'; c.fill(); c.beginPath(); c.arc(x + r * .35, y - r * .4, r * .38, 0, 7); c.fillStyle = '#fff'; c.fill(); },
+    brow: (x1, y1, x2, y2) => { path([[x1, y1], [x2, y2]]); c.lineWidth = 3.5; c.strokeStyle = O; c.stroke(); c.lineWidth = 3; },
+    tri: (x, y, w, h, fill) => { path([[x - w / 2, y], [x, y + h], [x + w / 2, y]]); c.closePath(); c.fillStyle = fill; c.fill(); },
+  };
+}
+const MODELS = {
+  bunny: (h) => {
+    h.E(-30, 12, 7, 7, 0, '#FFFFFF');
+    h.E(-18, 35, 10, 5, 0, '#D9D0C5');
+    h.E(-4, 16, 26, 20, 0, '#E9E2DA');
+    h.E(10, 36, 11, 5, 0, '#D9D0C5');
+    h.E(9, -30, 6, 17, -0.25, '#E9E2DA'); h.F(9, -30, 2.5, 11, -0.25, '#F4A9B8');
+    h.E(22, -28, 6, 17, 0.25, '#E9E2DA'); h.F(22, -28, 2.5, 11, 0.25, '#F4A9B8');
+    h.C(18, -4, 16, '#E9E2DA');
+    h.F(24, 4, 4.5, 2.6, 0, '#F7C6CF');
+    h.eye(25, -7); h.dot(33, -1, 2.6, '#E88A9C');
+  },
+  squirrel: (h) => {
+    h.B(c => { c.moveTo(-6, 32); c.bezierCurveTo(-52, 34, -54, -42, -16, -42); c.bezierCurveTo(-2, -42, -4, -24, -16, -22); c.bezierCurveTo(-30, -18, -26, 12, -4, 16); }, '#B8622A');
+    h.E(4, 18, 17, 19, 0, '#C97436'); h.F(10, 21, 8, 13, 0, '#F1D2A2');
+    h.E(12, 37, 9, 4, 0, '#A85A28');
+    h.P([[8, -16], [10, -31], [18, -18]], '#C97436');
+    h.C(16, -6, 13, '#C97436'); h.F(21, 1, 5, 3, 0, '#F1D2A2');
+    h.E(22, 10, 4, 3, 0, '#A85A28');
+    h.eye(21, -9); h.dot(29, -4, 2.2, '#2B2219');
+  },
+  fox: (h) => {
+    h.B(c => { c.moveTo(-20, 10); c.quadraticCurveTo(-50, 4, -46, -24); c.quadraticCurveTo(-30, -6, -18, 0); }, '#E8762C');
+    h.C(-45, -21, 6, '#FFFFFF');
+    h.L([[-14, 20], [-14, 38]], '#3A2A20', 5); h.L([[12, 20], [12, 38]], '#3A2A20', 5);
+    h.E(-2, 12, 24, 14, 0, '#E8762C'); h.F(14, 16, 7, 8, 0, '#FFF4E6');
+    h.P([[8, -12], [10, -32], [20, -16]], '#E8762C'); h.P([[18, -14], [26, -30], [28, -10]], '#E8762C');
+    h.C(18, -4, 13, '#E8762C');
+    h.P([[24, -9], [43, 1], [24, 8]], '#E8762C'); h.PF([[25, 3], [40, 3], [25, 8]], '#FFF4E6');
+    h.dot(42, 1, 3, '#2B2219'); h.eye(22, -6, 3);
+  },
+  owl: (h) => {
+    h.L([[-7, 34], [-7, 42]], '#F2A23A', 3); h.L([[7, 34], [7, 42]], '#F2A23A', 3);
+    h.P([[-20, -18], [-24, -40], [-6, -26]], '#8B6A4A'); h.P([[20, -18], [24, -40], [6, -26]], '#8B6A4A');
+    h.E(0, 6, 26, 32, 0, '#8B6A4A');
+    h.E(-23, 10, 8, 20, 0.2, '#6F5238'); h.E(23, 10, 8, 20, -0.2, '#6F5238');
+    h.F(0, 17, 15, 19, 0, '#D8BF96');
+    [[-6, 10], [6, 10], [0, 18], [-7, 25], [7, 25]].forEach(([x, y]) => h.arc(x, y, 3, 0.3, 2.8, 2));
+    h.F(-9, -12, 12, 12, 0, '#E8D5B0'); h.F(9, -12, 12, 12, 0, '#E8D5B0');
+    h.C(-9, -12, 8, '#FFFFFF'); h.C(9, -12, 8, '#FFFFFF');
+    h.eye(-8, -11, 4.5); h.eye(10, -11, 4.5);
+    h.P([[-4, -4], [4, -4], [0, 4]], '#F2A23A');
+  },
+  deer: (h) => {
+    [[-22, '#8F5C32'], [-12, '#A56B3B'], [12, '#8F5C32'], [20, '#A56B3B']].forEach(([x, col]) => h.L([[x, 8], [x, 40]], col, 5));
+    h.E(-31, -4, 5, 7, 0, '#FFFFFF');
+    h.E(-4, 2, 28, 14, 0, '#B97A45'); h.F(-2, 10, 20, 4, 0, '#E7C9A0');
+    [[-16, -2], [-6, -6], [4, -1], [-10, 4]].forEach(([x, y]) => h.dot(x, y, 2.4, '#F5E6D0'));
+    h.P([[12, -4], [18, -26], [28, -24], [24, 2]], '#B97A45');
+    h.L([[20, -34], [15, -52]], '#7A5230', 3); h.L([[16, -46], [7, -50]], '#7A5230', 3);
+    h.L([[26, -34], [32, -53]], '#7A5230', 3); h.L([[30, -46], [39, -48]], '#7A5230', 3);
+    h.E(14, -33, 7, 3.5, -0.5, '#B97A45');
+    h.E(26, -28, 11, 8, 0.2, '#B97A45');
+    h.dot(38, -24, 2.6, '#2B2219'); h.eye(27, -30, 2.8);
+  },
+  rooster: (h) => {
+    h.L([[-4, 24], [-4, 40]], '#E8962E', 4); h.L([[6, 24], [6, 40]], '#E8962E', 4);
+    h.E(-24, -16, 7, 18, -0.2, '#E8B020'); h.E(-30, -6, 7, 20, -0.9, '#C77B12'); h.E(-26, -12, 8, 22, -0.5, '#E09A1A');
+    h.E(-2, 10, 22, 18, 0, '#F2C230'); h.E(-4, 10, 12, 8, -0.2, '#E0A820');
+    h.C(12, -26, 4, '#D9443A'); h.C(17, -28, 4.5, '#D9443A'); h.C(22, -25, 3.8, '#D9443A');
+    h.C(16, -13, 11, '#F2C230');
+    h.P([[25, -16], [35, -12], [25, -8]], '#F2A23A'); h.E(24, -3, 3, 5, 0, '#D9443A');
+    h.eye(19, -15, 2.8);
+    h.dot(-14, 2, 2, '#FFF6C8'); h.dot(4, 0, 1.6, '#FFF6C8');
+  },
+  frog: (h) => {
+    h.E(-24, 30, 12, 8, -0.3, '#58A63A'); h.E(24, 30, 12, 8, 0.3, '#58A63A');
+    h.E(0, 16, 26, 20, 0, '#6DBE45'); h.F(0, 23, 16, 10, 0, '#C9E89A');
+    h.C(-12, -6, 10, '#6DBE45'); h.C(12, -6, 10, '#6DBE45');
+    h.C(-12, -7, 6, '#FFFFFF'); h.C(12, -7, 6, '#FFFFFF'); h.eye(-11, -7, 3.4); h.eye(13, -7, 3.4);
+    h.arc(0, 4, 12, 0.35, Math.PI - 0.35);
+    h.F(-16, 8, 4, 2.5, 0, '#F2A0A8'); h.F(16, 8, 4, 2.5, 0, '#F2A0A8');
+    h.E(-12, 36, 7, 4, 0, '#58A63A'); h.E(12, 36, 7, 4, 0, '#58A63A');
+  },
+  snail: (h, c) => {
+    h.L([[28, 10], [24, -10]], '#BFD38A', 3); h.L([[33, 12], [37, -8]], '#BFD38A', 3);
+    h.dot(24, -11, 3.6, '#2B2219'); h.dot(37, -9, 3.6, '#2B2219');
+    h.E(2, 33, 36, 7, 0, '#BFD38A'); h.E(28, 22, 8, 15, 0.3, '#BFD38A');
+    h.C(-6, 6, 24, '#C98A4E');
+    c.beginPath(); for (let a = 0; a < 4 * Math.PI; a += 0.15) { const r = 19 * (1 - a / (4.4 * Math.PI)); const x = -6 + Math.cos(a) * r, y = 6 + Math.sin(a) * r; a ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = '#8A5428'; c.lineWidth = 3; c.stroke(); c.strokeStyle = '#2B2219';
+    h.eye(31, 20, 2.4); h.arc(32, 26, 3, 0.3, 2.6, 2);
+  },
+  turtle: (h) => {
+    h.P([[-32, 22], [-42, 26], [-32, 28]], '#9CC46A');
+    h.E(-18, 30, 7, 8, 0, '#9CC46A'); h.E(16, 30, 7, 8, 0, '#9CC46A');
+    h.C(35, 14, 9, '#9CC46A'); h.eye(38, 11, 2.8); h.arc(38, 15, 3, 0.4, 2.4, 2);
+    h.B(c => { c.moveTo(-34, 26); c.bezierCurveTo(-34, -26, 30, -26, 30, 26); }, '#5E8C3A');
+    h.P([[-36, 25], [32, 25], [29, 31], [-33, 31]], '#C9A35E');
+    h.P([[-10, -6], [4, -6], [10, 6], [4, 18], [-10, 18], [-16, 6]], '#79A94A');
+    h.line([[-16, 6], [-30, 4]]); h.line([[10, 6], [26, 4]]); h.line([[-10, -6], [-16, -14]]); h.line([[4, -6], [10, -14]]);
+  },
+  flamingo: (h) => {
+    h.L([[-2, 10], [-2, 42]], '#E86A92', 3); h.L([[6, 10], [12, 24], [3, 27]], '#E86A92', 3);
+    h.P([[-22, -4], [-34, 0], [-22, 6]], '#E8709A');
+    h.E(-4, 0, 20, 12, -0.1, '#F48FB1'); h.E(-8, -1, 12, 7, -0.2, '#E8709A');
+    h.Q(c => { c.moveTo(12, -4); c.quadraticCurveTo(28, -14, 16, -26); c.quadraticCurveTo(8, -36, 18, -38); }, '#F48FB1', 6);
+    h.C(20, -38, 7, '#F48FB1');
+    h.P([[25, -41], [35, -37], [31, -29], [26, -35]], '#FFFFFF'); h.PF([[32, -37.5], [35, -37], [31, -29], [30, -33]], '#1E1A16');
+    h.eye(21, -40, 2.2);
+  },
+  croc: (h) => {
+    h.E(-16, 26, 6, 8, 0, '#3F7A30'); h.E(14, 26, 6, 8, 0, '#3F7A30');
+    h.P([[-24, 8], [-52, 22], [-22, 22]], '#4F8A3C');
+    h.E(-4, 14, 30, 11, 0, '#4F8A3C'); h.F(-2, 20, 24, 4, 0, '#B9D48A');
+    [-24, -14, -4, 6].forEach(x => h.P([[x - 4, 5], [x, -2], [x + 4, 5]], '#3F7A30'));
+    h.P([[18, 6], [48, 12], [48, 20], [18, 22]], '#4F8A3C');
+    [26, 33, 40].forEach(x => h.tri(x, 16, 4, 4, '#FFFFFF'));
+    h.C(18, 5, 8, '#4F8A3C'); h.eye(20, 2, 2.8); h.dot(45, 11, 1.6, '#2B2219');
+  },
+  bogrex: (h) => {
+    h.P([[-14, -6], [-52, 16], [-12, 16]], '#6E9A4A');
+    h.E(-8, 26, 8, 14, 0, '#5E8A3E'); h.E(-4, 39, 10, 4, 0, '#5E8A3E');
+    [[-22, -6], [-12, -14], [-2, -18]].forEach(([x, y]) => h.P([[x - 5, y + 4], [x, y - 7], [x + 5, y + 4]], '#3E6A2E'));
+    h.E(-2, 6, 22, 18, -0.3, '#6E9A4A'); h.F(5, 11, 10, 12, -0.3, '#C9D98E');
+    h.F(-12, 0, 6, 4, 0.3, '#4E7A34'); h.F(-4, 16, 4, 3, 0, '#4E7A34');
+    h.E(8, 26, 8, 14, 0, '#6E9A4A'); h.E(12, 39, 10, 4, 0, '#6E9A4A');
+    h.L([[15, 6], [22, 12]], '#6E9A4A', 4);
+    h.E(22, -20, 17, 12, 0.1, '#6E9A4A');
+    h.P([[12, -14], [42, -12], [38, -5], [14, -7]], '#5E8A3E');
+    [20, 27, 34].forEach(x => h.tri(x, -13, 4, 3.5, '#FFFFFF'));
+    h.F(14, -26, 5, 3, 0, '#4E7A34');
+    h.eye(26, -24, 3); h.brow(21, -30, 31, -28);
+  },
+  lizard: (h) => {
+    h.B(c => { c.moveTo(-12, 13); c.quadraticCurveTo(-40, 12, -50, -4); c.quadraticCurveTo(-36, 22, -12, 23); }, '#D9A94E');
+    [[-10, 20, -18, 32], [12, 20, 20, 32], [-6, 14, -14, 4], [14, 14, 22, 4]].forEach(([a, b, x, y]) => h.L([[a, b], [x, y]], '#C99440', 4));
+    h.E(2, 18, 20, 8, 0, '#D9A94E');
+    [[-6, 15], [4, 14], [-1, 20], [10, 19]].forEach(([x, y]) => h.dot(x, y, 2, '#A87A30'));
+    h.E(26, 14, 11, 7, 0.1, '#D9A94E'); h.eye(28, 11, 2.5); h.arc(30, 14, 4, 0.3, 1.5, 2);
+  },
+  beetle: (h) => {
+    h.C(-26, 14, 18, '#8A6440');
+    [[-32, 6], [-22, 20], [-30, 22], [-18, 8]].forEach(([x, y]) => h.dot(x, y, 2.2, '#6B4C30'));
+    [[2, 24, -2, 38], [12, 26, 12, 40], [20, 24, 26, 38], [4, 14, -8, 2]].forEach(([a, b, x, y]) => h.line([[a, b], [x, y]], '#2B2219', 3));
+    h.E(10, 16, 18, 14, 0, '#3B4566'); h.F(5, 9, 8, 4, -0.3, '#7484B0'); h.line([[10, 2], [10, 30]], '#2B2219', 2);
+    h.E(27, 18, 8, 7, 0, '#2E3550');
+    h.P([[31, 13], [40, 4], [36, 15]], '#2E3550');
+    h.line([[28, 12], [32, 2]], '#2B2219', 2); h.dot(30, 17, 1.8, '#E8E0D0');
+  },
+  camel: (h) => {
+    [[-24, '#B0804A'], [-14, '#C0905A'], [8, '#B0804A'], [16, '#C0905A']].forEach(([x, col]) => h.L([[x, 6], [x, 42]], col, 5));
+    h.L([[-30, -2], [-34, 12]], '#C0905A', 2);
+    h.C(-16, -12, 9, '#D7A86E'); h.C(2, -12, 9, '#D7A86E');
+    h.E(-6, 0, 26, 14, 0, '#D7A86E');
+    h.P([[14, -2], [20, -26], [28, -22], [24, 6]], '#D7A86E');
+    h.E(22, -33, 3, 5, -0.3, '#C0905A');
+    h.E(30, -26, 11, 7, 0.1, '#D7A86E'); h.E(39, -23, 5, 5, 0, '#C0905A');
+    h.eye(30, -29, 2.5); h.arc(38, -21, 3, 0.3, 2, 2);
+  },
+  eagle: (h) => {
+    h.P([[-6, 0], [-40, -38], [-32, -14], [-42, -22], [-24, 4]], '#4E3420');
+    h.P([[-20, 12], [-42, 26], [-22, 24]], '#FFFFFF');
+    h.L([[-2, 20], [-2, 34]], '#F2C230', 4); h.L([[6, 20], [6, 34]], '#F2C230', 4);
+    h.E(-4, 8, 20, 14, -0.2, '#6B4A2E');
+    h.P([[0, 0], [-26, -30], [-18, -10], [-28, -16], [-10, 8]], '#5C3F26');
+    h.C(16, -10, 11, '#F5F0E6');
+    h.P([[24, -15], [37, -10], [33, -1], [27, -6]], '#F2C230');
+    h.eye(18, -13, 2.6); h.brow(13, -19, 22, -16);
+  },
+  cobra: (h) => {
+    h.E(-4, 30, 28, 10, 0, '#C9A24A'); h.arc(-4, 30, 16, 3.4, 6.0, 2);
+    h.Q(c => { c.moveTo(-6, 26); c.quadraticCurveTo(22, 18, 8, -2); }, '#C9A24A', 10);
+    h.E(8, -14, 15, 20, 0, '#C9A24A'); h.F(8, -12, 8, 13, 0, '#E8C870');
+    h.dot(1, -18, 2.4, '#5A3A10'); h.dot(15, -18, 2.4, '#5A3A10');
+    h.E(8, -31, 8, 6, 0, '#B89040');
+    h.eye(5, -32, 2); h.eye(11, -32, 2);
+    h.line([[8, -26], [8, -20], [6, -17]], '#D9443A', 1.6); h.line([[8, -20], [10, -17]], '#D9443A', 1.6);
+  },
+  dragon: (h) => {
+    h.P([[-4, -6], [-32, -44], [-26, -22], [-42, -30], [-16, 0]], '#F2A33A');
+    h.B(c => { c.moveTo(-16, 12); c.quadraticCurveTo(-40, 24, -46, 4); c.lineTo(-40, 8); c.quadraticCurveTo(-34, 14, -14, 4); }, '#E8562C');
+    h.P([[-46, 4], [-54, -6], [-48, -2], [-50, -12], [-42, 0]], '#F7C948');
+    h.E(-8, 28, 7, 10, 0, '#C9431F'); h.E(10, 28, 7, 10, 0, '#D04A24');
+    h.E(0, 10, 22, 16, 0, '#E8562C'); h.F(6, 14, 10, 11, 0, '#F7C948');
+    h.line([[2, 8], [10, 8]], '#D99A2B', 2); h.line([[1, 14], [11, 14]], '#D99A2B', 2); h.line([[2, 20], [10, 20]], '#D99A2B', 2);
+    h.P([[2, -4], [-14, -40], [-8, -18], [-22, -26], [-4, 6]], '#F7B541');
+    h.P([[16, -20], [12, -34], [22, -22]], '#F7E3A0'); h.P([[22, -20], [24, -34], [28, -20]], '#F7E3A0');
+    h.E(22, -12, 13, 10, 0.2, '#E8562C'); h.E(33, -7, 8, 5.5, 0.2, '#E8562C');
+    h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
+  },
+  'g-chicken': (h) => {
+    h.L([[-6, 24], [-6, 40]], '#E8962E', 4); h.L([[6, 24], [6, 40]], '#E8962E', 4);
+    h.E(-28, -10, 8, 18, -0.5, '#F2EDE4'); h.E(-24, -16, 7, 15, -0.2, '#FFFFFF');
+    h.E(-2, 10, 25, 19, 0, '#FFFFFF'); h.E(-4, 10, 13, 9, -0.2, '#ECE2D2');
+    h.C(12, -27, 4.5, '#D9443A'); h.C(18, -29, 5, '#D9443A'); h.C(23, -25, 4, '#D9443A');
+    h.C(17, -13, 12, '#FFFFFF');
+    h.P([[27, -16], [38, -11], [27, -7]], '#F2A23A'); h.E(26, -2, 3, 5.5, 0, '#D9443A');
+    h.eye(20, -14, 3); h.brow(14, -21, 24, -17);
+  },
+  'g-swan': (h) => {
+    h.E(2, 31, 10, 4, 0, '#F28A2E');
+    h.P([[-10, 4], [-44, -30], [-26, -18], [-40, -40], [-4, -10]], '#F2F2EE');
+    h.P([[-28, 8], [-46, 2], [-30, 18]], '#FFFFFF');
+    h.E(-4, 14, 28, 16, 0, '#FFFFFF'); h.E(-8, 12, 14, 8, -0.2, '#EDEDE6');
+    h.Q(c => { c.moveTo(16, 6); c.quadraticCurveTo(34, -10, 18, -24); c.quadraticCurveTo(10, -32, 18, -38); }, '#FFFFFF', 8);
+    h.C(21, -38, 8, '#FFFFFF');
+    h.P([[27, -41], [42, -35], [27, -32]], '#F28A2E'); h.dot(27, -38, 3, '#1E1A16');
+    h.eye(21, -40, 2.6); h.brow(16, -46, 26, -43);
+  },
+  'g-scorpion': (h) => {
+    [[-14, 22, -24, 38], [-4, 24, -8, 40], [6, 24, 8, 40], [14, 22, 22, 38]].forEach(([a, b, x, y]) => h.L([[a, b], [(a + x) / 2, b + 4], [x, y]], '#5A1E14', 3));
+    [[-24, 10, 8], [-32, -2, 7.5], [-32, -16, 7], [-25, -28, 6.5], [-13, -34, 6]].forEach(([x, y, r]) => h.C(x, y, r, '#9A3422'));
+    h.P([[-8, -36], [6, -30], [-4, -26]], '#2B2219');
+    h.E(-4, 16, 22, 11, 0, '#9A3422'); h.line([[-14, 8], [-14, 24]], '#6E2014', 2); h.line([[-4, 6], [-4, 26]], '#6E2014', 2); h.line([[6, 7], [6, 25]], '#6E2014', 2);
+    h.E(20, 15, 10, 8, 0, '#8A2E1F');
+    h.L([[24, 10], [34, 0]], '#9A3422', 5); h.C(40, -4, 8, '#9A3422'); h.PF([[40, -4], [50, -8], [48, -2]], '#2B2219');
+    h.L([[26, 20], [36, 26]], '#9A3422', 5); h.C(42, 28, 7, '#9A3422'); h.PF([[42, 28], [51, 26], [49, 31]], '#2B2219');
+    h.eye(23, 11, 2.2); h.eye(18, 11, 2.2);
+  },
+  arcticfox: (h) => {
+    h.B(c => { c.moveTo(-20, 10); c.quadraticCurveTo(-50, 4, -46, -24); c.quadraticCurveTo(-30, -6, -18, 0); }, '#EEF3F7');
+    h.C(-45, -21, 6, '#FFFFFF');
+    h.L([[-14, 20], [-14, 38]], '#9FB0BF', 5); h.L([[12, 20], [12, 38]], '#9FB0BF', 5);
+    h.E(-2, 12, 24, 14, 0, '#EEF3F7'); h.F(14, 16, 7, 8, 0, '#FFFFFF');
+    h.P([[8, -12], [10, -32], [20, -16]], '#EEF3F7'); h.P([[18, -14], [26, -30], [28, -10]], '#EEF3F7');
+    h.C(18, -4, 13, '#EEF3F7');
+    h.P([[24, -9], [43, 1], [24, 8]], '#EEF3F7'); h.PF([[25, 3], [40, 3], [25, 8]], '#FFFFFF');
+    h.dot(42, 1, 3, '#2B2219'); h.eye(22, -6, 3);
+  },
+  firehound: (h) => {
+    h.B(c => { c.moveTo(-20, 10); c.quadraticCurveTo(-50, 4, -46, -24); c.quadraticCurveTo(-30, -6, -18, 0); }, '#3A2A2E');
+    h.C(-45, -21, 6, '#FFB13B');
+    h.L([[-14, 20], [-14, 38]], '#1E1416', 5); h.L([[12, 20], [12, 38]], '#1E1416', 5);
+    h.E(-2, 12, 24, 14, 0, '#3A2A2E'); h.F(14, 16, 7, 8, 0, '#E8501E');
+    h.P([[8, -12], [10, -32], [20, -16]], '#3A2A2E'); h.P([[18, -14], [26, -30], [28, -10]], '#3A2A2E');
+    h.C(18, -4, 13, '#3A2A2E');
+    h.P([[24, -9], [43, 1], [24, 8]], '#3A2A2E'); h.PF([[25, 3], [40, 3], [25, 8]], '#E8501E');
+    h.dot(42, 1, 3, '#2B2219'); h.eye(22, -6, 3);
+  },
+  snowyowl: (h) => {
+    h.L([[-7, 34], [-7, 42]], '#F2A23A', 3); h.L([[7, 34], [7, 42]], '#F2A23A', 3);
+    h.P([[-20, -18], [-24, -40], [-6, -26]], '#F4F6F8'); h.P([[20, -18], [24, -40], [6, -26]], '#F4F6F8');
+    h.E(0, 6, 26, 32, 0, '#F4F6F8');
+    h.E(-23, 10, 8, 20, 0.2, '#DCE3E8'); h.E(23, 10, 8, 20, -0.2, '#DCE3E8');
+    h.F(0, 17, 15, 19, 0, '#FFFFFF');
+    [[-6, 10], [6, 10], [0, 18], [-7, 25], [7, 25]].forEach(([x, y]) => h.arc(x, y, 3, 0.3, 2.8, 2));
+    h.F(-9, -12, 12, 12, 0, '#FFFFFF'); h.F(9, -12, 12, 12, 0, '#FFFFFF');
+    h.C(-9, -12, 8, '#FFFFFF'); h.C(9, -12, 8, '#FFFFFF');
+    h.eye(-8, -11, 4.5); h.eye(10, -11, 4.5);
+    h.P([[-4, -4], [4, -4], [0, 4]], '#F2A23A');
+  },
+  salamander: (h) => {
+    h.B(c => { c.moveTo(-12, 13); c.quadraticCurveTo(-40, 12, -50, -4); c.quadraticCurveTo(-36, 22, -12, 23); }, '#2B2226');
+    [[-10, 20, -18, 32], [12, 20, 20, 32], [-6, 14, -14, 4], [14, 14, 22, 4]].forEach(([a, b, x, y]) => h.L([[a, b], [x, y]], '#1E1618', 4));
+    h.E(2, 18, 20, 8, 0, '#2B2226');
+    [[-6, 15], [4, 14], [-1, 20], [10, 19]].forEach(([x, y]) => h.dot(x, y, 3, '#FF7A2A'));
+    h.E(26, 14, 11, 7, 0.1, '#2B2226'); h.eye(28, 11, 2.5); h.arc(30, 14, 4, 0.3, 1.5, 2);
+  },
+  monkey: (h) => {
+    h.Q(c => { c.moveTo(-14, 24); c.quadraticCurveTo(-44, 24, -40, 2); c.quadraticCurveTo(-36, -12, -28, -6); }, '#8A5A34', 4);
+    h.E(-8, 35, 7, 5, 0, '#6E4426'); h.E(8, 35, 7, 5, 0, '#6E4426');
+    h.E(-2, 16, 16, 18, 0, '#8A5A34'); h.F(2, 18, 9, 12, 0, '#E2B98A');
+    h.L([[8, 6], [20, 18]], '#8A5A34', 5);
+    h.C(-2, -12, 5, '#E8C79A');
+    h.C(10, -10, 14, '#8A5A34'); h.F(14, -7, 10, 9, 0, '#E8C79A');
+    h.eye(11, -11, 2.5); h.eye(19, -11, 2.5); h.arc(16, -5, 4, 0.4, 2.6, 2);
+  },
+  parrot: (h) => {
+    h.P([[-12, 12], [-40, 36], [-32, 38], [-6, 20]], '#2E7BD8');
+    h.L([[0, 24], [0, 34]], '#7A7A80', 3); h.L([[6, 22], [8, 34]], '#7A7A80', 3);
+    h.E(0, 6, 14, 20, 0.3, '#E8402C');
+    h.E(-4, 8, 9, 15, 0.3, '#2E7BD8'); h.F(-1, 0, 7, 4, 0.3, '#FFD23F');
+    h.C(8, -18, 11, '#E8402C'); h.F(12, -18, 5, 5, 0, '#FFFFFF');
+    h.P([[16, -23], [25, -18], [21, -9], [17, -13]], '#F2E6D0'); h.PF([[17, -14], [21, -10], [19, -9]], '#2B2219');
+    h.eye(12, -20, 2.4);
+  },
+  toucan: (h) => {
+    h.P([[-12, 18], [-28, 36], [-18, 36], [-6, 24]], '#1E1E24');
+    h.L([[-2, 24], [-2, 36]], '#4FA3E0', 3); h.L([[6, 24], [6, 36]], '#4FA3E0', 3);
+    h.E(-2, 8, 15, 20, 0.2, '#1E1E24'); h.F(5, -2, 8, 9, 0, '#FFF6E0');
+    h.C(4, -14, 11, '#1E1E24');
+    h.P([[12, -21], [46, -14], [40, -5], [12, -8]], '#F7A21B'); h.PF([[38, -15.5], [46, -14], [40, -5], [36, -6]], '#E8402C');
+    h.line([[13, -15], [44, -14]], '#2B2219', 2);
+    h.C(7, -15, 4.5, '#4FC3F7'); h.eye(7, -15, 2.4);
+  },
+  sloth: (h) => {
+    h.E(-14, 34, 9, 5, 0, '#8A6E52'); h.E(10, 34, 9, 5, 0, '#8A6E52');
+    h.E(-4, 16, 22, 20, 0, '#A88A6A'); h.F(0, 20, 12, 12, 0, '#C2A688');
+    h.Q(c => { c.moveTo(8, 8); c.quadraticCurveTo(26, 10, 24, 28); }, '#A88A6A', 6);
+    h.line([[22, 30], [20, 36]], '#2B2219', 2); h.line([[25, 30], [26, 36]], '#2B2219', 2);
+    h.C(10, -8, 14, '#A88A6A'); h.F(13, -6, 10, 8, 0, '#E8D8BE');
+    h.F(8, -7, 4.5, 2.6, 0.4, '#5A4630'); h.F(18, -7, 4.5, 2.6, -0.4, '#5A4630');
+    h.eye(8, -7, 2); h.eye(18, -7, 2); h.dot(13, -2, 2, '#2B2219'); h.arc(13, -1, 3.5, 0.5, 2.6, 2);
+  },
+  tiger: (h, c) => {
+    h.Q(cc => { cc.moveTo(-26, 4); cc.quadraticCurveTo(-46, -2, -44, -22); }, '#E8822C', 5);
+    [[-22, '#D9711E'], [-12, '#E8822C'], [10, '#D9711E'], [18, '#E8822C']].forEach(([x, col]) => h.L([[x, 14], [x, 38]], col, 6));
+    h.E(-4, 10, 26, 14, 0, '#E8822C'); h.F(0, 18, 18, 5, 0, '#FFF4E6');
+    [-18, -8, 2, 12].forEach(x => h.line([[x, -2], [x - 3, 8]], '#2B2219', 3));
+    h.C(12, -16, 5, '#E8822C'); h.C(26, -17, 5, '#E8822C');
+    h.C(20, -4, 14, '#E8822C'); h.F(28, 1, 8, 6, 0, '#FFF4E6');
+    h.line([[16, -16], [18, -11]], '#2B2219', 2.5); h.line([[22, -17], [22, -12]], '#2B2219', 2.5);
+    h.dot(34, -1, 2.6, '#2B2219'); h.eye(25, -6, 3);
+  },
+  chameleon: (h, c) => {
+    const g = c.createLinearGradient(-24, 0, 22, 0);
+    ['#E8402C', '#F7A21B', '#FFD23F', '#3FC37A', '#2E7BD8', '#9B59E8'].forEach((col, i) => g.addColorStop(i / 5, col));
+    h.Q(cc => { cc.moveTo(-20, 12); cc.quadraticCurveTo(-46, 14, -42, 30); cc.quadraticCurveTo(-38, 40, -30, 32); cc.quadraticCurveTo(-26, 26, -34, 26); }, '#9B59E8', 5);
+    [[-12, 16, -16, 34], [12, 16, 16, 34]].forEach(([a, b, x, y]) => h.L([[a, b], [x, y]], '#3FC37A', 4));
+    h.L([[-26, 36], [20, 36]], '#7A5230', 4);
+    h.P([[-18, -2], [-8, -12], [2, -4], [12, -12], [18, 0]], '#E8402C');
+    h.E(-2, 8, 22, 13, 0, g);
+    h.P([[14, -8], [36, 4], [16, 16]], '#3FC37A');
+    h.C(22, 2, 6.5, '#FFD23F'); h.eye(23, 2, 3);
+  },
+  penguin: (h) => {
+    h.E(-4, 38, 7, 3.5, 0, '#F2A23A'); h.E(8, 38, 7, 3.5, 0, '#F2A23A');
+    h.E(0, 10, 18, 28, 0, '#22262E'); h.F(5, 14, 11, 22, 0, '#FFFFFF');
+    h.E(-9, 12, 6, 16, 0.25, '#22262E');
+    h.F(7, -13, 4, 3, 0, '#FFD23F');
+    h.P([[13, -9], [24, -6], [13, -2]], '#F2A23A'); h.eye(9, -11, 2.6);
+  },
+  seal: (h) => {
+    h.P([[-30, 26], [-48, 16], [-44, 36]], '#76879A');
+    h.E(-6, 25, 30, 13, 0, '#8A9AA8'); h.F(-2, 31, 22, 5, 0, '#B9C6D2');
+    [[-18, 20], [-8, 17], [-24, 26]].forEach(([x, y]) => h.dot(x, y, 2.2, '#6E7F8E'));
+    h.E(12, 36, 8, 3.5, 0.3, '#76879A');
+    h.C(22, 8, 13, '#8A9AA8'); h.F(30, 12, 7, 5, 0, '#C8D2DA');
+    h.eye(22, 5, 3.4); h.dot(35, 10, 2.4, '#2B2219');
+    [[29, 14], [32, 15], [30, 17]].forEach(([x, y]) => h.dot(x, y, 0.9, '#2B2219'));
+  },
+  walrus: (h) => {
+    h.E(-26, 34, 10, 5, -0.3, '#8E5E44'); h.E(8, 36, 10, 5, 0.2, '#8E5E44');
+    h.E(-6, 18, 30, 20, 0, '#B07A5A');
+    [[-20, 8], [-10, 14], [-22, 22]].forEach(([x, y]) => h.arc(x, y, 4, 0.3, 2.6, 1.8));
+    h.C(18, 2, 15, '#B07A5A');
+    h.P([[20, 12], [22, 30], [25, 12]], '#FFF8EC'); h.P([[28, 12], [31, 30], [33, 12]], '#FFF8EC');
+    h.C(22, 9, 6, '#C99A78'); h.C(30, 9, 6, '#C99A78');
+    h.eye(20, -4, 2.4); h.dot(26, 5, 2, '#2B2219');
+  },
+  mammoth: (h) => {
+    [[-24, '#6E9EC0'], [-12, '#7AA7C7'], [8, '#6E9EC0'], [18, '#7AA7C7']].forEach(([x, col]) => h.L([[x, 10], [x, 38]], col, 9));
+    h.E(-4, 0, 28, 20, 0, '#9CC8E4');
+    [-24, -16, -8, 0, 8].forEach(x => h.line([[x, 14], [x - 2, 22]], '#6E9EC0', 2.5));
+    h.Q(c => { c.moveTo(30, -2); c.quadraticCurveTo(38, 14, 34, 24); c.quadraticCurveTo(32, 30, 38, 30); }, '#9CC8E4', 7);
+    h.C(20, -10, 15, '#9CC8E4');
+    h.E(10, -8, 9, 12, 0, '#86B6D4');
+    h.Q(c => { c.moveTo(26, 0); c.quadraticCurveTo(44, 10, 46, -6); }, '#FFFFFF', 4);
+    h.eye(24, -14, 2.6);
+    [[-14, -10], [0, -14], [-22, 2], [14, -20]].forEach(([x, y]) => h.dot(x, y, 2, '#FFFFFF'));
+  },
+  emberbat: (h) => {
+    h.P([[-6, -2], [-46, -22], [-40, -6], [-46, 6], [-28, 2], [-20, 14]], '#3A2030');
+    h.P([[6, -2], [46, -22], [40, -6], [46, 6], [28, 2], [20, 14]], '#3A2030');
+    h.line([[-8, 0], [-40, -6]], '#FF7A2A', 2); h.line([[8, 0], [40, -6]], '#FF7A2A', 2);
+    h.P([[-10, -14], [-8, -26], [-2, -16]], '#4A2A3A'); h.P([[10, -14], [8, -26], [2, -16]], '#4A2A3A');
+    h.E(0, 2, 13, 15, 0, '#4A2A3A'); h.F(0, 7, 7, 8, 0, '#6A3A4A');
+    h.C(-5, -4, 3.2, '#FFB13B'); h.C(5, -4, 3.2, '#FFB13B');
+    h.tri(-2, 4, 2.5, 4, '#FFFFFF'); h.tri(2, 4, 2.5, 4, '#FFFFFF');
+    h.P([[-4, 22], [0, 30], [4, 22]], '#FF7A2A');
+  },
+  lavacrab: (h) => {
+    [[-14, -26], [-8, -28], [-2, -26]].forEach(([dx, ex]) => { h.L([[dx, 18], [ex, 36]], '#C0391B', 3); h.L([[-dx, 18], [-ex, 36]], '#C0391B', 3); });
+    h.L([[-16, 6], [-28, -6]], '#E0502A', 5); h.L([[16, 6], [28, -6]], '#E0502A', 5);
+    h.C(-32, -10, 9, '#E0502A'); h.PF([[-32, -10], [-40, -22], [-30, -20]], '#2B2219');
+    h.C(32, -10, 9, '#E0502A'); h.PF([[32, -10], [40, -22], [30, -20]], '#2B2219');
+    h.L([[-6, 4], [-8, -10]], '#E0502A', 3); h.L([[6, 4], [8, -10]], '#E0502A', 3);
+    h.dot(-8, -12, 3.6, '#2B2219'); h.dot(8, -12, 3.6, '#2B2219');
+    h.E(0, 14, 26, 14, 0, '#E0502A');
+    h.line([[-14, 10], [-6, 16], [2, 10], [10, 18]], '#FFB13B', 2.5); h.line([[-4, 22], [6, 24]], '#FFB13B', 2);
+  },
+  rhino: (h) => {
+    [[-24, '#1E1E26'], [-12, '#2A2A33'], [8, '#1E1E26'], [18, '#2A2A33']].forEach(([x, col]) => h.L([[x, 14], [x, 38]], col, 8));
+    h.E(-4, 6, 30, 18, 0, '#3B3B48');
+    h.line([[-22, 0], [-14, 6], [-6, -2], [2, 8]], '#FF7A2A', 2.5); h.line([[-16, 16], [-8, 12]], '#FF7A2A', 2);
+    h.E(18, -10, 4, 6, 0, '#3B3B48');
+    h.E(24, 2, 16, 12, 0.15, '#3B3B48');
+    h.P([[32, -6], [44, -26], [40, -2]], '#FF8A3D'); h.P([[24, -8], [28, -18], [30, -8]], '#FFB13B');
+    h.C(26, -1, 3, '#FFB13B'); h.dot(26, -1, 1.4, '#2B2219');
+  },
+  phoenix: (h) => {
+    h.P([[-10, 14], [-48, 34], [-30, 22], [-50, 18], [-28, 12], [-44, 2], [-14, 6]], '#E8402C');
+    h.P([[-12, 12], [-40, 26], [-30, 16], [-40, 10], [-14, 8]], '#FFD23F');
+    h.P([[-4, 0], [-34, -42], [-24, -22], [-38, -26], [-20, -8], [-30, -6], [-10, 6]], '#FF7A2A');
+    h.E(0, 6, 14, 16, 0.2, '#E8402C'); h.F(4, 10, 7, 9, 0.2, '#FFB13B');
+    h.P([[6, -22], [2, -38], [10, -28], [12, -42], [16, -24]], '#FFD23F');
+    h.C(10, -14, 10, '#F2A33A');
+    h.P([[18, -17], [28, -13], [18, -9]], '#FFF1A8'); h.eye(13, -16, 2.6);
+    h.P([[2, 0], [-16, -30], [-10, -12], [-20, -14], [-4, 8]], '#FFB13B');
+  },
+  'g-gorilla': (h) => {
+    h.E(-12, 36, 10, 6, 0, '#2E2E34'); h.E(12, 36, 10, 6, 0, '#2E2E34');
+    h.L([[-22, -6], [-32, 30]], '#3A3A42', 11); h.L([[22, -6], [32, 30]], '#3A3A42', 11);
+    h.E(0, 10, 26, 26, 0, '#3A3A42'); h.F(0, 12, 15, 15, 0, '#6A6A72');
+    h.C(-32, 32, 8, '#2E2E34'); h.C(32, 32, 8, '#2E2E34');
+    h.C(0, -24, 15, '#3A3A42'); h.F(0, -19, 10, 9, 0, '#6A6A72');
+    h.brow(-10, -32, -2, -28); h.brow(10, -32, 2, -28);
+    h.eye(-5, -25, 2.4); h.eye(5, -25, 2.4);
+    h.dot(-2, -18, 1.6, '#2B2219'); h.dot(2, -18, 1.6, '#2B2219'); h.line([[-5, -13], [5, -13]], '#2B2219', 2);
+  },
+  'g-polarbear': (h) => {
+    [[-26, '#E4E2D8'], [-14, '#F2F2EA'], [8, '#E4E2D8'], [18, '#F2F2EA']].forEach(([x, col]) => h.L([[x, 16], [x, 38]], col, 10));
+    h.E(-6, 8, 30, 20, 0, '#F7F5EE'); h.F(-8, 18, 22, 6, 0, '#E6E3D8');
+    h.C(16, -14, 5, '#F7F5EE');
+    h.C(24, -4, 14, '#F7F5EE'); h.E(35, 2, 8, 6, 0, '#F7F5EE');
+    h.dot(42, 0, 3, '#1E1A16'); h.eye(26, -7, 2.6); h.brow(21, -13, 31, -10);
+    h.arc(36, 6, 4, 0.2, 1.8, 2);
+  },
+  'g-golem': (h) => {
+    h.P([[-20, 18], [-6, 18], [-8, 40], [-22, 40]], '#3E302C'); h.P([[6, 18], [20, 18], [22, 40], [8, 40]], '#3E302C');
+    h.C(-34, 4, 11, '#4A3A36'); h.C(34, 4, 11, '#4A3A36');
+    h.P([[-26, -18], [26, -18], [30, 22], [-30, 22]], '#5A4640');
+    h.line([[-18, -12], [-8, -2], [-14, 10]], '#FF7A2A', 3); h.line([[10, -14], [4, 0], [16, 12]], '#FF7A2A', 3); h.line([[-4, 6], [4, 16]], '#FFB13B', 2);
+    h.C(-38, 22, 9, '#4A3A36'); h.C(38, 22, 9, '#4A3A36');
+    h.line([[-40, 18], [-35, 26]], '#FF7A2A', 2); h.line([[40, 18], [35, 26]], '#FF7A2A', 2);
+    h.P([[-13, -38], [13, -38], [15, -18], [-15, -18]], '#4A3A36');
+    h.PF([[-10, -30], [-3, -28], [-3, -25], [-10, -26]], '#FFB13B'); h.PF([[10, -30], [3, -28], [3, -25], [10, -26]], '#FFB13B');
+    h.line([[-6, -21], [6, -21]], '#FF7A2A', 2.5);
+  },
+  gembeetle: (h) => {
+    h.C(-26, 14, 18, '#B07AF2');
+    [[-32, 6], [-22, 20], [-30, 22], [-18, 8]].forEach(([x, y]) => h.dot(x, y, 2.2, '#E6D2FF'));
+    [[2, 24, -2, 38], [12, 26, 12, 40], [20, 24, 26, 38], [4, 14, -8, 2]].forEach(([a, b, x, y]) => h.line([[a, b], [x, y]], '#2B2219', 3));
+    h.E(10, 16, 18, 14, 0, '#2FBF9F'); h.F(5, 9, 8, 4, -0.3, '#B8FFF0'); h.line([[10, 2], [10, 30]], '#2B2219', 2);
+    h.E(27, 18, 8, 7, 0, '#1F8A72');
+    h.P([[31, 13], [40, 4], [36, 15]], '#1F8A72');
+    h.line([[28, 12], [32, 2]], '#2B2219', 2); h.dot(30, 17, 1.8, '#E8E0D0');
+  },
+  crystalbat: (h) => {
+    h.P([[-6, -2], [-46, -22], [-40, -6], [-46, 6], [-28, 2], [-20, 14]], '#3A2E5A');
+    h.P([[6, -2], [46, -22], [40, -6], [46, 6], [28, 2], [20, 14]], '#3A2E5A');
+    h.line([[-8, 0], [-40, -6]], '#B8E6FF', 2); h.line([[8, 0], [40, -6]], '#B8E6FF', 2);
+    h.P([[-10, -14], [-8, -26], [-2, -16]], '#4A3A70'); h.P([[10, -14], [8, -26], [2, -16]], '#4A3A70');
+    h.E(0, 2, 13, 15, 0, '#4A3A70'); h.F(0, 7, 7, 8, 0, '#6A5A90');
+    h.C(-5, -4, 3.2, '#7FF2FF'); h.C(5, -4, 3.2, '#7FF2FF');
+    h.tri(-2, 4, 2.5, 4, '#FFFFFF'); h.tri(2, 4, 2.5, 4, '#FFFFFF');
+    h.P([[-4, 22], [0, 30], [4, 22]], '#B8E6FF');
+  },
+  cavebear: (h) => {
+    [[-26, '#6E4A9E'], [-14, '#7E58B0'], [8, '#6E4A9E'], [18, '#7E58B0']].forEach(([x, col]) => h.L([[x, 16], [x, 38]], col, 10));
+    h.E(-6, 8, 30, 20, 0, '#8C66C0'); h.F(-8, 18, 22, 6, 0, '#A884D8');
+    h.C(16, -14, 5, '#8C66C0');
+    h.C(24, -4, 14, '#8C66C0'); h.E(35, 2, 8, 6, 0, '#8C66C0');
+    h.dot(42, 0, 3, '#1E1A16'); h.eye(26, -7, 2.6); h.brow(21, -13, 31, -10);
+    h.arc(36, 6, 4, 0.2, 1.8, 2);
+  },
+  crystaldragon: (h) => {
+    h.P([[-4, -6], [-32, -44], [-26, -22], [-42, -30], [-16, 0]], '#7FD8F5');
+    h.B(c => { c.moveTo(-16, 12); c.quadraticCurveTo(-40, 24, -46, 4); c.lineTo(-40, 8); c.quadraticCurveTo(-34, 14, -14, 4); }, '#7E58C8');
+    h.P([[-46, 4], [-54, -6], [-48, -2], [-50, -12], [-42, 0]], '#E6D2FF');
+    h.E(-8, 28, 7, 10, 0, '#5E3E9E'); h.E(10, 28, 7, 10, 0, '#6A48AE');
+    h.E(0, 10, 22, 16, 0, '#7E58C8'); h.F(6, 14, 10, 11, 0, '#E6D2FF');
+    h.line([[2, 8], [10, 8]], '#B89AE8', 2); h.line([[1, 14], [11, 14]], '#B89AE8', 2); h.line([[2, 20], [10, 20]], '#B89AE8', 2);
+    h.P([[2, -4], [-14, -40], [-8, -18], [-22, -26], [-4, 6]], '#A6E8FF');
+    h.P([[16, -20], [12, -34], [22, -22]], '#FFFFFF'); h.P([[22, -20], [24, -34], [28, -20]], '#FFFFFF');
+    h.E(22, -12, 13, 10, 0.2, '#7E58C8'); h.E(33, -7, 8, 5.5, 0.2, '#7E58C8');
+    h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
+  },
+  moonbunny: (h) => {
+    h.E(-30, 12, 7, 7, 0, '#FFFFFF');
+    h.E(-18, 35, 10, 5, 0, '#B8AEE0');
+    h.E(-4, 16, 26, 20, 0, '#D9D2F2');
+    h.E(10, 36, 11, 5, 0, '#B8AEE0');
+    h.E(9, -30, 6, 17, -0.25, '#D9D2F2'); h.F(9, -30, 2.5, 11, -0.25, '#9FD8FF');
+    h.E(22, -28, 6, 17, 0.25, '#D9D2F2'); h.F(22, -28, 2.5, 11, 0.25, '#9FD8FF');
+    h.C(18, -4, 16, '#D9D2F2');
+    h.F(24, 4, 4.5, 2.6, 0, '#F7C6CF');
+    h.eye(25, -7); h.dot(33, -1, 2.6, '#E88A9C');
+  },
+  cometfox: (h) => {
+    h.B(c => { c.moveTo(-20, 10); c.quadraticCurveTo(-50, 4, -46, -24); c.quadraticCurveTo(-30, -6, -18, 0); }, '#4A6FD8');
+    h.C(-45, -21, 6, '#FFE066');
+    h.L([[-14, 20], [-14, 38]], '#2A3570', 5); h.L([[12, 20], [12, 38]], '#2A3570', 5);
+    h.E(-2, 12, 24, 14, 0, '#4A6FD8'); h.F(14, 16, 7, 8, 0, '#DCE6FF');
+    h.P([[8, -12], [10, -32], [20, -16]], '#4A6FD8'); h.P([[18, -14], [26, -30], [28, -10]], '#4A6FD8');
+    h.C(18, -4, 13, '#4A6FD8');
+    h.P([[24, -9], [43, 1], [24, 8]], '#4A6FD8'); h.PF([[25, 3], [40, 3], [25, 8]], '#DCE6FF');
+    h.dot(42, 1, 3, '#2B2219'); h.eye(22, -6, 3);
+  },
+  saturnturtle: (h) => {
+    h.P([[-32, 22], [-42, 26], [-32, 28]], '#C9B8F2');
+    h.E(-18, 30, 7, 8, 0, '#C9B8F2'); h.E(16, 30, 7, 8, 0, '#C9B8F2');
+    h.C(35, 14, 9, '#C9B8F2'); h.eye(38, 11, 2.8); h.arc(38, 15, 3, 0.4, 2.4, 2);
+    h.B(c => { c.moveTo(-34, 26); c.bezierCurveTo(-34, -26, 30, -26, 30, 26); }, '#3E3A7A');
+    h.P([[-36, 25], [32, 25], [29, 31], [-33, 31]], '#FFD23F');
+    h.P([[-10, -6], [4, -6], [10, 6], [4, 18], [-10, 18], [-16, 6]], '#6A5AC8');
+    h.line([[-16, 6], [-30, 4]]); h.line([[10, 6], [26, 4]]); h.line([[-10, -6], [-16, -14]]); h.line([[4, -6], [10, -14]]);
+  },
+  clownfish: (h) => {
+    h.P([[-22, 4], [-42, -12], [-36, 4], [-42, 20]], '#FF8A3D');
+    h.P([[-12, -10], [0, -22], [8, -10]], '#FF8A3D');
+    h.E(0, 4, 26, 16, 0, '#FF8A3D');
+    h.E(-10, 4, 4.5, 14.5, 0, '#FFFFFF'); h.E(8, 4, 4.5, 15, 0, '#FFFFFF');
+    h.E(0, 14, 7, 4, 0.5, '#FF8A3D');
+    h.eye(17, 0, 3.4); h.arc(22, 8, 3, 0.3, 2.2, 2);
+  },
+  starfish: (h) => {
+    const pts = []; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 15 : 38; pts.push([Math.cos(a) * r, 6 + Math.sin(a) * r]); }
+    h.P(pts, '#FF7A6A');
+    [[0, -18], [-20, 0], [20, 0], [-12, 24], [12, 24]].forEach(([x, y]) => h.dot(x, y, 2.4, '#FFB3A6'));
+    h.eye(-5, 4, 2.8); h.eye(5, 4, 2.8); h.arc(0, 9, 4, 0.4, 2.7, 2);
+  },
+  seahorse: (h) => {
+    h.Q(c => { c.moveTo(-2, 16); c.quadraticCurveTo(-8, 36, 4, 38); c.quadraticCurveTo(12, 36, 6, 28); }, '#F2C230', 7);
+    h.E(-10, 2, 6, 9, 0.3, '#FFE58A');
+    h.E(0, 2, 11, 18, 0.15, '#F2C230');
+    [[-4, -6], [-6, 2], [-6, 10]].forEach(([x, y]) => h.line([[x, y], [x + 8, y + 1]], '#D99A1A', 2));
+    h.P([[0, -26], [-4, -34], [4, -30], [6, -38], [10, -28]], '#F2C230');
+    h.P([[12, -24], [30, -20], [30, -14], [12, -14]], '#F2C230');
+    h.E(6, -20, 10, 8, 0, '#F2C230');
+    h.eye(8, -22, 2.8);
+  },
+  octopus: (h) => {
+    [[-16, -24], [-6, -8], [6, 8], [16, 24]].forEach(([x, ex]) => h.Q(c => { c.moveTo(x, 10); c.quadraticCurveTo(x + (ex - x) * .3 - 8, 26, ex, 38); }, '#B85AD8', 7));
+    h.E(0, -6, 22, 22, 0, '#C46AE0');
+    [[-12, -18], [10, -20], [0, -26]].forEach(([x, y]) => h.dot(x, y, 2.6, '#E2A6F2'));
+    h.C(-8, -4, 6, '#FFFFFF'); h.C(8, -4, 6, '#FFFFFF'); h.eye(-7, -4, 3); h.eye(9, -4, 3);
+    h.arc(0, 4, 5, 0.4, 2.7, 2);
+  },
+  dolphin: (h) => {
+    h.P([[-26, 4], [-46, -8], [-40, 6], [-46, 18]], '#5A96C8');
+    h.P([[-8, -8], [0, -28], [8, -8]], '#5A96C8');
+    h.E(0, 4, 32, 13, -0.12, '#6AA6D8'); h.F(4, 11, 22, 5, -0.12, '#D8ECFA');
+    h.E(36, 7, 10, 5, 0, '#6AA6D8');
+    h.E(6, 16, 8, 4, 0.6, '#5A96C8');
+    h.eye(24, 0, 3); h.arc(34, 6, 6, 0.3, 1.4, 2);
+  },
+  narwhal: (h) => {
+    h.P([[-28, 8], [-48, -6], [-42, 8], [-48, 22]], '#DCD6F0');
+    h.L([[24, 0], [52, -28]], '#FFF6D0', 4);
+    [[30, -6], [36, -12], [42, -18], [48, -24]].forEach(([x, y]) => h.line([[x - 2, y - 2], [x + 2, y + 2]], '#C9A94E', 1.6));
+    h.E(-2, 6, 30, 15, 0, '#F2F0FA'); h.F(2, 14, 22, 5, 0, '#FFFFFF');
+    [[-14, 0], [-4, -4], [6, 0], [-18, 8]].forEach(([x, y]) => h.dot(x, y, 2.4, '#C9B8F2'));
+    h.E(6, 16, 8, 4, 0.6, '#DCD6F0');
+    h.eye(20, 2, 3); h.arc(24, 8, 4, 0.3, 1.6, 2);
+    h.dot(-24, -6, 2, '#FFFFFF'); h.dot(12, -10, 1.6, '#FFFFFF');
+  },
+  mole: (h) => {
+    h.P([[-36, 40], [-28, 26], [-12, 30], [0, 40]], '#8A6440');
+    h.E(-2, 14, 26, 20, 0, '#5A4A44');
+    h.E(10, 32, 10, 5, 0, '#FFB3C6'); [6, 10, 14].forEach(x => h.line([[x, 35], [x + 1, 39]], '#2B2219', 1.6));
+    h.E(26, 12, 7, 5.5, 0, '#FF9BB3');
+    h.dot(16, 6, 1.8, '#1E1A16');
+    h.line([[24, 16], [34, 20]], '#2B2219', 1.4); h.line([[24, 14], [35, 14]], '#2B2219', 1.4);
+  },
+  axolotl: (h) => {
+    h.P([[-20, 6], [-46, 2], [-44, 14], [-20, 16]], '#FF9EB8');
+    [[-12, 18, -16, 30], [10, 18, 14, 30]].forEach(([a, b, x, y]) => h.L([[a, b], [x, y]], '#FFB3C6', 4));
+    h.E(-2, 10, 24, 12, 0, '#FFB3C6');
+    [[10, -6, 2, -20], [12, -2, 0, -10], [12, 4, -2, 2]].forEach(([a, b, x, y]) => h.L([[a, b], [x, y]], '#FF6A9A', 4));
+    h.E(20, 2, 15, 12, 0, '#FFB3C6');
+    h.eye(24, -1, 2.6); h.arc(26, 4, 7, 0.4, 1.9, 2);
+    h.F(22, 8, 3.5, 2, 0, '#FF7FA8');
+  },
+  starjelly: (h) => {
+    [-14, -5, 5, 14].forEach((x, i) => h.Q(c => { c.moveTo(x, 6); c.quadraticCurveTo(x + (i % 2 ? 8 : -8), 22, x, 40); }, '#C9A6FF', 3));
+    h.B(c => { c.moveTo(-28, 8); c.bezierCurveTo(-28, -40, 28, -40, 28, 8); c.quadraticCurveTo(0, 14, -28, 8); }, '#9FD8FF');
+    [[-14, -12], [10, -18], [16, -4], [-4, -22]].forEach(([x, y]) => h.dot(x, y, 2.2, '#FFF6A8'));
+    h.eye(-7, -4, 2.8); h.eye(7, -4, 2.8); h.F(-12, 1, 3, 2, 0, '#FF9BD0'); h.F(12, 1, 3, 2, 0, '#FF9BD0'); h.arc(0, 0, 3, 0.4, 2.7, 2);
+  },
+  astropup: (h) => {
+    h.P([[-30, 2], [-14, 2], [-14, 22], [-30, 22]], '#C0C8D8');
+    [[-14, '#D4B088'], [-4, '#E8C49A'], [6, '#D4B088'], [14, '#E8C49A']].forEach(([x, col]) => h.L([[x, 20], [x, 38]], col, 5));
+    h.L([[-26, 10], [-36, 0]], '#E8C49A', 4);
+    h.E(-2, 16, 22, 13, 0, '#E8C49A');
+    h.C(16, -8, 12, '#E8C49A'); h.E(8, -6, 5, 9, 0.3, '#B88A5A');
+    h.eye(20, -10, 2.6); h.dot(27, -5, 2.6, '#2B2219'); h.arc(23, -2, 3, 0.4, 2.4, 2);
+    h.C(16, -8, 19, 'rgba(180,230,255,.35)'); h.F(9, -16, 5, 3, -0.6, 'rgba(255,255,255,.75)');
+  },
+  unicorn: (h, c) => {
+    const tg = c.createLinearGradient(-40, -10, -20, 30); tg.addColorStop(0, '#FF7AD9'); tg.addColorStop(.5, '#7FD8F5'); tg.addColorStop(1, '#FFD23F');
+    h.Q(cc => { cc.moveTo(-28, -2); cc.quadraticCurveTo(-46, 4, -40, 26); }, tg, 7);
+    [[-22, '#2E2264'], [-12, '#3A2A7A'], [10, '#2E2264'], [18, '#3A2A7A']].forEach(([x, col]) => h.L([[x, 10], [x, 40]], col, 5));
+    h.E(-4, 4, 26, 14, 0, '#3A2A7A');
+    h.P([[12, -2], [18, -26], [28, -24], [24, 6]], '#3A2A7A');
+    [[14, -26, '#FF7AD9'], [12, -16, '#7FD8F5'], [10, -6, '#FFD23F']].forEach(([x, y, col]) => h.C(x, y, 6, col));
+    h.E(26, -22, 11, 8, 0.2, '#3A2A7A');
+    h.P([[22, -30], [28, -52], [31, -29]], '#FFD23F');
+    h.eye(27, -25, 2.8);
+    [[-16, -2], [-4, 0], [4, -4], [-10, 8], [30, -16]].forEach(([x, y]) => h.dot(x, y, 1.8, '#FFFFFF'));
+  },
+  'g-shark': (h) => {
+    h.P([[-30, 6], [-52, -16], [-44, 6], [-52, 26]], '#6A7F96');
+    h.P([[-8, -6], [2, -32], [12, -6]], '#6A7F96');
+    h.E(-2, 8, 36, 15, 0, '#7A8FA6'); h.F(4, 15, 28, 6, 0, '#E6EEF5');
+    h.P([[4, 16], [16, 30], [18, 16]], '#6A7F96');
+    [14, 18, 22].forEach(x => h.line([[x, 2], [x - 2, 10]], '#4E5F72', 2));
+    h.line([[24, 14], [40, 12]], '#2B2219', 2.5);
+    [27, 32, 37].forEach(x => h.tri(x, 13, 3.5, 3.5, '#FFFFFF'));
+    h.eye(28, 2, 2.8); h.brow(23, -3, 33, 0);
+  },
+  'g-spider': (h) => {
+    for (let i = 0; i < 8; i++) { const bx = -16 + i * 4.5, o = i - 3.5; h.L([[bx, 8], [bx + o * 8, -10 - (i % 2) * 8], [bx + o * 13, 40]], i % 2 ? '#2B2230' : '#3A2E48', 3); }
+    h.E(-14, 2, 22, 18, 0, '#4A3A5A');
+    h.P([[-20, -10], [-16, -2], [-24, -4]], '#B07AF2'); h.P([[-8, -12], [-6, -4], [-12, -6]], '#7FF2FF'); h.P([[-16, 8], [-12, 14], [-20, 12]], '#B07AF2');
+    h.C(14, 8, 12, '#3A2E48');
+    [[14, 3], [20, 4], [17, 0], [22, 8]].forEach(([x, y]) => h.dot(x, y, 2.2, '#FF4A6A'));
+    h.P([[20, 14], [22, 22], [24, 14]], '#FFF8EC'); h.P([[14, 15], [15, 22], [18, 15]], '#FFF8EC');
+  },
+  'g-alien': (h) => {
+    h.L([[-6, 30], [-8, 40]], '#5EC45A', 5); h.L([[6, 30], [8, 40]], '#5EC45A', 5);
+    h.L([[-12, 12], [-26, 24]], '#5EC45A', 4); h.L([[12, 12], [26, 24]], '#5EC45A', 4);
+    h.E(0, 18, 15, 16, 0, '#7FE07A'); h.F(0, 20, 8, 9, 0, '#B6F2A8');
+    h.L([[-8, -34], [-14, -48]], '#5EC45A', 2.5); h.L([[8, -34], [14, -48]], '#5EC45A', 2.5);
+    h.C(-14, -49, 4, '#FFD23F'); h.C(14, -49, 4, '#FFD23F');
+    h.E(0, -18, 22, 18, 0, '#7FE07A');
+    h.E(-9, -18, 6.5, 10, 0.5, '#1E1A16'); h.E(9, -18, 6.5, 10, -0.5, '#1E1A16');
+    h.F(-11, -22, 2, 3, 0.5, '#FFFFFF'); h.F(7, -22, 2, 3, -0.5, '#FFFFFF');
+    h.line([[-3, -4], [3, -4]], '#2B2219', 2);
+  },
+  hydra: (h) => {
+    h.P([[-26, 14], [-50, 26], [-24, 24]], '#3F7A5A');
+    h.E(-14, 30, 7, 8, 0, '#356E50'); h.E(10, 30, 7, 8, 0, '#356E50');
+    h.Q(c => { c.moveTo(2, 8); c.quadraticCurveTo(4, -20, 12, -34); }, '#4F9A6A', 8);
+    h.Q(c => { c.moveTo(8, 10); c.quadraticCurveTo(22, -4, 32, -16); }, '#4F9A6A', 8);
+    h.Q(c => { c.moveTo(10, 14); c.quadraticCurveTo(28, 14, 38, 4); }, '#4F9A6A', 8);
+    h.E(-6, 16, 24, 14, 0, '#4F9A6A'); h.F(-2, 22, 18, 5, 0, '#C9E8A8');
+    [[-18, 6], [-8, 3], [2, 6]].forEach(([x, y]) => h.P([[x - 4, y + 2], [x, y - 6], [x + 4, y + 2]], '#2F6A4A'));
+    [[16, -36, 0.4], [36, -18, 0.2], [42, 2, 0]].forEach(([x, y, a]) => { h.E(x, y, 9, 6.5, a, '#5FB07A'); h.eye(x + 1, y - 2, 2.2); h.tri(x + 7, y + 3, 2.5, 3, '#FFFFFF'); });
+  },
+  sphinx: (h) => {
+    h.Q(c => { c.moveTo(-32, 26); c.quadraticCurveTo(-48, 20, -42, 4); }, '#E8C070', 4);
+    h.E(-24, 20, 13, 13, 0, '#E8C070');
+    h.E(-4, 24, 28, 12, 0, '#E8C070');
+    h.E(22, 34, 13, 5, 0, '#E8C070'); h.E(16, 36, 12, 5, 0, '#D9AE5A');
+    h.P([[6, -18], [30, -18], [36, 12], [0, 12]], '#2E6FD8');
+    [[8, -8, 34, -8], [6, 0, 35, 0], [4, 8, 36, 8]].forEach(([a, b, x, y]) => h.line([[a, b], [x, y]], '#FFD23F', 3));
+    h.C(18, -4, 10, '#E8C070');
+    h.P([[12, -22], [24, -22], [28, -16], [8, -16]], '#FFD23F');
+    h.eye(15, -6, 2.4); h.eye(22, -6, 2.4); h.line([[12, -6], [10, -4]], '#2B2219', 2); h.line([[25, -6], [27, -4]], '#2B2219', 2);
+    h.arc(18, -1, 3, 0.5, 2.6, 2);
+  },
+  leviathan: (h) => {
+    h.Q(c => { c.moveTo(-46, 24); c.quadraticCurveTo(-34, -14, -16, 10); c.quadraticCurveTo(-2, 34, 12, 8); c.quadraticCurveTo(18, -4, 24, -4); }, '#2E8A9A', 13);
+    h.Q(c => { c.moveTo(-40, 18); c.quadraticCurveTo(-32, -4, -18, 14); c.quadraticCurveTo(-4, 30, 10, 10); }, '#7FE0E0', 3);
+    h.P([[-36, -2], [-30, -16], [-26, -2]], '#1F6A7A'); h.P([[-6, 22], [0, 10], [4, 24]], '#1F6A7A');
+    h.P([[-46, 24], [-54, 14], [-50, 30]], '#1F6A7A');
+    h.P([[22, -14], [16, -30], [28, -16]], '#FFE066'); h.P([[30, -14], [32, -30], [36, -12]], '#FFE066');
+    h.E(30, -6, 14, 10, 0.1, '#2E8A9A');
+    h.C(32, -9, 3.5, '#FFE066'); h.dot(32, -9, 1.6, '#2B2219');
+    h.line([[34, 0], [44, -2]], '#2B2219', 2); [37, 41].forEach(x => h.tri(x, -1, 3, 3, '#FFFFFF'));
+  },
+  cosmicwhale: (h) => {
+    h.P([[-30, 6], [-50, -10], [-44, 6], [-50, 22]], '#2E2264');
+    h.E(-2, 8, 36, 18, 0, '#3A2A7A'); h.F(4, 18, 28, 7, 0, '#6A5AC8');
+    [12, 18, 24].forEach(x => h.line([[x, 16], [x + 8, 22]], '#4A3A9A', 1.6));
+    h.E(8, 22, 9, 4, 0.5, '#2E2264');
+    h.eye(22, 2, 3); h.arc(28, 10, 6, 0.3, 1.5, 2);
+    [[-20, -2], [-8, -4], [2, 2], [-14, 8], [-26, 10], [10, -6]].forEach(([x, y], i) => h.dot(x, y, i % 2 ? 1.6 : 2.4, i % 3 ? '#FFFFFF' : '#FFE066'));
+    h.L([[-6, -10], [-10, -22]], '#9FD8FF', 2); h.L([[-2, -10], [2, -24]], '#9FD8FF', 2);
+  },
+  gummybear: (h) => {
+    h.E(-10, 34, 8, 7, 0, '#FF4F6A'); h.E(10, 34, 8, 7, 0, '#FF4F6A');
+    h.E(-16, 12, 7, 9, 0.4, '#FF4F6A'); h.E(16, 12, 7, 9, -0.4, '#FF4F6A');
+    h.E(0, 18, 16, 18, 0, '#FF4F6A');
+    h.C(-11, -21, 5, '#FF4F6A'); h.C(11, -21, 5, '#FF4F6A');
+    h.C(0, -10, 14, '#FF4F6A'); h.F(4, -6, 6, 4, 0, '#FF8A9C');
+    h.F(-6, -16, 4, 2.5, -0.5, 'rgba(255,255,255,.7)'); h.F(-8, 10, 3, 6, 0.2, 'rgba(255,255,255,.5)');
+    h.eye(-5, -12, 2.4); h.eye(5, -12, 2.4); h.arc(0, -6, 3, 0.4, 2.7, 2);
+  },
+  marshchick: (h) => {
+    h.L([[-6, 34], [-6, 40]], '#F2A23A', 3); h.L([[6, 34], [6, 40]], '#F2A23A', 3);
+    h.B(c => { c.moveTo(-22, 34); c.bezierCurveTo(-26, 10, -16, -26, 4, -26); c.bezierCurveTo(22, -26, 28, 2, 24, 34); }, '#FFE3EE');
+    h.E(-14, 12, 7, 10, 0.3, '#FFD0E2');
+    [[-4, 4], [8, 18], [-10, 24], [14, 0], [2, 28]].forEach(([x, y]) => h.dot(x, y, 1.4, '#FFFFFF'));
+    h.P([[16, -12], [26, -8], [16, -4]], '#F2A23A');
+    h.eye(10, -14, 2.6); h.F(8, -6, 3.5, 2, 0, '#FF9BB3');
+  },
+  cottonsheep: (h) => {
+    [[-16, '#3A2E3A'], [-6, '#4A3A4A'], [8, '#3A2E3A'], [16, '#4A3A4A']].forEach(([x, col]) => h.L([[x, 18], [x, 38]], col, 4));
+    [[-20, 0], [-8, -8], [6, -6], [-24, 14], [-8, 16], [8, 14], [14, 2]].forEach(([x, y]) => h.C(x, y, 11, '#FFC6E6'));
+    h.F(-6, 4, 18, 10, 0, '#FFC6E6');
+    h.E(22, -2, 9, 11, 0.2, '#5A4A5A'); h.E(16, -10, 6, 3, -0.5, '#5A4A5A');
+    h.C(20, -12, 6, '#FFB3DC');
+    h.eye(25, -3, 2.2);
+  },
+  'g-gingerbread': (h) => {
+    h.E(-11, 32, 9, 11, 0.1, '#C8823A'); h.E(11, 32, 9, 11, -0.1, '#C8823A');
+    h.E(-24, 0, 13, 8, 0.3, '#C8823A'); h.E(24, 0, 13, 8, -0.3, '#C8823A');
+    h.E(0, 10, 19, 24, 0, '#C8823A');
+    h.line([[-32, -2], [-28, 4], [-24, -2], [-20, 4]], '#FFFFFF', 2.5); h.line([[20, 4], [24, -2], [28, 4], [32, -2]], '#FFFFFF', 2.5);
+    h.line([[-16, 36], [-12, 32], [-8, 36]], '#FFFFFF', 2.5); h.line([[8, 36], [12, 32], [16, 36]], '#FFFFFF', 2.5);
+    h.C(0, 2, 3.5, '#E8402C'); h.C(0, 12, 3.5, '#3FC37A'); h.C(0, 22, 3.5, '#FFD23F');
+    h.C(0, -26, 15, '#C8823A');
+    h.C(-5, -28, 2.6, '#FFFFFF'); h.C(5, -28, 2.6, '#FFFFFF');
+    h.brow(-10, -35, -2, -31); h.brow(10, -35, 2, -31);
+    h.Q(c => { c.moveTo(-6, -20); c.quadraticCurveTo(0, -16, 6, -20); }, '#FFFFFF', 2);
+  },
+  'g-griffin': (h) => {
+    h.Q(c => { c.moveTo(-30, 10); c.quadraticCurveTo(-46, 8, -46, -6); }, '#D9A94E', 3); h.C(-46, -8, 5, '#B8862E');
+    [[-22, '#C99440'], [-12, '#D9A94E'], [8, '#C99440'], [16, '#D9A94E']].forEach(([x, col]) => h.L([[x, 18], [x, 38]], col, 6));
+    h.P([[-6, 0], [-36, -46], [-26, -26], [-42, -30], [-22, -10], [-34, -8], [-10, 8]], '#5A6E8A');
+    h.E(-6, 12, 26, 14, 0, '#D9A94E');
+    h.P([[2, -2], [-20, -40], [-14, -20], [-28, -24], [-6, 6]], '#73879F');
+    h.P([[-18, -30], [-12, -18], [-16, -18], [-10, -6], [-20, -20], [-16, -20]], '#FFE066');
+    h.C(18, -10, 12, '#F5F0E6');
+    h.P([[26, -15], [38, -10], [34, -1], [28, -6]], '#F2C230');
+    h.eye(20, -13, 2.6); h.brow(15, -19, 24, -16);
+  },
+  spiritstag: (h) => {
+    [[-22, '#4FC8D8'], [-12, '#5FD0DE'], [12, '#4FC8D8'], [20, '#5FD0DE']].forEach(([x, col]) => h.L([[x, 8], [x, 40]], col, 5));
+    h.E(-31, -4, 5, 7, 0, '#FFFFFF');
+    h.E(-4, 2, 28, 14, 0, '#7FE8F0'); h.F(-2, 10, 20, 4, 0, '#D8FAFF');
+    [[-16, -2], [-6, -6], [4, -1], [-10, 4]].forEach(([x, y]) => h.dot(x, y, 2.4, '#FFFFFF'));
+    h.P([[12, -4], [18, -26], [28, -24], [24, 2]], '#7FE8F0');
+    h.L([[20, -34], [15, -52]], '#FFE066', 3); h.L([[16, -46], [7, -50]], '#FFE066', 3);
+    h.L([[26, -34], [32, -53]], '#FFE066', 3); h.L([[30, -46], [39, -48]], '#FFE066', 3);
+    h.E(14, -33, 7, 3.5, -0.5, '#7FE8F0');
+    h.E(26, -28, 11, 8, 0.2, '#7FE8F0');
+    h.dot(38, -24, 2.6, '#2B2219'); h.eye(27, -30, 2.8);
+  },
+  jadetiger: (h, c) => {
+    h.Q(cc => { cc.moveTo(-26, 4); cc.quadraticCurveTo(-46, -2, -44, -22); }, '#3FC38A', 5);
+    [[-22, '#2FA874'], [-12, '#3FC38A'], [10, '#2FA874'], [18, '#3FC38A']].forEach(([x, col]) => h.L([[x, 14], [x, 38]], col, 6));
+    h.E(-4, 10, 26, 14, 0, '#3FC38A'); h.F(0, 18, 18, 5, 0, '#E8FFF2');
+    [-18, -8, 2, 12].forEach(x => h.line([[x, -2], [x - 3, 8]], '#FFD23F', 3));
+    h.C(12, -16, 5, '#3FC38A'); h.C(26, -17, 5, '#3FC38A');
+    h.C(20, -4, 14, '#3FC38A'); h.F(28, 1, 8, 6, 0, '#E8FFF2');
+    h.line([[16, -16], [18, -11]], '#2B2219', 2.5); h.line([[22, -17], [22, -12]], '#2B2219', 2.5);
+    h.dot(34, -1, 2.6, '#2B2219'); h.eye(25, -6, 3);
+  },
+  icephoenix: (h) => {
+    h.P([[-10, 14], [-48, 34], [-30, 22], [-50, 18], [-28, 12], [-44, 2], [-14, 6]], '#4FA8F0');
+    h.P([[-12, 12], [-40, 26], [-30, 16], [-40, 10], [-14, 8]], '#E6F8FF');
+    h.P([[-4, 0], [-34, -42], [-24, -22], [-38, -26], [-20, -8], [-30, -6], [-10, 6]], '#7FD8F5');
+    h.E(0, 6, 14, 16, 0.2, '#4FA8F0'); h.F(4, 10, 7, 9, 0.2, '#BFEFFF');
+    h.P([[6, -22], [2, -38], [10, -28], [12, -42], [16, -24]], '#E6F8FF');
+    h.C(10, -14, 10, '#9FD8FF');
+    h.P([[18, -17], [28, -13], [18, -9]], '#FFFFFF'); h.eye(13, -16, 2.6);
+    h.P([[2, 0], [-16, -30], [-10, -12], [-20, -14], [-4, 8]], '#BFEFFF');
+  },
+  magmakraken: (h) => {
+    [[-16, -24], [-6, -8], [6, 8], [16, 24]].forEach(([x, ex]) => h.Q(c => { c.moveTo(x, 10); c.quadraticCurveTo(x + (ex - x) * .3 - 8, 26, ex, 38); }, '#2B2226', 7));
+    h.E(0, -6, 22, 22, 0, '#3A2A2E');
+    [[-12, -18], [10, -20], [0, -26]].forEach(([x, y]) => h.dot(x, y, 2.6, '#FF7A2A'));
+    h.C(-8, -4, 6, '#FFB13B'); h.C(8, -4, 6, '#FFB13B'); h.eye(-7, -4, 3); h.eye(9, -4, 3);
+    h.arc(0, 4, 5, 0.4, 2.7, 2);
+  },
+  geodetitan: (h) => {
+    h.P([[-20, 18], [-6, 18], [-8, 40], [-22, 40]], '#3A2E5A'); h.P([[6, 18], [20, 18], [22, 40], [8, 40]], '#3A2E5A');
+    h.C(-34, 4, 11, '#4A3A70'); h.C(34, 4, 11, '#4A3A70');
+    h.P([[-26, -18], [26, -18], [30, 22], [-30, 22]], '#5E4A8E');
+    h.line([[-18, -12], [-8, -2], [-14, 10]], '#7FF2FF', 3); h.line([[10, -14], [4, 0], [16, 12]], '#7FF2FF', 3); h.line([[-4, 6], [4, 16]], '#FF9BF0', 2);
+    h.C(-38, 22, 9, '#4A3A70'); h.C(38, 22, 9, '#4A3A70');
+    h.line([[-40, 18], [-35, 26]], '#7FF2FF', 2); h.line([[40, 18], [35, 26]], '#7FF2FF', 2);
+    h.P([[-13, -38], [13, -38], [15, -18], [-15, -18]], '#4A3A70');
+    h.PF([[-10, -30], [-3, -28], [-3, -25], [-10, -26]], '#FF9BF0'); h.PF([[10, -30], [3, -28], [3, -25], [10, -26]], '#FF9BF0');
+    h.line([[-6, -21], [6, -21]], '#7FF2FF', 2.5);
+  },
+  lollisnail: (h, c) => {
+    h.L([[28, 10], [24, -10]], '#FFE0EE', 3); h.L([[33, 12], [37, -8]], '#FFE0EE', 3);
+    h.dot(24, -11, 3.6, '#2B2219'); h.dot(37, -9, 3.6, '#2B2219');
+    h.E(2, 33, 36, 7, 0, '#FFE0EE'); h.E(28, 22, 8, 15, 0.3, '#FFE0EE');
+    h.C(-6, 6, 24, '#FF6AB0');
+    c.beginPath(); for (let a = 0; a < 4 * Math.PI; a += 0.15) { const r = 19 * (1 - a / (4.4 * Math.PI)); const x = -6 + Math.cos(a) * r, y = 6 + Math.sin(a) * r; a ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = '#FFFFFF'; c.lineWidth = 3; c.stroke(); c.strokeStyle = '#2B2219';
+    h.eye(31, 20, 2.4); h.arc(32, 26, 3, 0.3, 2.6, 2);
+  },
+  chocobunny: (h) => {
+    h.E(-30, 12, 7, 7, 0, '#F2D8C0');
+    h.E(-18, 35, 10, 5, 0, '#5E3820');
+    h.E(-4, 16, 26, 20, 0, '#7A4A2A');
+    h.E(10, 36, 11, 5, 0, '#5E3820');
+    h.E(9, -30, 6, 17, -0.25, '#7A4A2A'); h.F(9, -30, 2.5, 11, -0.25, '#C98A5A');
+    h.E(22, -28, 6, 17, 0.25, '#7A4A2A'); h.F(22, -28, 2.5, 11, 0.25, '#C98A5A');
+    h.C(18, -4, 16, '#7A4A2A');
+    h.F(24, 4, 4.5, 2.6, 0, '#A86A40');
+    h.eye(25, -7); h.dot(33, -1, 2.6, '#F2C6D0');
+  },
+  sprinkleunicorn: (h, c) => {
+    const tg = c.createLinearGradient(-40, -10, -20, 30); tg.addColorStop(0, '#FF7AD9'); tg.addColorStop(.5, '#7FD8F5'); tg.addColorStop(1, '#FFD23F');
+    h.Q(cc => { cc.moveTo(-28, -2); cc.quadraticCurveTo(-46, 4, -40, 26); }, tg, 7);
+    [[-22, '#F2C6DA'], [-12, '#FFF0F6'], [10, '#F2C6DA'], [18, '#FFF0F6']].forEach(([x, col]) => h.L([[x, 10], [x, 40]], col, 5));
+    h.E(-4, 4, 26, 14, 0, '#FFF0F6');
+    h.P([[12, -2], [18, -26], [28, -24], [24, 6]], '#FFF0F6');
+    [[14, -26, '#FF7AD9'], [12, -16, '#7FD8F5'], [10, -6, '#FFD23F']].forEach(([x, y, col]) => h.C(x, y, 6, col));
+    h.E(26, -22, 11, 8, 0.2, '#FFF0F6');
+    h.P([[22, -30], [28, -52], [31, -29]], '#FFD23F');
+    h.eye(27, -25, 2.8);
+    [[-16, -2], [-4, 0], [4, -4], [-10, 8], [30, -16]].forEach(([x, y]) => h.dot(x, y, 1.8, '#FF6AB0'));
+  },
+  candydragon: (h) => {
+    h.P([[-4, -6], [-32, -44], [-26, -22], [-42, -30], [-16, 0]], '#7FE8C8');
+    h.B(c => { c.moveTo(-16, 12); c.quadraticCurveTo(-40, 24, -46, 4); c.lineTo(-40, 8); c.quadraticCurveTo(-34, 14, -14, 4); }, '#FF8AC8');
+    h.P([[-46, 4], [-54, -6], [-48, -2], [-50, -12], [-42, 0]], '#FFF0F6');
+    h.E(-8, 28, 7, 10, 0, '#E86AA8'); h.E(10, 28, 7, 10, 0, '#F07AB8');
+    h.E(0, 10, 22, 16, 0, '#FF8AC8'); h.F(6, 14, 10, 11, 0, '#FFF0F6');
+    h.line([[2, 8], [10, 8]], '#FFB3D9', 2); h.line([[1, 14], [11, 14]], '#FFB3D9', 2); h.line([[2, 20], [10, 20]], '#FFB3D9', 2);
+    h.P([[2, -4], [-14, -40], [-8, -18], [-22, -26], [-4, 6]], '#A6F2DC');
+    h.P([[16, -20], [12, -34], [22, -22]], '#FFFFFF'); h.P([[22, -20], [24, -34], [28, -20]], '#FFFFFF');
+    h.E(22, -12, 13, 10, 0.2, '#FF8AC8'); h.E(33, -7, 8, 5.5, 0.2, '#FF8AC8');
+    h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
+  },
+  cloudbunny: (h) => {
+    h.E(-30, 12, 7, 7, 0, '#FFFFFF');
+    h.E(-18, 35, 10, 5, 0, '#CFE6F7');
+    h.E(-4, 16, 26, 20, 0, '#F4FAFF');
+    h.E(10, 36, 11, 5, 0, '#CFE6F7');
+    h.E(9, -30, 6, 17, -0.25, '#F4FAFF'); h.F(9, -30, 2.5, 11, -0.25, '#9FD8FF');
+    h.E(22, -28, 6, 17, 0.25, '#F4FAFF'); h.F(22, -28, 2.5, 11, 0.25, '#9FD8FF');
+    h.C(18, -4, 16, '#F4FAFF');
+    h.F(24, 4, 4.5, 2.6, 0, '#F7C6CF');
+    h.eye(25, -7); h.dot(33, -1, 2.6, '#E88A9C');
+  },
+  bluebird: (h) => {
+    h.P([[-12, 12], [-40, 36], [-32, 38], [-6, 20]], '#1F5EA8');
+    h.L([[0, 24], [0, 34]], '#7A7A80', 3); h.L([[6, 22], [8, 34]], '#7A7A80', 3);
+    h.E(0, 6, 14, 20, 0.3, '#3F8FE0');
+    h.E(-4, 8, 9, 15, 0.3, '#1F5EA8'); h.F(-1, 0, 7, 4, 0.3, '#FFFFFF');
+    h.C(8, -18, 11, '#3F8FE0'); h.F(12, -18, 5, 5, 0, '#DFF3FF');
+    h.P([[16, -23], [25, -18], [21, -9], [17, -13]], '#F2E6D0'); h.PF([[17, -14], [21, -10], [19, -9]], '#2B2219');
+    h.eye(12, -20, 2.4);
+  },
+  skyfox: (h) => {
+    h.B(c => { c.moveTo(-20, 10); c.quadraticCurveTo(-50, 4, -46, -24); c.quadraticCurveTo(-30, -6, -18, 0); }, '#5FC8D8');
+    h.C(-45, -21, 6, '#FFFFFF');
+    h.L([[-14, 20], [-14, 38]], '#2E7A8A', 5); h.L([[12, 20], [12, 38]], '#2E7A8A', 5);
+    h.E(-2, 12, 24, 14, 0, '#5FC8D8'); h.F(14, 16, 7, 8, 0, '#F0FCFF');
+    h.P([[8, -12], [10, -32], [20, -16]], '#5FC8D8'); h.P([[18, -14], [26, -30], [28, -10]], '#5FC8D8');
+    h.C(18, -4, 13, '#5FC8D8');
+    h.P([[24, -9], [43, 1], [24, 8]], '#5FC8D8'); h.PF([[25, 3], [40, 3], [25, 8]], '#F0FCFF');
+    h.dot(42, 1, 3, '#2B2219'); h.eye(22, -6, 3);
+  },
+  thunderowl: (h) => {
+    h.L([[-7, 34], [-7, 42]], '#F2A23A', 3); h.L([[7, 34], [7, 42]], '#F2A23A', 3);
+    h.P([[-20, -18], [-24, -40], [-6, -26]], '#4A5A7A'); h.P([[20, -18], [24, -40], [6, -26]], '#4A5A7A');
+    h.E(0, 6, 26, 32, 0, '#4A5A7A');
+    h.E(-23, 10, 8, 20, 0.2, '#36425E'); h.E(23, 10, 8, 20, -0.2, '#36425E');
+    h.F(0, 17, 15, 19, 0, '#FFE066');
+    [[-6, 10], [6, 10], [0, 18], [-7, 25], [7, 25]].forEach(([x, y]) => h.arc(x, y, 3, 0.3, 2.8, 2));
+    h.F(-9, -12, 12, 12, 0, '#C8D6EC'); h.F(9, -12, 12, 12, 0, '#C8D6EC');
+    h.C(-9, -12, 8, '#FFFFFF'); h.C(9, -12, 8, '#FFFFFF');
+    h.eye(-8, -11, 4.5); h.eye(10, -11, 4.5);
+    h.P([[-4, -4], [4, -4], [0, 4]], '#F2A23A');
+  },
+  skyunicorn: (h, c) => {
+    const tg = c.createLinearGradient(-40, -10, -20, 30); tg.addColorStop(0, '#FF7AD9'); tg.addColorStop(.5, '#7FD8F5'); tg.addColorStop(1, '#FFD23F');
+    h.Q(cc => { cc.moveTo(-28, -2); cc.quadraticCurveTo(-46, 4, -40, 26); }, tg, 7);
+    [[-22, '#CFE0F0'], [-12, '#F8FBFF'], [10, '#CFE0F0'], [18, '#F8FBFF']].forEach(([x, col]) => h.L([[x, 10], [x, 40]], col, 5));
+    h.E(-4, 4, 26, 14, 0, '#F8FBFF');
+    h.P([[12, -2], [18, -26], [28, -24], [24, 6]], '#F8FBFF');
+    [[14, -26, '#FF7AD9'], [12, -16, '#7FD8F5'], [10, -6, '#FFD23F']].forEach(([x, y, col]) => h.C(x, y, 6, col));
+    h.E(26, -22, 11, 8, 0.2, '#F8FBFF');
+    h.P([[22, -30], [28, -52], [31, -29]], '#FFD23F');
+    h.eye(27, -25, 2.8);
+    [[-16, -2], [-4, 0], [4, -4], [-10, 8], [30, -16]].forEach(([x, y]) => h.dot(x, y, 1.8, '#9FD8FF'));
+  },
+  skywhale: (h) => {
+    h.P([[-30, 6], [-50, -10], [-44, 6], [-50, 22]], '#9FC8E8');
+    h.E(-2, 8, 36, 18, 0, '#E8F4FF'); h.F(4, 18, 28, 7, 0, '#FFFFFF');
+    [12, 18, 24].forEach(x => h.line([[x, 16], [x + 8, 22]], '#BFD8EE', 1.6));
+    h.E(8, 22, 9, 4, 0.5, '#9FC8E8');
+    h.eye(22, 2, 3); h.arc(28, 10, 6, 0.3, 1.5, 2);
+    [[-20, -2], [-8, -4], [2, 2], [-14, 8], [-26, 10], [10, -6]].forEach(([x, y], i) => h.dot(x, y, i % 2 ? 1.6 : 2.4, i % 3 ? '#FFFFFF' : '#FFE066'));
+    h.L([[-6, -10], [-10, -22]], '#FFFFFF', 2); h.L([[-2, -10], [2, -24]], '#FFFFFF', 2);
+  },
+  celestialdragon: (h) => {
+    h.P([[-4, -6], [-32, -44], [-26, -22], [-42, -30], [-16, 0]], '#FFE066');
+    h.B(c => { c.moveTo(-16, 12); c.quadraticCurveTo(-40, 24, -46, 4); c.lineTo(-40, 8); c.quadraticCurveTo(-34, 14, -14, 4); }, '#F8F6FF');
+    h.P([[-46, 4], [-54, -6], [-48, -2], [-50, -12], [-42, 0]], '#FFD23F');
+    h.E(-8, 28, 7, 10, 0, '#D8D2F0'); h.E(10, 28, 7, 10, 0, '#E4DEF8');
+    h.E(0, 10, 22, 16, 0, '#F8F6FF'); h.F(6, 14, 10, 11, 0, '#FFD23F');
+    h.line([[2, 8], [10, 8]], '#E8B830', 2); h.line([[1, 14], [11, 14]], '#E8B830', 2); h.line([[2, 20], [10, 20]], '#E8B830', 2);
+    h.P([[2, -4], [-14, -40], [-8, -18], [-22, -26], [-4, 6]], '#FFF1A8');
+    h.P([[16, -20], [12, -34], [22, -22]], '#FFD23F'); h.P([[22, -20], [24, -34], [28, -20]], '#FFD23F');
+    h.E(22, -12, 13, 10, 0.2, '#F8F6FF'); h.E(33, -7, 8, 5.5, 0.2, '#F8F6FF');
+    h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
+  },
+  triceratops: (h) => {
+    [[-22, '#5E8A4A'], [-12, '#6FA05A'], [8, '#5E8A4A'], [16, '#6FA05A']].forEach(([x, col]) => h.L([[x, 18], [x, 38]], col, 7));
+    h.P([[-26, 10], [-46, 20], [-26, 20]], '#6FA05A');
+    h.E(-4, 14, 26, 15, 0, '#6FA05A'); h.F(-2, 22, 18, 4, 0, '#A8D08A');
+    h.E(14, 2, 11, 16, 0.2, '#E8A23A'); [[8, -10], [14, -14], [20, -12]].forEach(([x, y]) => h.dot(x, y, 2, '#B86A1A'));
+    h.E(24, 10, 13, 10, 0, '#6FA05A');
+    h.P([[24, 0], [40, -14], [30, 2]], '#FFF8EC'); h.P([[34, 6], [42, 0], [38, 9]], '#FFF8EC');
+    h.P([[34, 12], [40, 16], [32, 18]], '#5E8A4A');
+    h.eye(26, 6, 2.8);
+  },
+  ptero: (h) => {
+    h.P([[-6, -2], [-50, -18], [-42, 0], [-26, 4], [-8, 10]], '#C86A3A');
+    h.P([[6, -2], [44, -22], [38, -2], [22, 4], [8, 10]], '#D9884A');
+    h.line([[-8, 2], [-44, -12]], '#8A4A22', 2); h.line([[8, 2], [40, -16]], '#8A4A22', 2);
+    h.E(0, 4, 10, 13, 0, '#D9884A');
+    h.L([[-3, 16], [-5, 26]], '#8A4A22', 2.5); h.L([[3, 16], [5, 26]], '#8A4A22', 2.5);
+    h.P([[2, -16], [-12, -30], [0, -20]], '#E8572C');
+    h.E(6, -14, 8, 6, 0, '#D9884A'); h.P([[12, -16], [32, -12], [12, -10]], '#F2C230');
+    h.eye(7, -16, 2.4);
+  },
+  stego: (h) => {
+    [[-22, '#6E9A4A'], [-12, '#8AB45A'], [10, '#6E9A4A'], [18, '#8AB45A']].forEach(([x, col]) => h.L([[x, 20], [x, 38]], col, 6));
+    [[-20, 0], [-8, -6], [4, -6], [16, 0]].forEach(([x, y], i) => h.P([[x - 7, y + 6], [x, y - 12], [x + 7, y + 6]], i % 2 ? '#E86A3A' : '#F2A23A'));
+    h.P([[-26, 12], [-48, 8], [-26, 22]], '#8AB45A');
+    h.P([[-42, 8], [-48, 0], [-44, 9]], '#FFF8EC'); h.P([[-38, 9], [-42, 2], [-36, 10]], '#FFF8EC');
+    h.E(-4, 14, 28, 14, 0, '#8AB45A'); h.F(-2, 22, 20, 4, 0, '#C8E0A0');
+    h.E(28, 18, 9, 6, 0.1, '#8AB45A'); h.eye(30, 16, 2.2);
+  },
+  raptor: (h) => {
+    h.P([[-14, 0], [-48, 4], [-14, 12]], '#C9A050');
+    h.L([[-4, 12], [-8, 26], [-2, 38]], '#B08A40', 4); h.L([[6, 12], [8, 26], [14, 38]], '#C9A050', 4);
+    h.line([[14, 38], [20, 36]], '#2B2219', 2);
+    h.E(-2, 4, 17, 11, -0.3, '#C9A050');
+    [-10, -4, 2].forEach(x => h.line([[x, -4], [x - 2, 4]], '#8A5A28', 2.5));
+    h.L([[10, 6], [16, 14]], '#C9A050', 3);
+    h.P([[8, -6], [14, -18], [22, -16], [16, 0]], '#C9A050');
+    h.P([[10, -24], [6, -32], [14, -26], [14, -34], [18, -24]], '#E8572C');
+    h.E(22, -16, 11, 7, 0.1, '#C9A050'); h.line([[24, -11], [33, -12]], '#2B2219', 2);
+    [26, 30].forEach(x => h.tri(x, -11.5, 3, 3, '#FFFFFF'));
+    h.eye(22, -18, 2.4); h.brow(18, -23, 26, -21);
+  },
+  brachio: (h) => {
+    h.P([[-28, 14], [-50, 26], [-26, 24]], '#7FA8C8');
+    [[-22, '#6A92B4'], [-12, '#7FA8C8'], [8, '#6A92B4'], [16, '#7FA8C8']].forEach(([x, col]) => h.L([[x, 20], [x, 40]], col, 8));
+    h.Q(c => { c.moveTo(12, 10); c.quadraticCurveTo(26, -10, 28, -40); }, '#7FA8C8', 9);
+    h.E(-6, 16, 26, 14, 0, '#7FA8C8'); h.F(-4, 24, 18, 4, 0, '#BFD8EC');
+    [[-16, 10], [-4, 8], [-10, 14]].forEach(([x, y]) => h.dot(x, y, 2.4, '#5E86A8'));
+    h.E(32, -44, 10, 6.5, 0.1, '#7FA8C8'); h.eye(33, -46, 2.4); h.arc(36, -42, 3, 0.3, 1.8, 2);
+  },
+  blackcat: (h) => {
+    h.Q(c => { c.moveTo(-24, 12); c.quadraticCurveTo(-46, 6, -40, -16); c.quadraticCurveTo(-38, -22, -32, -20); }, '#2A2A33', 4);
+    [[-18, '#22222A'], [-8, '#2A2A33'], [8, '#22222A'], [16, '#2A2A33']].forEach(([x, col]) => h.L([[x, 20], [x, 38]], col, 5));
+    h.E(-4, 14, 22, 12, 0, '#2A2A33');
+    h.P([[8, -10], [10, -26], [17, -13]], '#2A2A33'); h.P([[20, -13], [26, -26], [28, -8]], '#2A2A33');
+    h.C(18, -2, 12, '#2A2A33');
+    h.C(14, -4, 3.6, '#FFD23F'); h.C(22, -4, 3.6, '#FFD23F'); h.F(14, -4, 1, 3, 0, '#1E1A16'); h.F(22, -4, 1, 3, 0, '#1E1A16');
+    h.dot(19, 2, 1.8, '#FF9BB3');
+    h.line([[22, 3], [32, 1]], '#8A8A9A', 1.2); h.line([[22, 5], [32, 6]], '#8A8A9A', 1.2);
+  },
+  butterfly: (h) => {
+    h.E(-16, -10, 17, 12, -0.4, '#FF7AD9'); h.E(16, -10, 17, 12, 0.4, '#7FD8F5');
+    h.E(-11, 13, 11, 9, 0.3, '#FFD23F'); h.E(11, 13, 11, 9, -0.3, '#7FE07A');
+    [[-18, -12], [18, -12], [-12, 14], [12, 14]].forEach(([x, y]) => h.dot(x, y, 3.2, '#FFFFFF'));
+    h.Q(c => { c.moveTo(-2, -16); c.quadraticCurveTo(-8, -32, -14, -30); }, '#3A2E48', 1.5);
+    h.Q(c => { c.moveTo(2, -16); c.quadraticCurveTo(8, -32, 14, -30); }, '#3A2E48', 1.5);
+    h.E(0, 2, 4.5, 20, 0, '#3A2E48');
+    h.dot(-2, -14, 1.4, '#FFFFFF'); h.dot(2, -14, 1.4, '#FFFFFF');
+  },
+  lion: (h) => {
+    h.Q(c => { c.moveTo(-28, 8); c.quadraticCurveTo(-44, 0, -42, -14); }, '#E8B030', 3); h.C(-42, -16, 5, '#FF7AD9');
+    [[-22, '#D9A020'], [-12, '#F2C230'], [8, '#D9A020'], [16, '#F2C230']].forEach(([x, col]) => h.L([[x, 18], [x, 38]], col, 6));
+    h.E(-6, 12, 24, 13, 0, '#F2C230');
+    ['#FF5A5A', '#FF9F3A', '#FFE066', '#7FE07A', '#5AC8FF', '#9B7AFF', '#FF7AD9', '#FF5A5A'].forEach((col, i) => { const a = -Math.PI * .9 + i * Math.PI * 1.8 / 7; h.C(18 + Math.cos(a) * 14, -4 + Math.sin(a) * 14, 7, col); });
+    h.C(18, -4, 12, '#F2C230'); h.F(24, 1, 6, 4.5, 0, '#FFF1C8');
+    h.dot(28, -1, 2.4, '#5A3A22'); h.eye(21, -7, 2.6);
+  },
+  'g-ghost': (h) => {
+    h.B(c => { c.moveTo(-30, 30); c.bezierCurveTo(-34, -44, 34, -44, 30, 30); for (let k = 0; k < 5; k++) { const x = 30 - k * 12; c.quadraticCurveTo(x - 3, 40, x - 6, 30); c.quadraticCurveTo(x - 9, 22, x - 12, 30); } }, 'rgba(242,240,255,.94)');
+    h.E(-32, 2, 8, 5, 0.6, 'rgba(242,240,255,.94)'); h.E(32, 2, 8, 5, -0.6, 'rgba(242,240,255,.94)');
+    h.E(-9, -12, 6, 9, 0.2, '#1E1A16'); h.E(9, -12, 6, 9, -0.2, '#1E1A16');
+    h.F(-11, -16, 2, 3, 0, '#FFFFFF'); h.F(7, -16, 2, 3, 0, '#FFFFFF');
+    h.brow(-16, -25, -4, -20); h.brow(16, -25, 4, -20);
+    h.E(0, 6, 6, 7, 0, '#3A2E48');
+  },
+  'g-trex': (h) => {
+    h.P([[-14, -6], [-52, 16], [-12, 16]], '#8A5A3A');
+    h.E(-8, 26, 8, 14, 0, '#6E4428'); h.E(-4, 39, 10, 4, 0, '#6E4428');
+    [[-22, -6], [-12, -14], [-2, -18]].forEach(([x, y]) => h.P([[x - 5, y + 4], [x, y - 7], [x + 5, y + 4]], '#4A2E1E'));
+    h.E(-2, 6, 22, 18, -0.3, '#8A5A3A'); h.F(5, 11, 10, 12, -0.3, '#E8C9A0');
+    h.F(-12, 0, 6, 4, 0.3, '#5A3A22'); h.F(-4, 16, 4, 3, 0, '#5A3A22');
+    h.E(8, 26, 8, 14, 0, '#8A5A3A'); h.E(12, 39, 10, 4, 0, '#8A5A3A');
+    h.L([[15, 6], [22, 12]], '#8A5A3A', 4);
+    h.E(22, -20, 17, 12, 0.1, '#8A5A3A');
+    h.P([[12, -14], [42, -12], [38, -5], [14, -7]], '#6E4428');
+    [20, 27, 34].forEach(x => h.tri(x, -13, 4, 3.5, '#FFFFFF'));
+    h.F(14, -26, 5, 3, 0, '#5A3A22');
+    h.eye(26, -24, 3); h.brow(21, -30, 31, -28);
+  },
+  spino: (h) => {
+    h.P([[-14, -6], [-52, 16], [-12, 16]], '#3F8AA8');
+    h.E(-8, 26, 8, 14, 0, '#2E7090'); h.E(-4, 39, 10, 4, 0, '#2E7090');
+    [[-22, -6], [-12, -14], [-2, -18]].forEach(([x, y]) => h.P([[x - 5, y + 4], [x, y - 7], [x + 5, y + 4]], '#E8572C'));
+    h.E(-2, 6, 22, 18, -0.3, '#3F8AA8'); h.F(5, 11, 10, 12, -0.3, '#BFE6F0');
+    h.F(-12, 0, 6, 4, 0.3, '#2A6A80'); h.F(-4, 16, 4, 3, 0, '#2A6A80');
+    h.E(8, 26, 8, 14, 0, '#3F8AA8'); h.E(12, 39, 10, 4, 0, '#3F8AA8');
+    h.L([[15, 6], [22, 12]], '#3F8AA8', 4);
+    h.E(22, -20, 17, 12, 0.1, '#3F8AA8');
+    h.P([[12, -14], [42, -12], [38, -5], [14, -7]], '#2E7090');
+    [20, 27, 34].forEach(x => h.tri(x, -13, 4, 3.5, '#FFFFFF'));
+    h.F(14, -26, 5, 3, 0, '#2A6A80');
+    h.eye(26, -24, 3); h.brow(21, -30, 31, -28);
+  },
+  primalrex: (h) => {
+    h.P([[-14, -6], [-52, 16], [-12, 16]], '#2A2226');
+    h.E(-8, 26, 8, 14, 0, '#1E1618'); h.E(-4, 39, 10, 4, 0, '#1E1618');
+    [[-22, -6], [-12, -14], [-2, -18]].forEach(([x, y]) => h.P([[x - 5, y + 4], [x, y - 7], [x + 5, y + 4]], '#FFB13B'));
+    h.E(-2, 6, 22, 18, -0.3, '#2A2226'); h.F(5, 11, 10, 12, -0.3, '#FF7A2A');
+    h.F(-12, 0, 6, 4, 0.3, '#FF5A2A'); h.F(-4, 16, 4, 3, 0, '#FF5A2A');
+    h.E(8, 26, 8, 14, 0, '#2A2226'); h.E(12, 39, 10, 4, 0, '#2A2226');
+    h.L([[15, 6], [22, 12]], '#2A2226', 4);
+    h.E(22, -20, 17, 12, 0.1, '#2A2226');
+    h.P([[12, -14], [42, -12], [38, -5], [14, -7]], '#1E1618');
+    [20, 27, 34].forEach(x => h.tri(x, -13, 4, 3.5, '#FFFFFF'));
+    h.F(14, -26, 5, 3, 0, '#FF5A2A');
+    h.eye(26, -24, 3); h.brow(21, -30, 31, -28);
+  },
+  nightbat: (h) => {
+    h.P([[-6, -2], [-46, -22], [-40, -6], [-46, 6], [-28, 2], [-20, 14]], '#1E1E2E');
+    h.P([[6, -2], [46, -22], [40, -6], [46, 6], [28, 2], [20, 14]], '#1E1E2E');
+    h.line([[-8, 0], [-40, -6]], '#9A7AE8', 2); h.line([[8, 0], [40, -6]], '#9A7AE8', 2);
+    h.P([[-10, -14], [-8, -26], [-2, -16]], '#2E2E44'); h.P([[10, -14], [8, -26], [2, -16]], '#2E2E44');
+    h.E(0, 2, 13, 15, 0, '#2E2E44'); h.F(0, 7, 7, 8, 0, '#44445E');
+    h.C(-5, -4, 3.2, '#FF4A6A'); h.C(5, -4, 3.2, '#FF4A6A');
+    h.tri(-2, 4, 2.5, 4, '#FFFFFF'); h.tri(2, 4, 2.5, 4, '#FFFFFF');
+    h.P([[-4, 22], [0, 30], [4, 22]], '#9A7AE8');
+  },
+  pumpkinsnail: (h, c) => {
+    h.L([[28, 10], [24, -10]], '#7FB85A', 3); h.L([[33, 12], [37, -8]], '#7FB85A', 3);
+    h.dot(24, -11, 3.6, '#2B2219'); h.dot(37, -9, 3.6, '#2B2219');
+    h.E(2, 33, 36, 7, 0, '#7FB85A'); h.E(28, 22, 8, 15, 0.3, '#7FB85A');
+    h.C(-6, 6, 24, '#F2862A');
+    c.beginPath(); for (let a = 0; a < 4 * Math.PI; a += 0.15) { const r = 19 * (1 - a / (4.4 * Math.PI)); const x = -6 + Math.cos(a) * r, y = 6 + Math.sin(a) * r; a ? c.lineTo(x, y) : c.moveTo(x, y); }
+    c.strokeStyle = '#B8561A'; c.lineWidth = 3; c.stroke(); c.strokeStyle = '#2B2219';
+    h.eye(31, 20, 2.4); h.arc(32, 26, 3, 0.3, 2.6, 2);
+  },
+  zombiebunny: (h) => {
+    h.E(-30, 12, 7, 7, 0, '#C8D8B8');
+    h.E(-18, 35, 10, 5, 0, '#7E9A6C');
+    h.E(-4, 16, 26, 20, 0, '#9DB88A');
+    h.E(10, 36, 11, 5, 0, '#7E9A6C');
+    h.E(9, -30, 6, 17, -0.25, '#9DB88A'); h.F(9, -30, 2.5, 11, -0.25, '#B86A6A');
+    h.E(22, -28, 6, 17, 0.25, '#9DB88A'); h.F(22, -28, 2.5, 11, 0.25, '#B86A6A');
+    h.C(18, -4, 16, '#9DB88A');
+    h.F(24, 4, 4.5, 2.6, 0, '#8AA078');
+    h.eye(25, -7); h.dot(33, -1, 2.6, '#6A4A4A');
+  },
+  raven: (h) => {
+    h.P([[-12, 12], [-40, 36], [-32, 38], [-6, 20]], '#1E1E28');
+    h.L([[0, 24], [0, 34]], '#7A7A80', 3); h.L([[6, 22], [8, 34]], '#7A7A80', 3);
+    h.E(0, 6, 14, 20, 0.3, '#2A2A36');
+    h.E(-4, 8, 9, 15, 0.3, '#1E1E28'); h.F(-1, 0, 7, 4, 0.3, '#5A4A8A');
+    h.C(8, -18, 11, '#2A2A36'); h.F(12, -18, 5, 5, 0, '#4A4A5A');
+    h.P([[16, -23], [25, -18], [21, -9], [17, -13]], '#8A8A9A'); h.PF([[17, -14], [21, -10], [19, -9]], '#2B2219');
+    h.eye(12, -20, 2.4);
+  },
+  ghostunicorn: (h, c) => {
+    const tg = c.createLinearGradient(-40, -10, -20, 30); tg.addColorStop(0, '#9AF2D0'); tg.addColorStop(.5, '#C8B8F5'); tg.addColorStop(1, '#E8FFF6');
+    h.Q(cc => { cc.moveTo(-28, -2); cc.quadraticCurveTo(-46, 4, -40, 26); }, tg, 7);
+    [[-22, '#C8C4E0'], [-12, '#E8E6F5'], [10, '#C8C4E0'], [18, '#E8E6F5']].forEach(([x, col]) => h.L([[x, 10], [x, 40]], col, 5));
+    h.E(-4, 4, 26, 14, 0, '#E8E6F5');
+    h.P([[12, -2], [18, -26], [28, -24], [24, 6]], '#E8E6F5');
+    [[14, -26, '#9AF2D0'], [12, -16, '#C8B8F5'], [10, -6, '#E8FFF6']].forEach(([x, y, col]) => h.C(x, y, 6, col));
+    h.E(26, -22, 11, 8, 0.2, '#E8E6F5');
+    h.P([[22, -30], [28, -52], [31, -29]], '#E8FFF6');
+    h.eye(27, -25, 2.8);
+    [[-16, -2], [-4, 0], [4, -4], [-10, 8], [30, -16]].forEach(([x, y]) => h.dot(x, y, 1.8, '#B8F0E0'));
+  },
+  phantomdragon: (h) => {
+    h.P([[-4, -6], [-32, -44], [-26, -22], [-42, -30], [-16, 0]], '#5AE8A8');
+    h.B(c => { c.moveTo(-16, 12); c.quadraticCurveTo(-40, 24, -46, 4); c.lineTo(-40, 8); c.quadraticCurveTo(-34, 14, -14, 4); }, '#4A3A6E');
+    h.P([[-46, 4], [-54, -6], [-48, -2], [-50, -12], [-42, 0]], '#8AF2C8');
+    h.E(-8, 28, 7, 10, 0, '#3A2E5A'); h.E(10, 28, 7, 10, 0, '#41346A');
+    h.E(0, 10, 22, 16, 0, '#4A3A6E'); h.F(6, 14, 10, 11, 0, '#8AF2C8');
+    h.line([[2, 8], [10, 8]], '#5AB890', 2); h.line([[1, 14], [11, 14]], '#5AB890', 2); h.line([[2, 20], [10, 20]], '#5AB890', 2);
+    h.P([[2, -4], [-14, -40], [-8, -18], [-22, -26], [-4, 6]], '#3FC890');
+    h.P([[16, -20], [12, -34], [22, -22]], '#C8FFE8'); h.P([[22, -20], [24, -34], [28, -20]], '#C8FFE8');
+    h.E(22, -12, 13, 10, 0.2, '#4A3A6E'); h.E(33, -7, 8, 5.5, 0.2, '#4A3A6E');
+    h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
+  },
+  'g-toadstool': (h) => {
+    h.E(-12, 40, 10, 5, 0, '#6B4A2E'); h.E(12, 40, 10, 5, 0, '#6B4A2E');
+    h.P([[-12, 24], [-4, 24], [-5, 38], [-13, 38]], '#E8D6B0'); h.P([[4, 24], [12, 24], [13, 38], [5, 38]], '#E8D6B0');
+    h.L([[-20, 4], [-36, 16], [-40, 28]], '#E8D6B0', 7); h.L([[20, 4], [36, 14], [42, 4]], '#E8D6B0', 7);
+    h.C(-40, 30, 6, '#E8D6B0'); h.C(42, 2, 6, '#E8D6B0');
+    h.B(c => { c.moveTo(-20, -8); c.quadraticCurveTo(-24, 26, -14, 28); c.lineTo(14, 28); c.quadraticCurveTo(24, 26, 20, -8); }, '#F3E3C3');
+    h.F(0, 22, 14, 4, 0, '#D9C49A');
+    h.eye(-8, 4, 3.6); h.eye(8, 4, 3.6); h.brow(-13, -3, -4, 0); h.brow(13, -3, 4, 0);
+    h.arc(0, 18, 6, 3.6, 5.8, 2.5);
+    h.B(c => { c.ellipse(0, -10, 44, 30, 0, Math.PI, 0); c.quadraticCurveTo(0, -2, -44, -10); }, '#D9443A');
+    [[-26, -20, 6], [-6, -32, 7], [16, -26, 6], [32, -14, 4], [-36, -12, 3.5], [4, -18, 4]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  shroomhog: (h) => {
+    h.E(-14, 36, 6, 4, 0, '#5A3A22'); h.E(10, 36, 6, 4, 0, '#5A3A22');
+    for (let k = 0; k < 7; k++) { const a = Math.PI + k / 6 * Math.PI * .9 + .15; h.P([[-6 + Math.cos(a) * 18, 20 + Math.sin(a) * 12], [-6 + Math.cos(a) * 32, 20 + Math.sin(a) * 22], [-6 + Math.cos(a + .25) * 18, 20 + Math.sin(a + .25) * 12]], '#6B4A2E'); }
+    h.E(-4, 22, 28, 16, 0, '#A8774A');
+    h.E(20, 24, 12, 10, 0, '#F2D2A8'); h.C(32, 24, 3.5, '#2B2219'); h.eye(22, 19, 2.8); h.F(20, 28, 3.5, 2, 0, '#FF9AA8');
+    h.P([[-12, 8], [-8, 8], [-9, -4], [-11, -4]], '#F3E3C3');
+    h.B(c => { c.ellipse(-10, -4, 16, 12, 0, Math.PI, 0); c.quadraticCurveTo(-10, 0, -26, -4); }, '#E8402C');
+    [[-16, -9, 2.6], [-6, -12, 3], [0, -6, 2]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  glowworm: (h) => {
+    h.L([[24, 6], [20, -10]], '#7FD06A', 2); h.L([[30, 8], [34, -8]], '#7FD06A', 2);
+    h.dot(20, -12, 4.5, '#FFF27A'); h.dot(34, -10, 4.5, '#FFF27A');
+    [[-34, 30, 9, '#FFF27A'], [-22, 28, 11, '#B6F07A'], [-8, 26, 12, '#9BE86A'], [6, 26, 12, '#B6F07A']].forEach(([x, y, r, col]) => h.C(x, y, r, col));
+    h.dot(-34, 30, 13, 'rgba(255,242,122,.25)');
+    h.C(24, 20, 14, '#9BE86A'); h.eye(28, 16, 3); h.arc(28, 24, 4, 0.3, 2.6, 2); h.F(20, 24, 3, 2, 0, '#FF9AA8');
+  },
+  sporefrog: (h, c) => {
+    MODELS.frog(h, c);
+    h.P([[-3, -16], [3, -16], [3, -26], [-3, -26]], '#F3E3C3');
+    h.B(c2 => { c2.ellipse(0, -26, 15, 11, 0, Math.PI, 0); c2.quadraticCurveTo(0, -22, -15, -26); }, '#9B5AE8');
+    [[-7, -30, 2.4], [4, -33, 2.8], [9, -27, 1.8]].forEach(([x, y, r]) => h.dot(x, y, r, '#FFF6E6'));
+  },
+  mossturtle: (h, c) => {
+    MODELS.turtle(h, c);
+    [[-20, -10], [-6, -16], [8, -12], [-14, 4], [10, 2]].forEach(([x, y]) => h.dot(x, y, 4, '#4FA040'));
+    for (const [x, y, r, col] of [[-18, -16, 8, '#E8402C'], [2, -22, 10, '#F2A33A']]) {
+      h.P([[x - 2.5, y], [x + 2.5, y], [x + 2.5, y + r * .8], [x - 2.5, y + r * .8]], '#F3E3C3');
+      h.B(c2 => { c2.ellipse(x, y, r, r * .72, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 3, x - r, y); }, col);
+      h.dot(x - r * .35, y - r * .35, 1.8, '#FFF6E6'); h.dot(x + r * .3, y - r * .2, 1.5, '#FFF6E6');
+    }
+  },
+  fairyfox: (h, c) => {
+    c.globalAlpha = .85; h.E(-14, -14, 20, 9, -0.7, '#BFF2FF'); h.E(-4, -18, 18, 8, -1.1, '#E2C8FF'); c.globalAlpha = 1;
+    MODELS.fox(h, c);
+    [[-30, -30], [30, -34], [-40, 0], [40, 4], [6, -40]].forEach(([x, y], i) => h.dot(x, y, i % 2 ? 2 : 3, '#FFF27A'));
+  },
+  shroomstag: (h, c) => {
+    [[9, -40], [34, -42]].forEach(([x, y]) => h.dot(x, y, 11, 'rgba(95,224,232,.35)'));
+    MODELS.deer(h, c);
+    for (const [x, y, r] of [[9, -40, 7], [34, -42, 7]]) h.B(c2 => { c2.ellipse(x, y, r, r * .75, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 2, x - r, y); }, '#5FE0E8');
+    [[-24, 6], [-10, 4], [2, 10]].forEach(([x, y]) => h.dot(x, y, 2.5, '#5FE0E8'));
+  },
+  mothqueen: (h) => {
+    h.E(-20, -10, 24, 18, -0.4, '#C8B4F2'); h.E(20, -10, 24, 18, 0.4, '#C8B4F2');
+    h.E(-16, 18, 15, 12, 0.5, '#9FE0B8'); h.E(16, 18, 15, 12, -0.5, '#9FE0B8');
+    h.C(-22, -10, 7, '#7F5BFF'); h.C(22, -10, 7, '#7F5BFF'); h.dot(-22, -10, 3, '#FFF27A'); h.dot(22, -10, 3, '#FFF27A');
+    h.E(0, 10, 7, 24, 0, '#F3EAD6'); [0, 8, 16].forEach(y => h.line([[-6, y + 6], [6, y + 6]], '#C8B89A', 2));
+    h.C(0, -16, 9, '#F3EAD6'); h.eye(-3.5, -16, 2.4); h.eye(3.5, -16, 2.4);
+    h.Q(c => { c.moveTo(-3, -24); c.quadraticCurveTo(-10, -40, -18, -40); }, '#C8B89A', 2); h.Q(c => { c.moveTo(3, -24); c.quadraticCurveTo(10, -40, 18, -40); }, '#C8B89A', 2);
+    h.P([[-6, -25], [-6, -32], [-3, -28], [0, -34], [3, -28], [6, -32], [6, -25]], '#FFD23F');
+  },
+  shroomdragonbase: (h, c) => {
+    MODELS.dragon(h, c);
+    for (const [x, y, r, col] of [[22, -30, 9, '#9B5AE8'], [-8, 0, 8, '#E8402C'], [-24, 14, 6, '#9B5AE8']]) {
+      h.P([[x - 2.5, y], [x + 2.5, y], [x + 2.5, y + r * .8], [x - 2.5, y + r * .8]], '#F3E3C3');
+      h.B(c2 => { c2.ellipse(x, y, r, r * .72, 0, Math.PI, 0); c2.quadraticCurveTo(x, y + 3, x - r, y); }, col);
+      h.dot(x - r * .35, y - r * .35, 2, '#FFF6E6'); h.dot(x + r * .3, y - r * .2, 1.6, '#FFF6E6');
+    }
+  },
+  'g-prism': (h) => {
+    h.P([[-20, 18], [-6, 18], [-8, 40], [-22, 40]], '#B07AF2'); h.P([[6, 18], [20, 18], [22, 40], [8, 40]], '#B07AF2');
+    h.C(-34, 4, 11, '#7FD8F5'); h.C(34, 4, 11, '#7FD8F5');
+    h.P([[-26, -18], [26, -18], [30, 22], [-30, 22]], '#FF9BD0');
+    h.line([[-18, -12], [-8, -2], [-14, 10]], '#FFFFFF', 3); h.line([[10, -14], [4, 0], [16, 12]], '#FFFFFF', 3); h.line([[-4, 6], [4, 16]], '#FFE066', 2);
+    h.C(-38, 22, 9, '#7FD8F5'); h.C(38, 22, 9, '#7FD8F5');
+    h.line([[-40, 18], [-35, 26]], '#FFFFFF', 2); h.line([[40, 18], [35, 26]], '#FFFFFF', 2);
+    h.P([[-13, -38], [13, -38], [15, -18], [-15, -18]], '#7FD8F5');
+    h.PF([[-10, -30], [-3, -28], [-3, -25], [-10, -26]], '#FFE066'); h.PF([[10, -30], [3, -28], [3, -25], [10, -26]], '#FFE066');
+    h.line([[-6, -21], [6, -21]], '#FFFFFF', 2.5);
+  },
+  rainbowfrog: (h) => {
+    h.E(-24, 30, 12, 8, -0.3, '#7F5BFF'); h.E(24, 30, 12, 8, 0.3, '#7F5BFF');
+    h.E(0, 16, 26, 20, 0, '#FF7AD9'); h.F(0, 23, 16, 10, 0, '#FFE066');
+    h.C(-12, -6, 10, '#FF7AD9'); h.C(12, -6, 10, '#FF7AD9');
+    h.C(-12, -7, 6, '#FFFFFF'); h.C(12, -7, 6, '#FFFFFF'); h.eye(-11, -7, 3.4); h.eye(13, -7, 3.4);
+    h.arc(0, 4, 12, 0.35, Math.PI - 0.35);
+    h.F(-16, 8, 4, 2.5, 0, '#7FD8F5'); h.F(16, 8, 4, 2.5, 0, '#7FD8F5');
+    h.E(-12, 36, 7, 4, 0, '#7F5BFF'); h.E(12, 36, 7, 4, 0, '#7F5BFF');
+  },
+  rainbowcobra: (h) => {
+    h.E(-4, 30, 28, 10, 0, '#7F5BFF'); h.arc(-4, 30, 16, 3.4, 6.0, 2);
+    h.Q(c => { c.moveTo(-6, 26); c.quadraticCurveTo(22, 18, 8, -2); }, '#7F5BFF', 10);
+    h.E(8, -14, 15, 20, 0, '#7F5BFF'); h.F(8, -12, 8, 13, 0, '#7FD8F5');
+    h.dot(1, -18, 2.4, '#FF4FD8'); h.dot(15, -18, 2.4, '#FF4FD8');
+    h.E(8, -31, 8, 6, 0, '#FF7AD9');
+    h.eye(5, -32, 2); h.eye(11, -32, 2);
+    h.line([[8, -26], [8, -20], [6, -17]], '#D9443A', 1.6); h.line([[8, -20], [10, -17]], '#D9443A', 1.6);
+  },
+  glitterowl: (h) => {
+    h.L([[-7, 34], [-7, 42]], '#F2A23A', 3); h.L([[7, 34], [7, 42]], '#F2A23A', 3);
+    h.P([[-20, -18], [-24, -40], [-6, -26]], '#FF8AC8'); h.P([[20, -18], [24, -40], [6, -26]], '#FF8AC8');
+    h.E(0, 6, 26, 32, 0, '#FF8AC8');
+    h.E(-23, 10, 8, 20, 0.2, '#C86AE0'); h.E(23, 10, 8, 20, -0.2, '#C86AE0');
+    h.F(0, 17, 15, 19, 0, '#FFE6F5');
+    [[-6, 10], [6, 10], [0, 18], [-7, 25], [7, 25]].forEach(([x, y]) => h.arc(x, y, 3, 0.3, 2.8, 2));
+    h.F(-9, -12, 12, 12, 0, '#FFFFFF'); h.F(9, -12, 12, 12, 0, '#FFFFFF');
+    h.C(-9, -12, 8, '#FFFFFF'); h.C(9, -12, 8, '#FFFFFF');
+    h.eye(-8, -11, 4.5); h.eye(10, -11, 4.5);
+    h.P([[-4, -4], [4, -4], [0, 4]], '#F2A23A');
+  },
+  prismunicorn: (h, c) => {
+    const tg = c.createLinearGradient(-40, -10, -20, 30); tg.addColorStop(0, '#FF7AD9'); tg.addColorStop(.5, '#7FD8F5'); tg.addColorStop(1, '#FFD23F');
+    h.Q(cc => { cc.moveTo(-28, -2); cc.quadraticCurveTo(-46, 4, -40, 26); }, tg, 7);
+    [[-22, '#E8E0FF'], [-12, '#FFFFFF'], [10, '#E8E0FF'], [18, '#FFFFFF']].forEach(([x, col]) => h.L([[x, 10], [x, 40]], col, 5));
+    h.E(-4, 4, 26, 14, 0, '#FFFFFF');
+    h.P([[12, -2], [18, -26], [28, -24], [24, 6]], '#FFFFFF');
+    [[14, -26, '#FF7AD9'], [12, -16, '#7FD8F5'], [10, -6, '#FFD23F']].forEach(([x, y, col]) => h.C(x, y, 6, col));
+    h.E(26, -22, 11, 8, 0.2, '#FFFFFF');
+    h.P([[22, -30], [28, -52], [31, -29]], '#FFD23F');
+    h.eye(27, -25, 2.8);
+    [[-16, -2], [-4, 0], [4, -4], [-10, 8], [30, -16]].forEach(([x, y]) => h.dot(x, y, 1.8, '#FF7AD9'));
+  },
+  aurorphoenix: (h) => {
+    h.P([[-10, 14], [-48, 34], [-30, 22], [-50, 18], [-28, 12], [-44, 2], [-14, 6]], '#FF4FD8');
+    h.P([[-12, 12], [-40, 26], [-30, 16], [-40, 10], [-14, 8]], '#7FE0FF');
+    h.P([[-4, 0], [-34, -42], [-24, -22], [-38, -26], [-20, -8], [-30, -6], [-10, 6]], '#7F5BFF');
+    h.E(0, 6, 14, 16, 0.2, '#FF4FD8'); h.F(4, 10, 7, 9, 0.2, '#FFE066');
+    h.P([[6, -22], [2, -38], [10, -28], [12, -42], [16, -24]], '#7FE0FF');
+    h.C(10, -14, 10, '#3FD0A0');
+    h.P([[18, -17], [28, -13], [18, -9]], '#FFFFFF'); h.eye(13, -16, 2.6);
+    h.P([[2, 0], [-16, -30], [-10, -12], [-20, -14], [-4, 8]], '#FFE066');
+  },
+};
+const VAR = {
+  moonfox: { base: 'fox', shift: 200, sat: .5 }, jadefrog: { base: 'frog', shift: 60, sat: .6 }, goldcamel: { base: 'camel', shift: 15, sat: .85 },
+  emeraldtoucan: { base: 'toucan', shift: 130, sat: .6 }, snowlion: { base: 'lion', shift: 180, sat: .3 }, emberwolf: { base: 'firehound', shift: 340, sat: .7 },
+  pearldolphin: { base: 'dolphin', shift: 90, sat: .4 }, opalaxolotl: { base: 'axolotl', shift: 150, sat: .5 }, lunarpup: { base: 'astropup', shift: 200, sat: .4 },
+  candyunicorn: { base: 'unicorn', shift: 300, sat: .6 }, stormeagle: { base: 'eagle', shift: 200, sat: .5 }, goldraptor: { base: 'raptor', shift: 10, sat: .9 },
+  ghostfox: { base: 'arcticfox', shift: 260, sat: .35, hue: 270 }, rainbowpegasus: { base: 'skyunicorn', shift: 300, sat: .5, hue: 300 },
+  elderowl: { base: 'owl', shift: 250, sat: .55 }, bogdragon: { base: 'dragon', shift: 110, sat: .6 }, miragecobra: { base: 'cobra', shift: 190, sat: .6 },
+  silverback: { base: 'g-gorilla', shift: 0, sat: .3, hue: 210 }, blizzardmammoth: { base: 'mammoth', shift: 60, sat: .5 }, lavaphoenix: { base: 'phoenix', shift: 330, sat: .9 },
+  krakenqueen: { base: 'octopus', shift: 300, sat: .6 }, spiderqueen: { base: 'g-spider', shift: 0, sat: .45, hue: 300 }, galaxydragon: { base: 'dragon', shift: 240, sat: .6 },
+  gumdrophydra: { base: 'hydra', shift: 300, sat: .7 }, thunderbird: { base: 'phoenix', shift: 200, sat: .6 }, ancientbrachio: { base: 'brachio', shift: 160, sat: .5 },
+  reaperraven: { base: 'raven', shift: 0, sat: .5, hue: 280 }, spectrumserpent: { base: 'leviathan', shift: 270, sat: .7 },
+  seraphstag: { base: 'spiritstag', divine: true, acc: [200, .75] }, divinehydra: { base: 'hydra', divine: true, acc: [150, .7] }, pharaohsphinx: { base: 'sphinx', divine: true, acc: [225, .85] },
+  suntiger: { base: 'jadetiger', divine: true, acc: [22, .95] }, halophoenix: { base: 'icephoenix', divine: true, acc: [188, .85], lt: .78 }, solarkraken: { base: 'octopus', divine: true, acc: [12, .92], lt: .86 },
+  oceansovereign: { base: 'leviathan', divine: true, acc: [176, .8] }, diamondtitan: { base: 'geodetitan', divine: true, acc: [200, .9] }, starwhale: { base: 'cosmicwhale', divine: true, acc: [232, .75] },
+  heavenlydragon: { base: 'candydragon', divine: true, acc: [330, .85], lt: .8 }, archangeldragon: { base: 'celestialdragon', divine: true, acc: [212, .5] }, titanrex: { base: 'spino', divine: true, acc: [350, .85] },
+  fungaldragon: { base: 'shroomdragonbase', shift: 130, sat: .65 }, mycowyrm: { base: 'leviathan', shift: 95, sat: .6 }, sporeemperor: { base: 'shroomdragonbase', divine: true, acc: [285, .8] },
+  wraithking: { base: 'phantomdragon', divine: true, acc: [140, .75] }, radiantphoenix: { base: 'aurorphoenix', divine: true, acc: 'rainbow', lt: .84 },
+};
+// recolours a drawn model in place (dark outlines and eyes stay as they are)
+function tintCanvas(x, v) {
+  let top = 191, topX = 96;
+  try {
+    const d = x.getImageData(0, 0, 192, 192), a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] < 10) continue;
+      const py = (i / 4 / 192) | 0; if (py < top && a[i + 3] > 200) { top = py; topX = (i / 4) % 192; }
+      let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
+      if (l < .2) continue;
+      if (v.divine) {
+        if (l > (v.lt || .58)) { h = 46; sat = .45 + sat * .3; l = .66 + l * .3; }
+        else if (v.acc === 'rainbow') { h = (((i / 4) % 192) * 2.2) % 360; sat = .85; l = .4 + l * .5; }
+        else { h = v.acc[0]; sat = v.acc[1]; l = .3 + l * .58; }
+      }
+      else {
+        if (sat < .15) { if (v.hue === undefined) continue; h = v.hue; } else h = (h + (v.shift || 0)) % 360;
+        sat = Math.max(sat, v.sat || 0);
+      }
+      const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) {}
+  if (v.divine) {
+    // a golden halo above the head and a few sparkles
+    const cx = clamp(topX, 34, 158), cy = Math.max(16, top - 12);
+    x.lineWidth = 5; x.strokeStyle = '#FFD23F'; x.shadowColor = '#FFF6C8'; x.shadowBlur = 10;
+    x.beginPath(); x.ellipse(cx, cy, 22, 7, 0, 0, 7); x.stroke(); x.shadowBlur = 0;
+    x.fillStyle = v.acc === 'rainbow' ? '#FF9BE8' : v.acc ? `hsl(${v.acc[0]},95%,78%)` : '#FFF1A8';
+    [[20, 40, 7], [172, 60, 6], [30, 150, 5], [166, 156, 6]].forEach(([sx, sy, r]) => { x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); });
+  }
+}
+const modelCache = {}, modelUrlCache = {};
+function modelImg(key) {
+  if (!modelCache[key]) {
+    const c = document.createElement('canvas'); c.width = c.height = 192;
+    const x = c.getContext('2d'); x.setTransform(192 / 110, 0, 0, 192 / 110, 96, 88);
+    if (VAR[key]) { x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(modelImg(VAR[key].base), 0, 0); tintCanvas(x, VAR[key]); }
+    else MODELS[key](kit(x), x);
+    modelCache[key] = c;
+  }
+  return modelCache[key];
+}
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hsl2rgb(h, s, l) {
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
+// Fused = colours swung toward violet with sparkles; Mega = solid gold with a crown
+function fusedImg(key, tier) {
+  const ck = key + '|' + tier;
+  if (modelCache[ck]) return modelCache[ck];
+  const c = document.createElement('canvas'); c.width = c.height = 192;
+  const x = c.getContext('2d'); x.drawImage(modelImg(key), 0, 0);
+  let top = 191, topX = 96;
+  try {
+    const d = x.getImageData(0, 0, 192, 192), a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] < 10) continue;
+      const py = (i / 4 / 192) | 0; if (py < top && a[i + 3] > 200) { top = py; topX = (i / 4) % 192; }
+      let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
+      if (l < .2) continue;
+      if (tier === 1) { h = sat < .15 ? 285 : (h + 150) % 360; sat = Math.max(sat, .55); }
+      else { h = 40 + (h % 20); sat = Math.max(sat, .8); l = .3 + l * .62; }
+      const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) {}
+  const star = (sx, sy, r, col) => { x.fillStyle = col; x.strokeStyle = '#2B2219'; x.lineWidth = 2.5; x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); x.stroke(); };
+  if (tier === 1) { star(166, 34, 14, '#E8A6FF'); star(24, 60, 10, '#FF9BF0'); star(170, 150, 9, '#C86AFF'); }
+  else {
+    const cx = clamp(topX, 30, 162), cy = Math.max(30, top - 4);
+    x.fillStyle = '#FFD23F'; x.strokeStyle = '#2B2219'; x.lineWidth = 3; x.lineJoin = 'round';
+    x.beginPath(); x.moveTo(cx - 20, cy); x.lineTo(cx - 22, cy - 22); x.lineTo(cx - 10, cy - 10); x.lineTo(cx, cy - 26); x.lineTo(cx + 10, cy - 10); x.lineTo(cx + 22, cy - 22); x.lineTo(cx + 20, cy); x.closePath(); x.fill(); x.stroke();
+    [[-11, '#E8402C'], [0, '#3FC8E0'], [11, '#E8402C']].forEach(([dx, col]) => { x.fillStyle = col; x.beginPath(); x.arc(cx + dx, cy - 5, 3, 0, 7); x.fill(); });
+  }
+  return (modelCache[ck] = c);
+}
+function mutImg(key, tier, mut) {
+  const ck = key + '|' + tier + '|' + mut;
+  if (modelCache[ck]) return modelCache[ck];
+  const c = document.createElement('canvas'); c.width = c.height = 192;
+  const x = c.getContext('2d'); x.drawImage(tier ? fusedImg(key, tier) : modelImg(key), 0, 0);
+  try {
+    const d = x.getImageData(0, 0, 192, 192), a = d.data;
+    for (let i = 0; i < a.length; i += 4) {
+      if (a[i + 3] < 10) continue;
+      let [h, sat, l] = rgb2hsl(a[i], a[i + 1], a[i + 2]);
+      if (l < .2 && mut !== 'dark') continue;   // keep outlines and eyes
+      if (l < .12) continue;
+      if (mut === 'bronze') { h = 26; sat = .62; l = .22 + l * .55; }
+      else if (mut === 'silver') { h = 215; sat = .08; l = .42 + l * .52; }
+      else if (mut === 'golden') { h = 46; sat = .92; l = .34 + l * .5; }
+      else if (mut === 'singer') { h = (h + 300) % 360; sat = Math.max(sat, .65); l = .55 + l * .35; }
+      else if (mut === 'enchanted') { h = 255 + (h % 70); sat = .78; l = .38 + l * .45; }
+      else if (mut === 'dark') { h = 268; sat = .38; l = .1 + l * .3; }
+      const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
+    }
+    x.putImageData(d, 0, 0);
+  } catch (e) {}
+  const star = (sx, sy, r, col) => { x.fillStyle = col; x.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? r * .4 : r, an = k * Math.PI / 4 - Math.PI / 2; x.lineTo(sx + Math.cos(an) * rr, sy + Math.sin(an) * rr); } x.closePath(); x.fill(); };
+  if (mut === 'enchanted') { star(26, 40, 9, '#7FF2FF'); star(168, 54, 8, '#FF9BF0'); star(160, 158, 7, '#E8A6FF'); star(30, 150, 6, '#7FF2FF'); }
+  if (mut === 'singer') { x.font = 'bold 30px system-ui, sans-serif'; x.fillStyle = '#FF5AB4'; x.fillText('♪', 150, 46); x.fillStyle = '#3FB8E0'; x.fillText('♫', 18, 60); }
+  if (mut === 'dark') { x.fillStyle = '#FF3A3A'; x.globalAlpha = .9; star(20, 44, 5, '#9A4AE0'); star(170, 150, 5, '#9A4AE0'); x.globalAlpha = 1; }
+  if (mut === 'golden' || mut === 'silver') { star(30, 46, 7, '#FFFFFF'); star(164, 150, 6, '#FFFFFF'); }
+  return (modelCache[ck] = c);
+}
+function modelURL(key, tier = 0, mut = null) { const ck = key + '|' + tier + '|' + (mut || ''); return modelUrlCache[ck] || (modelUrlCache[ck] = (mut && MUT[mut] ? mutImg(key, tier, mut) : tier ? fusedImg(key, tier) : modelImg(key)).toDataURL()); }
+
+
+// ======================================================================
+//  EGG HEIST 3D — the same game, in a 3D world. Game logic works in the
+//  same "pixel" units as the 2D game; the 3D scene is 1 unit = 20 pixels.
+// ======================================================================
+const U = 20;
+const HOME_W = 1100, ZX = i => HOME_W + i * BW, WORLD_W = HOME_W + BIOMES.length * BW;
+const PEN = { x: 70, y: 110, w: 450, h: 340 }, TM = { x: 545, y: 570, w: 210, h: 92 }, EXIT = { x: 72, y: BH / 2 };
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const SAVE_KEY = 'egg-heist-3d-v1';
+const zoneAt = x => x < HOME_W ? 'hub' : clamp(Math.floor((x - HOME_W) / BW), 0, BIOMES.length - 1);
+
+// ---------------- save ----------------
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, nextId: 1, clock: 0, carry: null }; }
+function loadSave() {
+  const g = freshSave();
+  try {
+    const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    if (o && typeof o === 'object') {
+      for (const k of Object.keys(g)) if (k in o) g[k] = o[k];
+      g.pen = Array.isArray(g.pen) ? g.pen.filter(p => p && spIndex(p.sid) >= 0) : [];
+      for (const p of g.pen) p.sp = spIndex(p.sid);
+      g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
+      g.speed = Math.max(0, +g.speed || 0); g.money = Math.max(0, +g.money || 0); g.clock = clamp(+g.clock || 0, 0, DAY + NIGHT - 1);
+      if (!g.carry || !RAR[g.carry.r] || !BIOMES[g.carry.b]) g.carry = null;
+    }
+  } catch (e) {}
+  return g;
+}
+let G = loadSave();
+function save() { G.carry = player.carry; try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch (e) {} }
+
+// ---------------- three.js scene ----------------
+const cv = $('cv');
+const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+const scene3 = new THREE.Scene();
+const SKY_DAY = new THREE.Color('#8FD3F5'), SKY_NIGHT = new THREE.Color('#141A36');
+scene3.background = SKY_DAY.clone();
+scene3.fog = new THREE.Fog(SKY_DAY.clone(), 70, 150);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 400);
+const hemi = new THREE.HemisphereLight('#FFFFFF', '#5A6A40', 0.62); scene3.add(hemi);
+const sun = new THREE.DirectionalLight('#FFF4D6', 0.5); sun.position.set(-30, 60, 40); scene3.add(sun);
+function resize() { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize); resize();
+
+const GEO = {
+  sph: new THREE.SphereGeometry(1, 14, 10), cyl: new THREE.CylinderGeometry(1, 1, 1, 12), cone: new THREE.ConeGeometry(1, 1, 12),
+  ico: new THREE.IcosahedronGeometry(1, 0), dod: new THREE.DodecahedronGeometry(1, 0), oct: new THREE.OctahedronGeometry(1, 0),
+  box: new THREE.BoxGeometry(1, 1, 1), half: new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+  torus: new THREE.TorusGeometry(1, .28, 8, 24), plane: new THREE.PlaneGeometry(1, 1), egg: new THREE.SphereGeometry(1, 16, 12),
+};
+const matCache = {};
+function mat(c, o) { const k = c + JSON.stringify(o || {}); return matCache[k] || (matCache[k] = new THREE.MeshLambertMaterial(Object.assign({ color: c }, o || {}))); }
+function mk(g, c, sx, sy, sz, x, y, z, o) { const m = new THREE.Mesh(GEO[g], mat(c, o)); m.scale.set(sx, sy, sz); m.position.set(x, y, z); return m; }
+const V = (x, y, h = 0) => new THREE.Vector3(x / U, h, y / U);
+
+// soft round shadow under things
+const shadowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const g = x.createRadialGradient(32, 32, 2, 32, 32, 32); g.addColorStop(0, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false });
+function blob(r) { const m = new THREE.Mesh(GEO.plane, shadowMat); m.rotation.x = -Math.PI / 2; m.scale.set(r * 2, r * 2, 1); m.position.y = .03; return m; }
+
+// pictures of animals and guardians come from the same drawings as the 2D game
+const texCache = {};
+function animalTex(key, tier = 0, mut = null) {
+  const k = key + '|' + tier + '|' + (mut || '');
+  if (!texCache[k]) { const t = new THREE.CanvasTexture(mut && MUT[mut] ? mutImg(key, tier, mut) : tier ? fusedImg(key, tier) : modelImg(key)); t.anisotropy = 4; texCache[k] = t; }
+  return texCache[k];
+}
+function animalSprite(key, size) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: animalTex(key), alphaTest: .35 }));
+  s.center.set(.5, .16); s.scale.set(size, size, 1); return s;
+}
+function textSprite(lines, w = 512, h = 160, scale = 10) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+  s.scale.set(scale, scale * h / w, 1);
+  s.userData.draw = (ls) => {
+    const x = c.getContext('2d'); x.clearRect(0, 0, w, h);
+    const n = ls.length, lh = h / n;
+    ls.forEach(([txt, size, col, bg], k) => {
+      x.font = `${size}px "Lilita One", system-ui, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      if (bg) { const tw = x.measureText(txt).width + 40; x.fillStyle = bg; const rx = (w - tw) / 2, ry = k * lh + 6; x.beginPath(); x.roundRect ? x.roundRect(rx, ry, tw, lh - 12, 18) : x.rect(rx, ry, tw, lh - 12); x.fill(); }
+      x.lineWidth = size / 6; x.strokeStyle = 'rgba(20,28,18,.85)'; x.lineJoin = 'round'; x.strokeText(txt, w / 2, k * lh + lh / 2); x.fillStyle = col || '#fff'; x.fillText(txt, w / 2, k * lh + lh / 2);
+    });
+    t.needsUpdate = true;
+  };
+  s.userData.draw(lines);
+  return s;
+}
+
+// ---------------- ground ----------------
+function groundTex(pal, seed, w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'), r = seeded(seed);
+  x.fillStyle = pal.g; x.fillRect(0, 0, w, h);
+  for (const [col, n, a, b] of [[pal.p, 40, 30, 90], [pal.p2, 30, 14, 45]]) for (let i = 0; i < n; i++) { x.fillStyle = col; x.beginPath(); x.ellipse(r() * w, r() * h, a + r() * (b - a), (a + r() * (b - a)) * .55, r() * 3, 0, 7); x.fill(); }
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+function groundPlane(x0, w, pal, seed) {
+  const m = new THREE.Mesh(GEO.plane, new THREE.MeshLambertMaterial({ map: groundTex(pal, seed, 512, 300) }));
+  m.rotation.x = -Math.PI / 2; m.scale.set(w / U, BH / U, 1); m.position.set((x0 + w / 2) / U, 0, BH / 2 / U); return m;
+}
+// the edges of the world
+scene3.add((() => { const m = new THREE.Mesh(GEO.plane, mat('#4E7A3A')); m.rotation.x = -Math.PI / 2; m.scale.set(WORLD_W / U + 400, BH / U + 400, 1); m.position.set(WORLD_W / U / 2, -.05, BH / U / 2); return m; })());
+
+// ---------------- home: pen, treadmill ----------------
+const hub = new THREE.Group(); scene3.add(hub);
+hub.add(groundPlane(0, HOME_W, { g: '#7CC15E', p: '#73B656', p2: '#88CC6A' }, 7));
+(() => {
+  // dirt path from the treadmill to the forest
+  const p = mk('box', '#D9B77A', (HOME_W - TM.x) / U, .04, 2.6, ((TM.x + HOME_W) / 2) / U, .02, (TM.y + TM.h / 2) / U); hub.add(p);
+  const p2 = mk('box', '#D9B77A', 2.6, .04, (TM.y - PEN.y - PEN.h) / U + 1, (PEN.x + PEN.w / 2) / U, .02, ((PEN.y + PEN.h + TM.y) / 2) / U); hub.add(p2);
+  // pen floor and fence (open on the right so you can walk in)
+  hub.add(mk('box', '#D9B26A', PEN.w / U, .06, PEN.h / U, (PEN.x + PEN.w / 2) / U, .03, (PEN.y + PEN.h / 2) / U));
+  const fx0 = PEN.x / U, fx1 = (PEN.x + PEN.w) / U, fz0 = PEN.y / U, fz1 = (PEN.y + PEN.h) / U;
+  const rail = (x0, z0, x1, z1) => { const len = Math.hypot(x1 - x0, z1 - z0); for (const h of [.6, 1.2]) { const m = mk('box', '#8A5A35', len, .14, .14, (x0 + x1) / 2, h, (z0 + z1) / 2); m.rotation.y = -Math.atan2(z1 - z0, x1 - x0); hub.add(m); } for (let k = 0; k <= Math.round(len / 2.5); k++) { const t = k / Math.round(len / 2.5); hub.add(mk('box', '#6B4426', .28, 1.6, .28, x0 + (x1 - x0) * t, .8, z0 + (z1 - z0) * t)); } };
+  rail(fx0, fz0, fx1, fz0); rail(fx0, fz1, fx1, fz1); rail(fx0, fz0, fx0, fz1);
+  rail(fx1, fz0, fx1, fz0 + (fz1 - fz0) * .35); rail(fx1, fz0 + (fz1 - fz0) * .65, fx1, fz1);
+  // a few trees around home
+  const r = seeded(3);
+  for (let k = 0; k < 14; k++) { const x = 40 + r() * (HOME_W - 80), y = r() < .5 ? 20 + r() * 60 : BH - 20 - r() * 80; if (y > BH * .4 && y < BH * .6) continue; hub.add(makeObstacle({ x, y, r: 30 + r() * 14, kind: 'tree' }, r)); }
+})();
+const penSign = textSprite([['PEN 0/3', 64, '#fff']], 512, 90, 8); penSign.position.set((PEN.x + PEN.w / 2) / U, 3.2, PEN.y / U); hub.add(penSign);
+// treadmill
+const tmGroup = new THREE.Group(); hub.add(tmGroup);
+const tmFrameMat = new THREE.MeshLambertMaterial({ color: '#4A525C' });
+const tmFrame = new THREE.Mesh(GEO.box, tmFrameMat); tmFrame.scale.set(TM.w / U + 1, .5, TM.h / U + .8); tmFrame.position.set((TM.x + TM.w / 2) / U, .25, (TM.y + TM.h / 2) / U); tmGroup.add(tmFrame);
+const tmConsole = new THREE.Mesh(GEO.box, tmFrameMat); tmConsole.scale.set(4, 2.4, .5); tmConsole.position.set((TM.x + TM.w / 2) / U, 1.2, TM.y / U - .6); tmGroup.add(tmConsole);
+const beltCanvas = document.createElement('canvas'); beltCanvas.width = 256; beltCanvas.height = 64;
+const beltTex = new THREE.CanvasTexture(beltCanvas); beltTex.wrapS = THREE.RepeatWrapping; beltTex.repeat.set(3, 1);
+const belt = new THREE.Mesh(GEO.plane, new THREE.MeshBasicMaterial({ map: beltTex })); belt.rotation.x = -Math.PI / 2; belt.scale.set(TM.w / U, TM.h / U, 1); belt.position.set((TM.x + TM.w / 2) / U, .52, (TM.y + TM.h / 2) / U); tmGroup.add(belt);
+const tmSign = textSprite([['TREADMILL LV 1', 52, '#fff'], ['0  +1/s', 46, '#7CF29A']], 512, 150, 8); tmSign.position.set((TM.x + TM.w / 2) / U, 4.4, TM.y / U - .6); tmGroup.add(tmSign);
+let tmLevelShown = 0, tmSignText = '';
+function paintBelt(t) {
+  const L = clamp(G.tL, 1, TREAD_MAX), [fr, bl, st] = TREAD_SKINS[L], hue = (t * 90) % 360;
+  const x = beltCanvas.getContext('2d'); x.fillStyle = bl; x.fillRect(0, 0, 256, 64);
+  for (let k = 0; k < 8; k++) { x.fillStyle = st === 'rainbow' ? `hsl(${(hue + k * 45) % 360},85%,60%)` : st; if (L % 3 === 1) x.fillRect(k * 32, 0, 12, 64); else if (L % 3 === 2) { x.beginPath(); x.moveTo(k * 32, 0); x.lineTo(k * 32 + 14, 32); x.lineTo(k * 32, 64); x.lineTo(k * 32 + 9, 64); x.lineTo(k * 32 + 23, 32); x.lineTo(k * 32 + 9, 0); x.fill(); } else { x.beginPath(); x.arc(k * 32 + 8, 18, 6, 0, 7); x.arc(k * 32 + 24, 46, 6, 0, 7); x.fill(); } }
+  beltTex.needsUpdate = true;
+  tmFrameMat.color.set(fr === 'rainbow' ? `hsl(${hue},80%,60%)` : fr);
+  tmFrameMat.emissive.set(L >= 20 ? (fr === 'rainbow' ? `hsl(${hue},80%,30%)` : fr) : '#000000'); tmFrameMat.emissiveIntensity = L >= 20 ? .35 : 0;
+}
+
+// ---------------- obstacles in 3D ----------------
+function makeObstacle(o, r) {
+  const R = o.r / U, g = new THREE.Group(); g.position.set(o.x / U, 0, o.y / U);
+  const add = (...a) => { const m = mk(...a); g.add(m); return m; };
+  const k = o.kind;
+  if (k === 'tree') { add('cyl', '#7A5232', R * .22, R * 1.4, R * .22, 0, R * .7, 0); add('sph', '#3E8A3A', R, R * .9, R, 0, R * 1.75, 0); add('sph', '#4FA046', R * .6, R * .55, R * .6, -R * .3, R * 2.3, R * .2); }
+  else if (k === 'pine') { add('cyl', '#6B4426', R * .18, R, R * .18, 0, R * .5, 0); [[1, 1.3, 1.1], [.75, 1.1, 1.8], [.5, .9, 2.4]].forEach(([s, h, y]) => add('cone', '#2F5E4A', R * s, R * h, R * s, 0, R * y, 0)); add('sph', '#FFFFFF', R * .2, R * .15, R * .2, 0, R * 2.85, 0); }
+  else if (k === 'palm') { const tr = add('cyl', '#8A6A3A', R * .14, R * 2.4, R * .14, 0, R * 1.2, 0); tr.rotation.z = .12; for (let q = 0; q < 6; q++) { const l = add('sph', q % 2 ? '#2E8A4A' : '#35994F', R * .95, R * .12, R * .3, Math.cos(q) * R * .6 + R * .15, R * 2.35, Math.sin(q) * R * .6); l.rotation.y = -q; l.rotation.z = -.35; } }
+  else if (k === 'deadtree') { add('cyl', '#2E2638', R * .2, R * 1.8, R * .2, 0, R * .9, 0); for (let q = 0; q < 4; q++) { const b = add('cyl', '#2E2638', R * .08, R * 1.1, R * .08, Math.cos(q * 1.6) * R * .35, R * 1.6 + q * .1, Math.sin(q * 1.6) * R * .35); b.rotation.z = Math.cos(q * 1.6) * .9; b.rotation.x = -Math.sin(q * 1.6) * .9; } }
+  else if (k === 'bush') { [[-.4, .1, .65], [.35, .15, .6], [0, -.3, .7]].forEach(([dx, dz, s]) => add('sph', '#2A7A3E', R * s, R * s * .85, R * s, dx * R, R * s * .7, dz * R)); for (let q = 0; q < 5; q++) add('sph', '#E8402C', .14, .14, .14, (r() - .5) * R * 1.2, R * .9, (r() - .5) * R); }
+  else if (k === 'rock' || k === 'moonrock' || k === 'basalt') { const m = add('dod', k === 'rock' ? '#9A7A55' : k === 'moonrock' ? '#8A8AA0' : '#2A2024', R, R * .7, R * .9, 0, R * .35, 0); m.rotation.y = r() * 6; }
+  else if (k === 'stalag') { add('dod', '#5E5878', R * .9, R * .5, R * .9, 0, R * .2, 0); add('cone', '#76709A', R * .55, R * 2.2, R * .55, 0, R * 1.1, 0); }
+  else if (k === 'cactus') { add('cyl', '#3F8A48', R * .4, R * 2.6, R * .4, 0, R * 1.3, 0); add('cyl', '#3F8A48', R * .25, R * 1, R * .25, R * .6, R * 1.6, 0); add('cyl', '#3F8A48', R * .25, R * .8, R * .25, -R * .6, R * 1.3, 0); add('sph', '#FF7FA8', R * .2, R * .15, R * .2, 0, R * 2.65, 0); }
+  else if (k === 'pool') { add('cyl', '#557F80', R + .3, .1, R * .8 + .3, 0, .05, 0); add('cyl', '#3B7A88', R, .14, R * .8, 0, .07, 0); for (let q = 0; q < 3; q++) add('cyl', '#5FA052', .5, .05, .5, (r() - .5) * R, .16, (r() - .5) * R * .6); }
+  else if (k === 'lava') { add('cyl', '#2A1C1A', R + .4, .12, R * .8 + .4, 0, .06, 0); add('cyl', '#FF6A2A', R, .16, R * .8, 0, .08, 0, { emissive: '#FF5A1A', emissiveIntensity: .8 }); }
+  else if (k === 'crater') { const t = add('torus', '#8E8EA2', R * .85, R * .85, R * .9, 0, .1, 0); t.rotation.x = Math.PI / 2; add('cyl', '#6E6E84', R * .8, .05, R * .8, 0, .03, 0); }
+  else if (k === 'ice') { const m = add('ico', '#BFE6F7', R, R * .9, R, 0, R * .7, 0, { transparent: true, opacity: .85 }); m.rotation.y = r() * 6; }
+  else if (k === 'coral') { for (let q = 0; q < 6; q++) { const b = add('cyl', ['#FF7A8A', '#FF9F5A', '#E86AD0'][q % 3], R * .12, R * 1.4, R * .12, Math.cos(q) * R * .3, R * .6, Math.sin(q) * R * .3); b.rotation.z = Math.cos(q) * .5; b.rotation.x = Math.sin(q) * .5; add('sph', ['#FF7A8A', '#FF9F5A', '#E86AD0'][q % 3], R * .16, R * .16, R * .16, Math.cos(q) * R * .65, R * 1.25, Math.sin(q) * R * .65); } }
+  else if (k === 'anemone') { add('sph', '#C24A9A', R * .55, R * .4, R * .55, 0, R * .3, 0); for (let q = 0; q < 10; q++) { const tn = add('cyl', '#FF9BD0', R * .06, R * .8, R * .06, Math.cos(q * .63) * R * .35, R * .7, Math.sin(q * .63) * R * .35); tn.rotation.z = Math.cos(q * .63) * .4; tn.rotation.x = -Math.sin(q * .63) * .4; } }
+  else if (k === 'crystal') { for (let q = 0; q < 4; q++) { const c = add('oct', q % 2 ? '#B07AF2' : '#7FD8F5', R * .3, R * (1 + r() * .5), R * .3, (q - 1.5) * R * .3, R * .9, (r() - .5) * R * .4, { emissive: q % 2 ? '#5A2AA0' : '#2A7A9A', emissiveIntensity: .4 }); c.rotation.z = (q - 1.5) * .3; } }
+  else if (k === 'lollipop') { add('cyl', '#FFFFFF', R * .08, R * 2, R * .08, 0, R, 0); ['#FFFFFF', '#FF4F8A', '#5AC8FF', '#FFD23F'].forEach((c, q) => { const d = add('cyl', c, R * (1 - q * .22), .18, R * (1 - q * .22), 0, R * 2.6, q * .02); d.rotation.x = Math.PI / 2; }); }
+  else if (k === 'gumdrop') { add('half', ['#7FE07A', '#FF6A8A', '#FFB13B', '#B07AF2'][Math.floor(r() * 4)], R, R * 1.1, R, 0, 0, 0); }
+  else if (k === 'cloud') { [[-.45, .15, .6], [.4, .2, .58], [0, -.25, .72], [.05, .35, .6]].forEach(([dx, dz, s]) => add('sph', '#FFFFFF', R * s, R * s * .8, R * s, dx * R, R * .7, dz * R)); }
+  else if (k === 'pillar') { add('cyl', '#E6E2D6', R * .55, R * 2.6, R * .55, 0, R * 1.3, 0); add('box', '#F6F3EA', R * 1.4, R * .25, R * 1.4, 0, R * 2.7, 0); add('box', '#F6F3EA', R * 1.4, R * .25, R * 1.4, 0, R * .12, 0); }
+  else if (k === 'tomb') { add('box', '#8A8498', R * 1.4, R * 1.7, R * .45, 0, R * .85, 0); add('cyl', '#8A8498', R * .7, R * .45, R * .7, 0, R * 1.7, 0).rotation.x = Math.PI / 2; add('box', '#5A5468', R * .12, R * .8, .05, 0, R * 1.1, R * .24); add('box', '#5A5468', R * .5, R * .12, .05, 0, R * 1.25, R * .24); }
+  else if (k === 'mushroom') { const col = ['#E8402C', '#9B5AE8', '#F2A33A', '#5FC8E8'][Math.floor(r() * 4)]; add('cyl', '#F3E3C3', R * .3, R * 1.5, R * .3, 0, R * .75, 0); add('half', col, R, R * .75, R, 0, R * 1.45, 0, { emissive: col, emissiveIntensity: .15 }); for (let q = 0; q < 6; q++) { const a = r() * 6.3, d = R * (.2 + r() * .55); add('sph', '#FFF6E6', R * .12, R * .08, R * .12, Math.cos(a) * d, R * 1.45 + Math.sqrt(Math.max(0, 1 - (d / R) ** 2)) * R * .75, Math.sin(a) * d); } }
+  else add('dod', '#888888', R, R, R, 0, R * .5, 0);
+  return g;
+}
+
+// ---------------- biomes ----------------
+function genObstacles(bi) {
+  const r = seeded(101 + bi * 77), list = [], want = BIOMES[bi].obs.n, kinds = BIOMES[bi].obs.kinds, nests = BIOMES[bi].nests;
+  for (let k = 0; k < 600 && list.length < want; k++) {
+    const x = 270 + r() * (BW - 420), y = 70 + r() * (BH - 140);
+    const kd = kinds[Math.floor(r() * kinds.length)], rad = kd[1] + r() * (kd[2] - kd[1]);
+    if (nests.some(([nx, ny]) => dist(x, y, nx, ny) < 170 + rad)) continue;
+    if (Math.abs(y - EXIT.y) < 70 && x < 420) continue;
+    if (list.some(o => dist(x, y, o.x, o.y) < rad + o.r + 60)) continue;
+    list.push({ x, y, r: rad, kind: kd[0] });
+  }
+  return list;
+}
+const zones = [];
+BIOMES.forEach((B, i) => {
+  const x0 = ZX(i), grp = new THREE.Group(), r = seeded(500 + i * 31);
+  grp.add(groundPlane(x0, BW, B.pal, 900 + i));
+  const obst = genObstacles(i).map(o => ({ ...o, x: o.x + x0 }));
+  for (const o of obst) grp.add(makeObstacle(o, r));
+  for (const [nx, ny] of B.nests) { const t = mk('torus', '#B98A45', 2.6, 2.6, 2.2, (nx + x0) / U, .25, ny / U); t.rotation.x = Math.PI / 2; grp.add(t); grp.add(mk('cyl', '#8C6430', 2.4, .1, 2.4, (nx + x0) / U, .08, ny / U)); }
+  // the line into the biome and its signs
+  const line = mk('box', B.portal, .35, .06, BH / U, x0 / U, .04, BH / 2 / U); grp.add(line);
+  const signs = [BH * .2, BH * .5, BH * .8].map(sy => { const s = textSprite([[B.name, 60, '#fff', 'rgba(90,58,34,.92)'], ['', 34, '#E8F5DC']], 512, 170, 9); s.position.set(x0 / U, 3.4, sy / U); grp.add(s); grp.add(mk('cyl', '#5A3A22', .15, 3, .15, x0 / U, 1.5, sy / U)); return s; });
+  scene3.add(grp);
+  const guards = B.nests.map(([x, y]) => {
+    const spr = animalSprite(B.guard.m, 6.5), sh = blob(1.8); scene3.add(spr); scene3.add(sh);
+    const alert = textSprite([['!', 120, '#FFD23F']], 128, 128, 2.2); alert.visible = false; scene3.add(alert);
+    return { x: x + x0, y, hx: x + x0, hy: y, st: 'patrol', wait: 0, carry: null, spr, sh, alert };
+  });
+  zones.push({ i, x0, grp, obst, eggs: [], guards, signs, signKey: '' });
+});
+
+// ---------------- eggs ----------------
+function pickRarity() { let r = Math.random() * RORDER.reduce((s, k) => s + RAR[k].w, 0); for (const k of RORDER) if ((r -= RAR[k].w) < 0) return k; return 'C'; }
+function eggMesh(e) {
+  const B = BIOMES[e.b], s = .55 * EGG_SIZES[e.es || 0].scale, g = new THREE.Group();
+  const shell = mk('egg', B.egg, s * .78, s, s * .78, 0, s, 0, e.r === 'M' || e.r === 'D' ? { emissive: RAR[e.r].color, emissiveIntensity: .35 } : undefined); g.add(shell);
+  // a ring in the rarity colour, and a few spots
+  const ring = mk('torus', RAR[e.r].color, s * .9, s * .9, s * .9, 0, .08, 0); ring.rotation.x = Math.PI / 2; g.add(ring);
+  if (e.r !== 'C') for (let q = 0; q < 4; q++) g.add(mk('sph', RAR[e.r].color, s * .13, s * .13, s * .1, Math.cos(q * 1.7) * s * .72, s * (.7 + (q % 2) * .5), Math.sin(q * 1.7) * s * .72));
+  g.add(blob(s * 1.1));
+  return g;
+}
+function spawnEgg(i, forced) {
+  const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(), see = B.guard.seeCarry;
+  for (let t = 0; t < 60; t++) {
+    const [nx, ny] = B.nests[Math.floor(Math.random() * B.nests.length)];
+    const a = rand(0, 6.28), d = r === 'C' ? rand(150, see - 40) : r === 'R' ? rand(100, 220) : r === 'E' ? rand(60, 150) : r === 'L' ? rand(35, 90) : r === 'M' ? rand(14, 45) : rand(0, 18);
+    let x = nx + Math.cos(a) * d, y = ny + Math.sin(a) * d;
+    if (x < 40 || x > BW - 40 || y < 40 || y > BH - 40) continue;
+    x += zd.x0;
+    if (zd.obst.some(o => dist(x, y, o.x, o.y) < o.r + 22)) continue;
+    if (t < 45 && zd.eggs.some(e => dist(x, y, e.x, e.y) < 50)) continue;
+    const er = Math.random() * 100, es = forced ? forced.es || 0 : er < EGG_SIZES[2].w ? 2 : er < EGG_SIZES[2].w + EGG_SIZES[1].w ? 1 : 0;
+    const e = { x, y, r, es, b: i, ph: rand(0, 6) }; e.mesh = eggMesh(e); e.mesh.position.copy(V(x, y)); scene3.add(e.mesh);
+    zd.eggs.push(e);
+    if (!forced && (r === 'M' || r === 'D') && !booting) toast(B.guard.m, `${r === 'D' ? 'A DIVINE' : 'A Mythic'} egg appeared in the ${B.name}!`, G.speed >= B.req ? 'It is right by the nest. Go get it!' : `You need speed ${fmt(B.req)} to take it.`, false, 'myth');
+    return;
+  }
+}
+function clearEggs() { for (const z of zones) { for (const e of z.eggs) scene3.remove(e.mesh); z.eggs = []; } }
+let booting = true;
+function fillEggs() { for (const z of zones) for (let n = 0; n < 10; n++) spawnEgg(z.i); }
+
+// ---------------- the player ----------------
+const player = { x: 650, y: 420, fx: 0, moving: false, carry: G.carry, invuln: 0, step: 0 };
+const kid = new THREE.Group(); scene3.add(kid);
+const legL = mk('box', '#2B3A55', .32, .9, .32, -.22, .45, 0), legR = mk('box', '#2B3A55', .32, .9, .32, .22, .45, 0);
+[legL, legR].forEach(l => { l.geometry = new THREE.BoxGeometry(1, 1, 1).translate(0, -.5, 0); l.position.y = .95; kid.add(l); });
+kid.add(mk('cyl', '#FF7A3D', .45, 1.1, .38, 0, 1.45, 0));
+const armL = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, -.5, 0), mat('#F5CBA7')); armL.scale.set(.2, .85, .2); armL.position.set(-.58, 1.9, 0); kid.add(armL);
+const armR = armL.clone(); armR.position.x = .58; kid.add(armR);
+kid.add(mk('sph', '#F5CBA7', .52, .52, .52, 0, 2.45, 0));
+kid.add(mk('half', '#2E6FD8', .55, .45, .55, 0, 2.55, 0));
+kid.add(mk('box', '#2E6FD8', .5, .08, .45, 0, 2.6, .55));
+kid.add(mk('sph', '#1E2A1B', .07, .07, .07, -.18, 2.5, .48)); kid.add(mk('sph', '#1E2A1B', .07, .07, .07, .18, 2.5, .48));
+kid.add(blob(.8));
+let carryMesh = null;
+function syncCarryMesh() {
+  if (carryMesh) { kid.remove(carryMesh); carryMesh = null; }
+  if (player.carry) { carryMesh = eggMesh(player.carry); carryMesh.remove(carryMesh.children[carryMesh.children.length - 1]); carryMesh.position.set(0, 3.1, 0); kid.add(carryMesh); }
+}
+syncCarryMesh();
+const CARRY_LOSS3 = { C: 0, R: 30, E: 100, L: 250, M: 300, D: 2000 }, SIZE_LOSS3 = [0, 600, 2000];
+const carryLoss3 = c => c ? (CARRY_LOSS3[c.r] || 0) + (SIZE_LOSS3[c.es || 0] || 0) : 0;
+const moveSpeed = () => speedPx(Math.max(0, Math.min(G.speed, MOVE_SPEED_CAP) - carryLoss3(player.carry)));
+function pushOut(o, r) {
+  const z = zoneAt(o.x); const list = z === 'hub' ? [] : zones[z].obst;
+  for (const ob of list) { const dx = o.x - ob.x, dy = o.y - ob.y, d = Math.hypot(dx, dy), min = ob.r + r; if (d < min && d > .001) { o.x = ob.x + dx / d * min; o.y = ob.y + dy / d * min; } }
+}
+
+// ---------------- pets walking in the pen ----------------
+const penPets = new Map();   // id -> { spr, sh, x, y, tx, ty, wait, ph }
+const penEggs = new Map();
+function syncPenObjects() {
+  const ids = new Set(G.pen.map(p => p.id));
+  for (const [id, o] of penPets) if (!ids.has(id) || !G.pen.find(p => p.id === id && !p.egg)) { hub.remove(o.spr); hub.remove(o.sh); penPets.delete(id); }
+  for (const [id, m] of penEggs) if (!G.pen.find(p => p.id === id && p.egg)) { hub.remove(m); penEggs.delete(id); }
+  let ei = 0;
+  for (const p of G.pen) {
+    if (p.egg) {
+      const col = ei % 8, row = Math.floor(ei / 8); ei++;
+      let m = penEggs.get(p.id); if (!m) { m = eggMesh(p); hub.add(m); penEggs.set(p.id, m); }
+      m.position.set((PEN.x + 46 + col * 50) / U, .06, (PEN.y + 40 + row * 44) / U);
+    } else if (!penPets.has(p.id)) {
+      const sp = SPECIES[p.sp], size = PSIZE[sp.r] / U * 1.25 * SIZES[p.z || 0].scale;
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: animalTex(sp.id, p.f || 0, p.mut), alphaTest: .35 })); spr.center.set(.5, .16); spr.scale.set(size, size, 1);
+      const sh = blob(size * .3); hub.add(spr); hub.add(sh);
+      const x = rand(PEN.x + 60, PEN.x + PEN.w - 60), y = rand(PEN.y + 150, PEN.y + PEN.h - 30);
+      penPets.set(p.id, { spr, sh, x, y, tx: x, ty: y, wait: rand(0, 2), ph: rand(0, 6), size, fx: 1 });
+    }
+  }
+}
+
+// ---------------- toasts, hud ----------------
+function toast(icon, title, sub, bad = false, cls = '') {
+  const el = document.createElement('div'); el.className = 'toast' + (bad ? ' bad' : '') + (cls === 'myth' ? ' myth' : '');
+  const pic = MODELS[icon] || VAR[icon] ? `<img src="${modelURL(icon)}" alt="">` : `<span class="em">${icon}</span>`;
+  el.innerHTML = `${pic}<div><b>${esc(title)}</b><span>${esc(sub || '')}</span></div>`;
+  const box = $('toasts'); box.prepend(el); while (box.children.length > 3) box.lastChild.remove();
+  setTimeout(() => el.remove(), 3800);
+}
+const toastGate = {};
+function gateToast(key, ...a) { const now = performance.now(); if ((toastGate[key] || 0) > now) return; toastGate[key] = now + 2500; toast(...a); }
+const petInc3 = p => RAR[SPECIES[p.sp].r].inc * BIOMES[SPECIES[p.sp].b].mult * penBonus(G.pL) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (MUT[p.mut] ? MUT[p.mut].mult : 1);
+const petSell3 = p => Math.round(RAR[SPECIES[p.sp].r].inc * BIOMES[SPECIES[p.sp].b].mult * 25) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (MUT[p.mut] ? MUT[p.mut].mult : 1);
+const petName3 = p => [SIZES[p.z || 0].name, MUT[p.mut] ? MUT[p.mut].name : '', FUSE[p.f || 0].name, SPECIES[p.sp].name].filter(Boolean).join(' ');
+let lastHint = '', nearEgg = null, scene = 'hub';
+function syncHud() {
+  let rate = 0; for (const p of G.pen) if (!p.egg) rate += petInc3(p);
+  $('money').textContent = fmt(G.money); $('rate').textContent = '+' + fmt(rate) + '/s';
+  $('spd').textContent = fmt(G.speed); $('gain').textContent = '+' + fmt(treadIdle(G.tL)) + '/s';
+  $('penCnt').textContent = `${G.pen.length}/${penSlots(G.pL)}`;
+  $('idxCnt').textContent = `${SPECIES.filter(s => G.found[s.id]).length}/${SPECIES.length}`;
+  const night = isNight(), left = Math.max(0, Math.ceil(night ? DAY + NIGHT - G.clock : DAY - G.clock));
+  $('clockT').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; $('clockL').textContent = night ? 'until morning' : 'until night'; $('sun').textContent = night ? '🌙' : '☀️';
+  $('where').textContent = scene === 'hub' ? 'Home' : BIOMES[scene].name;
+  const mz = zones.filter(z => z.eggs.some(e => e.r === 'M' || e.r === 'D') && G.speed >= BIOMES[z.i].req).map(z => BIOMES[z.i].name);
+  $('mythicPill').hidden = !mz.length || night; $('mythicPill').textContent = '✨ Mythic egg in ' + mz.join(', ');
+  let h = '';
+  if (scene === 'hub') {
+    const next = BIOMES.find(b => b.req > G.speed);
+    if (player.carry) h = G.pen.length >= penSlots(G.pL) ? 'Your pen is full. Sell a pet or upgrade the pen in the Shop.' : 'Carry the egg into your pen (the open side faces right).';
+    else if (night) h = `It's night. The biomes open again in ${left} seconds.`;
+    else if (onTread) h = `Stand on the treadmill to gain ${fmt(treadIdle(G.tL))} speed every second.`;
+    else if (!G.pen.length && !Object.keys(G.found).length) h = 'Run right into the Forest and grab an egg. Move with WASD, arrows or drag.';
+    else if (next) h = `Reach speed ${fmt(next.req)} on the treadmill to take eggs in the ${next.name}.`;
+  } else {
+    const B = BIOMES[scene], chased = zones.some(z => z.guards.some(g => g.st === 'chase' || g.st === 'wait'));
+    if (chased) h = 'A guardian is chasing you! Run all the way home.';
+    else if (player.carry) h = 'Got an egg! Run left, back home to your pen.';
+    else if (G.speed < B.req) h = `You can look around, but you need speed ${fmt(B.req)} to take eggs in the ${B.name}.`;
+    else if (nearEgg) h = 'Press Space or tap GRAB to pick up the egg.';
+    else h = `Walk up to an egg. The ${B.guard.name.toLowerCase()} only chases you once you take one.`;
+  }
+  if (h !== lastHint) { $('hint').textContent = h; lastHint = h; }
+  const ps = `PEN ${G.pen.length}/${penSlots(G.pL)}`; if (penSign.userData.txt !== ps) { penSign.userData.txt = ps; penSign.userData.draw([[ps, 64, '#fff']]); }
+  const ts = `TREADMILL LV ${G.tL}|${fmt(G.speed)}  +${fmt(treadIdle(G.tL))}/s`; if (ts !== tmSignText) { tmSignText = ts; const [a, b] = ts.split('|'); tmSign.userData.draw([[a, 52, '#fff'], [b, 46, '#7CF29A']]); }
+  for (const z of zones) {
+    const B = BIOMES[z.i], k = night ? 'n' : G.speed >= B.req ? 'o' : 'l';
+    if (z.signKey !== k) { z.signKey = k; const sub = night ? '🌙 closed for the night' : k === 'l' ? `🔒 eggs need speed ${fmt(B.req)}` : `${B.guard.name} · pets ×${fmt(B.mult)}`; for (const s of z.signs) s.userData.draw([[B.name, 60, '#fff', 'rgba(90,58,34,.92)'], [sub, 34, k === 'o' ? '#E8F5DC' : '#FFC9B8']]); }
+  }
+}
+
+// ---------------- input ----------------
+const keys = {};
+let modalOpen = false, joy = null;
+addEventListener('keydown', e => {
+  if (modalOpen) { if (e.key === 'Escape') closeModal(); return; }
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === ' ' || e.key.toLowerCase() === 'e') { e.preventDefault(); tryGrab(); }
+});
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+cv.addEventListener('pointerdown', e => { if (modalOpen) return; joy = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0 }; const s = $('stick'); s.hidden = false; s.style.left = e.clientX + 'px'; s.style.top = e.clientY + 'px'; s.firstElementChild.style.transform = ''; });
+addEventListener('pointermove', e => { if (!joy || e.pointerId !== joy.id) return; joy.dx = e.clientX - joy.x0; joy.dy = e.clientY - joy.y0; const m = Math.hypot(joy.dx, joy.dy), k = m > 40 ? 40 / m : 1; $('stick').firstElementChild.style.transform = `translate(${joy.dx * k}px,${joy.dy * k}px)`; });
+const endJoy = e => { if (joy && e.pointerId === joy.id) { joy = null; $('stick').hidden = true; } };
+addEventListener('pointerup', endJoy); addEventListener('pointercancel', endJoy);
+function inputVec() {
+  let x = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), y = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+  if (joy && Math.hypot(joy.dx, joy.dy) > 10) { const m = Math.hypot(joy.dx, joy.dy); x = joy.dx / m; y = joy.dy / m; }
+  const m = Math.hypot(x, y); return m ? [x / m, y / m] : [0, 0];
+}
+$('grab').onclick = () => tryGrab();
+
+// ---------------- game ----------------
+function tryGrab() {
+  const e = nearEgg; if (!e || player.carry || scene === 'hub') return;
+  const zd = zones[scene], i = zd.eggs.indexOf(e); if (i < 0) return;
+  player.carry = { r: e.r, b: e.b, es: e.es || 0 };
+  scene3.remove(e.mesh); zd.eggs.splice(i, 1); setTimeout(() => { if (!isNight()) spawnEgg(zd.i); }, 3000); nearEgg = null;
+  syncCarryMesh();
+  const loss = carryLoss3(player.carry);
+  toast('🥚', `${e.es ? EGG_SIZES[e.es].name + ' ' : ''}${RAR[e.r].name} egg!`, loss ? `It takes away ${fmt(loss)} speed while you carry it.` : 'Run it home to your pen.');
+}
+function makeEggItem(e) {
+  const ES = EGG_SIZES[e.es || 0]; let r = e.r, up = false;
+  if (r !== 'M' && r !== 'D' && Math.random() < ES.up) { r = RORDER[RORDER.indexOf(r) + 1]; up = true; }
+  const rz = Math.random(), z = rz < ES.big[2] ? 2 : rz < ES.big[2] + ES.big[1] ? 1 : 0;
+  const pool = SPECIES.filter(s => s.b === e.b && s.r === r), wts = pool.map(s => G.found[s.id] ? 1 : 3);
+  let roll = Math.random() * wts.reduce((a, b) => a + b, 0), pick = pool[pool.length - 1];
+  for (let k = 0; k < pool.length; k++) if ((roll -= wts[k]) < 0) { pick = pool[k]; break; }
+  const sp = SPECIES.indexOf(pick);
+  return { item: { id: G.nextId++, egg: true, sp, sid: pick.id, b: e.b, r, z, es: e.es || 0, left: RAR[r].hatch }, up, r };
+}
+function hatch(p) {
+  const sp = SPECIES[p.sp]; p.egg = false; delete p.left;
+  const isNew = !G.found[sp.id]; G.found[sp.id] = (G.found[sp.id] || 0) + 1;
+  toast(sp.id, `Hatched a ${petName3(p)}!${isNew ? ' (NEW)' : ''}`, `${RAR[sp.r].name} · $${fmt(petInc3(p))}/s`, false, sp.r === 'M' || sp.r === 'D' ? 'myth' : '');
+  syncPenObjects(); save();
+}
+function caught(GD, g) {
+  const lost = player.carry; if (lost) g.carry = { r: lost.r, es: lost.es || 0 };
+  player.carry = null; syncCarryMesh();
+  player.x = scene === 'hub' ? HOME_W - 160 : ZX(scene) + 120; player.y = BH / 2; player.invuln = 2;
+  for (const z of zones) for (const q of z.guards) if (q.st === 'chase' || q.st === 'wait') q.st = 'return';
+  toast(GD.m, `The ${GD.name.toLowerCase()} caught you!`, lost ? `It took the ${RAR[lost.r].name.toLowerCase()} egg back to its nest.` : '', true);
+}
+function startNight() {
+  clearEggs();
+  for (const z of zones) for (const g of z.guards) { g.x = g.hx; g.y = g.hy; g.st = 'patrol'; g.carry = null; }
+  if (scene !== 'hub') { player.x = HOME_W - 160; player.y = BH / 2; toast('🌙', 'Night fell, so you ran home', 'The biomes open again at sunrise.'); }
+  else toast('🌙', 'Night has fallen', `The biomes are closed for ${NIGHT} seconds and every egg resets.`);
+  save();
+}
+function startDay() { fillEggs(); toast('☀️', 'Good morning!', 'Fresh eggs are waiting in every biome.'); save(); }
+let onTread = false, saveT = 0, hudT = 0, beltT = 0;
+function update(dt) {
+  // income and hatching
+  for (const p of G.pen) { if (p.egg) { p.left -= dt; if (p.left <= 0) hatch(p); } else G.money += petInc3(p) * dt; }
+  const prev = G.clock; G.clock += dt;
+  if (scene !== 'hub' && prev < DAY - 10 && G.clock >= DAY - 10) toast('🌙', 'Night falls in 10 seconds', 'Head home before dark. The eggs reset at night.', true);
+  if (prev < DAY && G.clock >= DAY) startNight();
+  if (G.clock >= DAY + NIGHT) { G.clock -= DAY + NIGHT; startDay(); }
+  if (modalOpen) return;
+  // moving
+  const [ix, iy] = inputVec(); player.moving = !!(ix || iy);
+  const v = moveSpeed();
+  if (player.moving) {
+    const n = Math.max(1, Math.ceil(v * dt / 14));
+    for (let k = 0; k < n; k++) { player.x += ix * v * dt / n; player.y += iy * v * dt / n; pushOut(player, 16); }
+    player.fx = Math.atan2(ix, iy); player.step += dt * (8 + Math.min(20, v / 200));
+  }
+  player.x = clamp(player.x, 20, WORLD_W - 20); player.y = clamp(player.y, 30, BH - 20);
+  player.invuln = Math.max(0, player.invuln - dt);
+  let z = zoneAt(player.x);
+  if (z !== 'hub' && isNight()) { gateToast('night', '🌙', 'The biomes are closed at night', `They open again in ${Math.ceil(DAY + NIGHT - G.clock)} seconds`, true); player.x = HOME_W - 26; z = 'hub'; }
+  if (z !== scene) {
+    if (z === 'hub' && player.carry) toast('🏃', 'Made it home!', 'Walk the egg into your pen.');
+    else if (z !== 'hub') gateToast('enter' + z, BIOMES[z].guard.m, `Entered the ${BIOMES[z].name}`, G.speed >= BIOMES[z].req ? `Watch out for the ${BIOMES[z].guard.name.toLowerCase()}` : `You need speed ${fmt(BIOMES[z].req)} to take eggs here`);
+    scene = z;
+  }
+  nearEgg = null;
+  if (scene === 'hub') {
+    onTread = player.x > TM.x && player.x < TM.x + TM.w && player.y > TM.y && player.y < TM.y + TM.h;
+    if (onTread) {
+      if (!player.moving) { player.x += (TM.x + TM.w / 2 - player.x) * Math.min(1, dt * 8); player.y += (TM.y + TM.h / 2 - player.y) * Math.min(1, dt * 8); player.step += dt * 10; player.fx = Math.PI / 2; }
+      G.speed += treadIdle(G.tL) * dt;
+    }
+    const inPen = player.x > PEN.x && player.x < PEN.x + PEN.w && player.y > PEN.y && player.y < PEN.y + PEN.h;
+    if (inPen && player.carry) {
+      if (G.pen.length < penSlots(G.pL)) {
+        const e = player.carry; player.carry = null; syncCarryMesh();
+        const { item, up, r } = makeEggItem(e); G.pen.push(item); syncPenObjects();
+        toast('🥚', up ? `Your egg turned ${RAR[r].name}!` : `${RAR[r].name} ${BIOMES[e.b].name} egg is incubating`, `Hatches in ${RAR[r].hatch} seconds`);
+        save();
+      } else gateToast('full', '🚧', 'Your pen is full', 'Sell a pet or upgrade the pen in the Shop.', true);
+    }
+  } else {
+    onTread = false;
+    const B = BIOMES[scene], zd = zones[scene];
+    if (!player.carry) { let best = 1e9; for (const e of zd.eggs) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < best) { best = d; nearEgg = e; } } }
+    if (nearEgg && G.speed < B.req) { gateToast('weak' + scene, '🔒', `You need speed ${fmt(B.req)} to take eggs here`, `You have ${fmt(G.speed)}. Run on the treadmill to build it up.`, true); nearEgg = null; }
+  }
+  $('grab').hidden = !nearEgg;
+  updateGuards(dt);
+  // pets wander in the pen
+  for (const o of penPets.values()) {
+    o.wait -= dt;
+    if (o.wait <= 0) { o.tx = rand(PEN.x + 50, PEN.x + PEN.w - 50); o.ty = rand(PEN.y + 140, PEN.y + PEN.h - 25); o.wait = rand(2, 5); }
+    const dx = o.tx - o.x, dy = o.ty - o.y, m = Math.hypot(dx, dy);
+    if (m > 4) { const s = Math.min(m, 40 * dt); o.x += dx / m * s; o.y += dy / m * s; if (Math.abs(dx) > 2) o.fx = Math.sign(dx); }
+  }
+  saveT += dt; if (saveT > 5) { saveT = 0; save(); }
+  hudT += dt; if (hudT > .2) { hudT = 0; syncHud(); }
+}
+function updateGuards(dt) {
+  const atHome = scene === 'hub';
+  for (const zd of zones) {
+    const B = BIOMES[zd.i], GD = B.guard;
+    for (const g of zd.guards) {
+      const d = dist(player.x, player.y, g.x, g.y);
+      const theirs = !!player.carry && player.carry.b === zd.i && !atHome;
+      if (g.st === 'patrol' && theirs && scene === zd.i && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = clamp(400 / GD.speed, .15, 1); }
+      if (g.st === 'wait') { if (!theirs) g.st = 'return'; else if ((g.wait -= dt) <= 0) g.st = 'chase'; }
+      if (g.st === 'chase' && !theirs) g.st = 'return';
+      let tx, ty, sp;
+      if (g.st === 'chase') { tx = player.x; ty = player.y; sp = GD.speed; if (d < 30 && player.invuln <= 0) { caught(GD, g); return; } }
+      else if (g.st === 'return') {
+        tx = g.hx; ty = g.hy; sp = GD.speed * .55;
+        if (dist(g.x, g.y, g.hx, g.hy) < 20) { g.st = 'patrol'; g.x = g.hx; g.y = g.hy; if (g.carry) { spawnEgg(zd.i, g.carry); g.carry = null; } }
+      } else continue;
+      const dx = tx - g.x, dy = ty - g.y, m = Math.hypot(dx, dy) || 1, step = Math.min(m, sp * dt), n = Math.max(1, Math.ceil(step / 14));
+      for (let q = 0; q < n; q++) { g.x += dx / m * step / n; g.y += dy / m * step / n; pushOut(g, 20); }
+      if (g.st === 'chase' && player.invuln <= 0 && dist(player.x, player.y, g.x, g.y) < 30) { caught(GD, g); return; }
+      g.x = clamp(g.x, HOME_W + 20, WORLD_W - 20); g.y = clamp(g.y, 20, BH - 20);
+    }
+  }
+}
+
+// ---------------- drawing the 3D scene ----------------
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+function render(t, dt) {
+  // the player
+  kid.position.copy(V(player.x, player.y));
+  let a = player.fx - kid.rotation.y; a = Math.atan2(Math.sin(a), Math.cos(a)); kid.rotation.y += a * Math.min(1, dt * 12);
+  const sw = (player.moving || onTread) ? Math.sin(player.step) * .7 : 0;
+  legL.rotation.x = sw; legR.rotation.x = -sw; armL.rotation.x = -sw; armR.rotation.x = player.carry ? Math.PI : sw;
+  if (player.carry) armL.rotation.x = Math.PI;
+  kid.position.y = (player.moving || onTread) ? Math.abs(Math.sin(player.step)) * .15 : 0;
+  kid.visible = !(player.invuln > 0 && Math.floor(t * 12) % 2);
+  if (carryMesh) carryMesh.rotation.y = t;
+  // the camera follows from behind and above
+  const target = V(player.x, player.y);
+  const far = camera.aspect < 1 ? 1.7 : 1;
+  camPos.lerp(new THREE.Vector3(target.x, 21 * far, target.z + 22 * far), Math.min(1, dt * 6));
+  camLook.lerp(new THREE.Vector3(target.x, 1, target.z), Math.min(1, dt * 8));
+  camera.position.copy(camPos); camera.lookAt(camLook);
+  // only nearby biomes are drawn
+  const px = player.x;
+  for (const zd of zones) zd.grp.visible = zd.x0 < px + 2600 && zd.x0 + BW > px - 2600;
+  hub.visible = px < HOME_W + 2600;
+  for (const zd of zones) {
+    for (const g of zd.guards) {
+      const vis = g.x > px - 2600 && g.x < px + 2600; g.spr.visible = g.sh.visible = vis;
+      if (!vis) { g.alert.visible = false; continue; }
+      const p = V(g.x, g.y), run = g.st === 'chase' || g.st === 'return';
+      g.spr.position.set(p.x, run ? Math.abs(Math.sin(t * 14)) * .4 : Math.sin(t * 2 + g.hx) * .1, p.z); g.sh.position.set(p.x, .03, p.z);
+      const flip = (g.st === 'chase' ? player.x : g.hx) < g.x ? -1 : 1; g.spr.scale.x = 6.5 * (g.st === 'patrol' ? (player.x < g.x ? -1 : 1) : flip);
+      g.alert.visible = g.st === 'wait'; if (g.alert.visible) g.alert.position.set(p.x, 7.2, p.z);
+    }
+    if (zd.grp.visible) for (const e of zd.eggs) { e.ph += dt; e.mesh.children[0].position.y = .55 * EGG_SIZES[e.es || 0].scale + Math.abs(Math.sin(e.ph * 2.5)) * .15; e.mesh.children[0].rotation.y = e.ph * .5; }
+  }
+  // pets in the pen
+  for (const o of penPets.values()) { o.ph += dt * 6; const p = V(o.x, o.y); o.spr.position.set(p.x, Math.abs(Math.sin(o.ph)) * .25, p.z); o.sh.position.set(p.x, .03, p.z); o.spr.material.rotation = 0; o.spr.scale.x = o.size * o.fx; }
+  for (const [id, m] of penEggs) { const p = G.pen.find(q => q.id === id); if (p && p.left < 2) m.rotation.z = Math.sin(t * 30) * .15; }
+  // treadmill belt
+  if (onTread) beltTex.offset.x -= dt * (1 + Math.min(4, treadIdle(G.tL) / 100));
+  beltT -= dt; if (beltT <= 0 || tmLevelShown !== G.tL) { beltT = G.tL >= 20 ? .1 : 5; tmLevelShown = G.tL; paintBelt(t); }
+  // day and night
+  const night = isNight(), dusk = night ? Math.min(1, (G.clock - DAY) / 1.5, (DAY + NIGHT - G.clock) / 1.5) : 0;
+  scene3.background.copy(SKY_DAY).lerp(SKY_NIGHT, dusk); scene3.fog.color.copy(scene3.background);
+  hemi.intensity = .62 - .4 * dusk; sun.intensity = .5 - .4 * dusk;
+  renderer.render(scene3, camera);
+}
+
+// ---------------- menus ----------------
+let tab = 'shop';
+function openModal(t) { tab = t; modalOpen = true; joy = null; $('stick').hidden = true; for (const k in keys) keys[k] = false; $('modal').hidden = false; renderTab(); }
+function closeModal() { modalOpen = false; $('modal').hidden = true; save(); }
+$('closeBtn').onclick = closeModal; $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+$('shopBtn').onclick = () => openModal('shop'); $('penBtn').onclick = () => openModal('pen'); $('idxBtn').onclick = () => openModal('index');
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.tab; renderTab(); });
+function renderTab() {
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  const body = $('body');
+  if (tab === 'shop') {
+    const tMax = G.tL >= TREAD_MAX, pMax = G.pL >= PEN_MAX;
+    body.innerHTML = `<div class="cards">
+      <div class="up"><h3>Treadmill · level ${G.tL}/${TREAD_MAX}</h3><ul><li>Speed every second on it <b>${fmt(treadIdle(G.tL))}${tMax ? '' : ` → <em>${fmt(treadIdle(G.tL + 1))}</em>`}</b></li><li>Speed limit <b>None</b></li></ul>
+        <button class="buy" data-buy="tread" ${tMax || G.money < treadCost(G.tL) ? 'disabled' : ''}>${tMax ? 'Fully upgraded' : 'Upgrade · $' + fmt(treadCost(G.tL))}</button></div>
+      <div class="up"><h3>Pen · level ${G.pL}/${PEN_MAX}</h3><ul><li>Slots for eggs and pets <b>${penSlots(G.pL)}${pMax ? '' : ` → <em>${penSlots(G.pL + 1)}</em>`}</b></li><li>Pet income bonus <b>+${Math.round((penBonus(G.pL) - 1) * 100)}%${pMax ? '' : ` → <em>+${Math.round((penBonus(G.pL + 1) - 1) * 100)}%</em>`}</b></li></ul>
+        <button class="buy" data-buy="pen" ${pMax || G.money < penCost(G.pL) ? 'disabled' : ''}>${pMax ? 'Fully upgraded' : 'Upgrade · $' + fmt(penCost(G.pL))}</button></div></div>
+      <h3>Speed needed to take eggs</h3>
+      <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${fmt(b.req)}</b><span>${esc(b.guard.name)} runs at ${fmt(b.guard.lv)}</span></div>`).join('')}</div>
+      <p class="note">Carrying an egg takes away speed: rare −30, epic −100, legendary −250, mythic −300, divine −2000. Big eggs −600 more, huge eggs −2000 more. This 3D game has its own save, separate from Egg Heist.</p>
+      <button class="sell" data-reset="1" style="align-self:flex-start;color:#B4432C">Reset 3D progress</button>`;
+  } else if (tab === 'pen') {
+    const rows = G.pen.slice().reverse().map(p => {
+      const sp = SPECIES[p.sp];
+      if (p.egg) return `<div class="item"><span class="eggic" style="background:${BIOMES[p.b].egg};box-shadow:0 0 0 3px ${RAR[p.r].color}"></span><div class="info"><span class="nm">${p.es ? EGG_SIZES[p.es].name + ' ' : ''}${RAR[p.r].name} ${BIOMES[p.b].name} egg</span><span class="sub">Hatching in ${Math.ceil(p.left)}s</span></div></div>`;
+      return `<div class="item"><img src="${modelURL(sp.id, p.f || 0, p.mut)}" alt=""><div class="info"><span class="nm">${esc(petName3(p))}<span class="chip" style="background:${RAR[sp.r].color}">${RAR[sp.r].name}</span></span><span class="sub">${BIOMES[sp.b].name} · $${fmt(petInc3(p))}/s</span></div><button class="sell" data-sell="${p.id}">Sell $${fmt(petSell3(p))}</button></div>`;
+    }).join('');
+    body.innerHTML = `<div><h3>Your pen · ${G.pen.length}/${penSlots(G.pL)}</h3><p class="note">Pets earn money every second. Sell one to make room for a better one.</p></div><div class="list">${rows || '<p class="note">Your pen is empty. Bring an egg back from the Forest to get started.</p>'}</div>`;
+  } else {
+    body.innerHTML = `<h3>Animal index · ${SPECIES.filter(s => G.found[s.id]).length}/${SPECIES.length}</h3>` + BIOMES.map((b, bi) => `<div><h3 style="font-size:17px;margin:6px 0">${esc(b.name)}</h3><div class="idx">${SPECIES.filter(s => s.b === bi).sort((a, c) => RORDER.indexOf(a.r) - RORDER.indexOf(c.r)).map(s => `<div class="cell ${G.found[s.id] ? '' : 'no'}"><img src="${modelURL(s.id)}" alt="" loading="lazy">${G.found[s.id] ? esc(s.name) : '???'}<span class="chip" style="background:${RAR[s.r].color}">${RAR[s.r].name}</span></div>`).join('')}</div></div>`).join('');
+  }
+}
+let resetArmed = false;
+$('body').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.buy === 'tread' && G.tL < TREAD_MAX && G.money >= treadCost(G.tL)) { G.money -= treadCost(G.tL); G.tL++; toast('🏃', `Treadmill level ${G.tL}`, `You gain ${fmt(treadIdle(G.tL))} speed every second on it`); }
+  else if (b.dataset.buy === 'pen' && G.pL < PEN_MAX && G.money >= penCost(G.pL)) { G.money -= penCost(G.pL); G.pL++; toast('🏡', `Pen level ${G.pL}`, `${penSlots(G.pL)} slots`); }
+  else if (b.dataset.sell) { const i = G.pen.findIndex(p => p.id === +b.dataset.sell && !p.egg); if (i >= 0) { const p = G.pen[i]; G.money += petSell3(p); G.pen.splice(i, 1); syncPenObjects(); toast(SPECIES[p.sp].id, `Sold a ${petName3(p)}`, `+$${fmt(petSell3(p))}`); } }
+  else if (b.dataset.reset) { if (!resetArmed) { resetArmed = true; b.textContent = 'Tap again to wipe all 3D progress'; return; } G = freshSave(); player.carry = null; syncCarryMesh(); syncPenObjects(); save(); resetArmed = false; toast('🧹', 'Fresh start', 'All 3D progress was wiped'); }
+  save(); syncHud(); renderTab();
+});
+
+// ---------------- start ----------------
+window.__egg3d = { get G() { return G; }, player, zones, tryGrab, openModal };
+syncPenObjects();
+fillEggs(); booting = false;
+syncHud();
+let last = performance.now();
+camPos.copy(V(player.x, player.y)).add(new THREE.Vector3(0, 21, 22)); camLook.copy(V(player.x, player.y));
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  update(dt); render(now / 1000, dt);
+  requestAnimationFrame(frame);
+}
+$('loading').remove();
+requestAnimationFrame(frame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+addEventListener('pagehide', save);
+})();
+</script>
+</body>
+</html>
