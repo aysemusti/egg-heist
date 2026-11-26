@@ -550,6 +550,8 @@ const pxSpeed = () => G.slow ? 200 : speedPx(Math.min(G.speed, MOVE_SPEED_CAP));
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
+const CARRY_LOSS = { C: 0, R: 30, E: 100, L: 250, M: 300, D: 2000 }, SIZE_LOSS = [0, 600, 2000];
+const carryLoss = c => c ? (CARRY_LOSS[c.r] || 0) + (SIZE_LOSS[c.es || 0] || 0) : 0;
 function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
@@ -990,6 +992,7 @@ function tryGrab() {
   biome.eggs.splice(i, 1); biome.respawn.push(3); nearEgg = null;
   sfx.grab(); burst(e.x, e.y, RAR[e.r].color, 12);
   floatText(e.x, e.y - 30, (e.es ? EGG_SIZES[e.es].name + ' ' : '') + RAR[e.r].name + ' egg!', RAR[e.r].color);
+  const loss = carryLoss(player.carry); if (loss) floatText(player.x, player.y - 90, '-' + fmt(loss) + ' speed', '#FF9A8A', 1.4);
 }
 function tap() {
   if (modalOpen) return;
@@ -1024,8 +1027,8 @@ function update(dt) {
   // movement
   const [ix, iy] = inputVec();
   player.moving = ix !== 0 || iy !== 0;
-  const slow = player.carry ? RAR[player.carry.r].carry * EGG_SIZES[player.carry.es || 0].carry : 1;
-  const rq = rideP(), v = pxSpeed() * slow * (rq && !G.slow ? RIDE_MULT[SPECIES[rq.sp].r] : 1);
+  // carrying an egg takes speed away: its rarity and its size add together
+  const rq = rideP(), v = (G.slow ? 200 : speedPx(Math.max(0, Math.min(G.speed, MOVE_SPEED_CAP) - carryLoss(player.carry)))) * (rq && !G.slow ? RIDE_MULT[SPECIES[rq.sp].r] : 1);
   if (player.moving && G.cos.trail !== 'none') { trailT -= dt; if (trailT <= 0) { trailT = .045; spawnTrail(player.x, player.y, G.cos.trail, performance.now() / 1000); } }
   if (player.moving) { const n = Math.max(1, Math.ceil(v * dt / 14)); for (let k = 0; k < n; k++) { player.x += ix * v * dt / n; player.y += iy * v * dt / n; pushOut(player, 16); } if (Math.abs(ix) > .1) player.fx = Math.sign(ix); player.step += dt * (6 + v / 40); }
   player.x = clamp(player.x, 20, worldW - 20); player.y = clamp(player.y, 30, worldH - 20);
@@ -1468,7 +1471,7 @@ function renderTab() {
       </div>
       <h3>Speed needed to take eggs</h3>
       <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${b.req}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
-      <p class="note">Carrying an egg slows you down: rare eggs by 8%, epic by 15%, legendary by 25%, mythic by 32%. Big eggs weigh 8% more and huge eggs 16% more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
+      <p class="note">Carrying an egg takes away speed: rare eggs −30, epic −100, legendary −250, mythic −300, divine −2000 (common eggs −0). Big eggs take −600 more and huge eggs −2000 more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
       <div class="cloud-box"><p><b>Cloud save</b><br>${cloud ? (cloudState === 'error' ? 'Could not reach the cloud just now. It will try again.' : cloudAt ? `Saved ${Math.max(0, Math.round((Date.now() - cloudAt) / 1000))} seconds ago. Open the game on another device to keep playing.` : 'Saving…') : 'Your progress is saved in this browser. Play on the same device and browser to keep it.'}</p>${cloud ? '<button class="buy" id="cloudBtn">Save now</button>' : ''}</div>
       ${window.__siteAdmin && !isAdmin ? '<button class="reset" id="ownerLogin" style="color:var(--muted)">Owner login</button>' : ''}
       <div class="cloud-box"><p><b>Language</b><br>Choose the language of the game.</p><button class="sell" data-lang="en">English</button><button class="sell" data-lang="tr">T\u00fcrk\u00e7e</button></div>
@@ -2201,7 +2204,7 @@ const TR_EXACT = {
 const TR_RULES = [
   [/^Level (\d+)\/(\d+)$/, 'Seviye $1/$2'], [/^Upgrade · \$(.+)$/, 'Geliştir · $$$1'], [/^max (\d+)$/, 'en fazla $1'], [/^Speed (\d+)$/, 'Hız $1'],
   [/^(.+) · pets ×(.+)$/, '$1 · hayvanlar ×$2'], [/^Buy \$(.+)$/, 'Al $$$1'], [/^Sell \$(.+)$/, 'Sat $$$1'],
-  [/^Carrying an egg slows you down/, 'Yumurta taşımak seni yavaşlatır: nadir yumurtalar %8, destansı %15, efsanevi %25, mitik %32, ilahi %40. Büyük yumurtalar %8, dev yumurtalar %16 daha ağırdır ama daha büyük hayvanlar çıkarır ve nadirliği yükseltebilir. Bir yumurta tutarken bekçiden kaçabilecek kadar hızlan.'],
+  [/^Carrying an egg takes away speed.*$/, 'Yumurta taşımak hızını azaltır: nadir yumurtalar −30, destansı −100, efsanevi −250, mitik −300, ilahi −2000 (sıradan yumurtalar −0). Büyük yumurtalar −600, dev yumurtalar −2000 daha fazla azaltır ama daha büyük hayvanlar çıkarır (2× ya da 5× kazandırır) ve nadirliği yükseltebilir. Bir yumurta tutarken bekçiden kaçabilecek kadar hızlan.'],
   [/^Saved (\d+) seconds ago\..*$/, '$1 saniye önce kaydedildi. Başka bir cihazda oynamaya devam edebilirsin.'],
   [/^Your pen · (.+)$/, 'Ağılın · $1'], [/^Earning \$(.+) every second\. Sell a pet to free a slot for a better one\.$/, 'Saniyede $$$1 kazanıyorsun. Daha iyisine yer açmak için bir hayvan sat.'],
   [/^Hatching in (\d+)s$/, '$1 sn sonra çıkacak'], [/^(.+) · \$(.+)\/s$/, '$1 · $$$2/sn'], [/^(.+) · earns \$(.+)\/s in the pen$/, '$1 · ağılda $$$2/sn kazandırır'],
@@ -2252,7 +2255,7 @@ const TR_RULES = [
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
   [/^Sold an? (.+)$/, '$1 satıldı'], [/^You made an? (.+)!$/, '$1 yaptın!'], [/^Earns \$(.+)\/s · freed 2 pen slots$/, '$$$1/sn kazandırır · ağılda 2 yer açıldı'],
   [/^You adopted an? (.+)!$/, '$1 sahiplendin!'], [/^Stored (a|your) (.+)$/, '$2 saklandı'], [/^(.+) is back in the pen$/, '$1 ağıla döndü'], [/^Earning \$(.+)\/s again\.$/, 'Yine $$$1/sn kazandırıyor.'],
-  [/^Treadmill level (\d+)$/, 'Koşu bandı seviye $1'], [/^You gain (.+) speed every second on it$/, 'Üstünde saniyede $1 hız kazanırsın'],
+  [/^-(.+) speed$/, '-$1 hız'], [/^Treadmill level (\d+)$/, 'Koşu bandı seviye $1'], [/^You gain (.+) speed every second on it$/, 'Üstünde saniyede $1 hız kazanırsın'],
   [/^TREADMILL  LV (\d+)$/, 'KOŞU BANDI  SV $1'], [/^Level (\d+): \+(.+) speed every second$/, 'Seviye $1: saniyede +$2 hız'],
   [/^Stand on the treadmill to gain (.+) speed every second\. Upgrade it in the Shop to gain more\.$/, 'Koşu bandında dur, saniyede $1 hız kazan. Daha fazlası için Mağaza\'dan geliştir.'],
   [/^Reach speed (\d+) on the treadmill to take eggs in the (.+)\.$/, '$2 içinde yumurta almak için koşu bandında $1 hıza ulaş.'],
