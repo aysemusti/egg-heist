@@ -433,7 +433,8 @@ const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 // guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
 const speedPx = sp => 160 + 2.2 * Math.min(sp, 280) + 1.1 * Math.max(0, sp - 280);
-BIOMES.forEach((b, i) => { b.guard.lv = GUARD_SPEED[i] || 0; b.guard.speed = Math.round(speedPx(b.guard.lv)); });
+// the same numbers are also the smallest speed you need to take eggs in that biome
+BIOMES.forEach((b, i) => { b.req = GUARD_SPEED[i] || 0; b.guard.lv = GUARD_SPEED[i] || 0; b.guard.speed = Math.round(speedPx(b.guard.lv)); });
 BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
 const SPECIES = [
   ['bunny', 'Bunny', '🐰', 0, 'C'], ['squirrel', 'Squirrel', '🐿️', 0, 'C'], ['fox', 'Fox', '🦊', 0, 'R'], ['owl', 'Owl', '🦉', 0, 'R'], ['deer', 'Deer', '🦌', 0, 'E'], ['rooster', 'Golden Rooster', '🐓', 0, 'L'],
