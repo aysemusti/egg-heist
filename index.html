@@ -1091,7 +1091,7 @@ function updateHub(dt) {
 function makeEggItem(e) {
   const ES = EGG_SIZES[e.es || 0];
   let r = e.r, upgraded = false;
-  if (r !== 'M' && Math.random() < ES.up) { r = RORDER[RORDER.indexOf(r) + 1]; upgraded = true; }
+  if (r !== 'M' && r !== 'D' && RAR[RORDER[RORDER.indexOf(r) + 1]] && Math.random() < ES.up) { r = RORDER[RORDER.indexOf(r) + 1]; upgraded = true; }
   const rz = Math.random(), z = rz < ES.big[2] ? 2 : rz < ES.big[2] + ES.big[1] ? 1 : 0;
   const pool = SPECIES.filter(s => s.b === e.b && s.r === r);
   // animals not in the Index yet are 3x as likely, so collections fill up fairly
@@ -1254,7 +1254,7 @@ function updateGuards(dt) {
       const d = dist(player.x, player.y, g.x, g.y), GD = g.def || B.guard;
       // guardians only care about you while you carry one of THEIR eggs (a placed one: any egg), and give up once you are home
       const theirs = !!player.carry && (g.wild || player.carry.b === zi) && !atHome;
-      if (g.st === 'patrol' && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = 1; g.alert = 1; sfx.alert(); }
+      if (g.st === 'patrol' && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = clamp(400 / GD.speed, .15, 1); g.alert = 1; sfx.alert(); }
       if (g.st === 'wait') { g.fx = Math.sign(player.x - g.x) || g.fx; if (!theirs) g.st = 'return'; else if ((g.wait -= dt) <= 0) g.st = 'chase'; }
       if (g.st === 'chase' && !theirs) g.st = 'return';
       let tx, ty, sp;
@@ -1273,6 +1273,8 @@ function updateGuards(dt) {
       const dx = tx - g.x, dy = ty - g.y, m = Math.hypot(dx, dy) || 1;
       const step = Math.min(m, sp * dt), n = Math.max(1, Math.ceil(step / 14));
       for (let q = 0; q < n; q++) { g.x += dx / m * step / n; g.y += dy / m * step / n; pushOut(g, 20); }
+      // a very fast guardian can reach you within one frame: check again after it moved
+      if (g.st === 'chase' && player.invuln <= 0 && dist(player.x, player.y, g.x, g.y) < 30) { caught({ guard: GD }, g); return; }
       if (Math.abs(dx) > 2) g.fx = Math.sign(dx);
       g.x = clamp(g.x, HOME_W + 20, WORLD_W - 20); g.y = clamp(g.y, 20, BH - 20);
       g.alert = Math.max(0, g.alert - dt);
