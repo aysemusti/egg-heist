@@ -381,7 +381,9 @@ function fmt(n) {
   if (n < 1e9) return (n / 1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.?0+$/, '') + 'M';
   if (n < 1e12) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
   if (n < 1e15) return (n / 1e12).toFixed(2).replace(/\.?0+$/, '') + 'T';
-  return (n / 1e15).toFixed(2).replace(/\.?0+$/, '') + 'Qa';
+  if (n < 1e18) return (n / 1e15).toFixed(2).replace(/\.?0+$/, '') + 'Qa';
+  if (n < 1e21) return (n / 1e18).toFixed(2).replace(/\.?0+$/, '') + 'Qi';
+  return (n / 1e21).toFixed(2).replace(/\.?0+$/, '') + 'Sx';
 }
 
 // ================= DATA =================
@@ -427,6 +429,7 @@ const BIOMES = [
 ];
 // Biomes were designed on a 1400x900 map; they are now this much bigger.
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
+BIOMES.forEach(b => { b.guard.speed = Math.round(b.guard.speed * 1.3); });   // guardians run 30% faster
 BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
 const SPECIES = [
   ['bunny', 'Bunny', '🐰', 0, 'C'], ['squirrel', 'Squirrel', '🐿️', 0, 'C'], ['fox', 'Fox', '🦊', 0, 'R'], ['owl', 'Owl', '🦉', 0, 'R'], ['deer', 'Deer', '🦌', 0, 'E'], ['rooster', 'Golden Rooster', '🐓', 0, 'L'],
@@ -466,11 +469,14 @@ const rainbow = t => `hsl(${(t * 140) % 360},95%,62%)`;
 const spIndex = id => SPECIES.findIndex(s => s.id === id);
 
 // upgrades
-const TREAD_MAX = 20, PEN_MAX = 22;
-const treadCap = L => [0, 30, 60, 100, 150, 210, 280, 360, 450, 550, 650, 760, 900, 1080, 1300, 1600, 2000, 2400, 3000, 3700, 4500][L];
-const treadCost = L => [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12][L];       // cost to go from L to L+1
-const treadIdle = L => 1 + 0.7 * (L - 1);
-const treadTap = L => 0.4 + 0.25 * (L - 1);
+const TREAD_MAX = 30, PEN_MAX = 22;
+// speed you gain every second while standing on the treadmill (no limit on how high it goes)
+const TREAD_GAIN = [0, 1, 5, 10, 15, 20, 30, 40, 50, 65, 80, 100, 120, 145, 170, 200, 240, 280, 330, 380, 450, 520, 600, 700, 800, 950, 1100, 1300, 1500, 1750, 2000];
+const treadIdle = L => TREAD_GAIN[L] || 1;
+const treadCost = L => [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
+  500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
+// how running moves you: more speed is faster, but it levels off very high up
+const MOVE_SPEED_CAP = 6000;
 const penSlots = L => 2 + L;
 const penCost = L => Math.round(25 * Math.pow(2.6, L - 1));
 const penBonus = L => 1 + 0.15 * (L - 1);
@@ -534,7 +540,7 @@ const DAY = 180, NIGHT = 10;
 const isNight = () => G.clock >= DAY;
 let dawnT = 0;
 // slow mode walks at a normal pace; your trained speed (and the biome gates) stay the same
-const pxSpeed = () => G.slow ? 200 : 160 + 2.2 * Math.min(G.speed, 280) + 1.1 * Math.max(0, G.speed - 280);
+const pxSpeed = () => G.slow ? 200 : 160 + 2.2 * Math.min(G.speed, 280) + 1.1 * Math.max(0, Math.min(G.speed, MOVE_SPEED_CAP) - 280);
 
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
@@ -561,7 +567,7 @@ function loadSave(obj) {
     if (g.lang !== 'tr') g.lang = 'en';
     g.mounts = Math.max(0, Math.floor(+g.mounts || 0)); g.ride = +g.ride || 0;
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
-    g.speed = clamp(+g.speed || 0, 0, treadCap(g.tL)); g.money = Math.max(0, +g.money || 0);
+    g.speed = Math.max(0, +g.speed || 0); g.money = Math.max(0, +g.money || 0);
   }
   return g;
 }
@@ -983,14 +989,7 @@ function tryGrab() {
 function tap() {
   if (modalOpen) return;
   if (scene !== 'hub') { if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); return; }
-  if (!onTread) { if (nearPet) adoptPet(); return; }
-  const cap = treadCap(G.tL);
-  if (G.speed >= cap) { floatText(player.x, player.y - 60, 'MAX', '#FFD23F'); gateToast('cap', '⚡', 'Speed is maxed for this treadmill', 'Upgrade the treadmill in the Shop to go faster'); return; }
-  const g = treadTap(G.tL);
-  G.speed = Math.min(cap, G.speed + g);
-  tapHeat = Math.min(12, tapHeat + 1);
-  floatText(player.x + rand(-14, 14), player.y - 56, '+' + g.toFixed(2).replace(/0$/, ''), '#BFE0FF');
-  sfx.tap();
+  if (nearPet) adoptPet();
 }
 
 function update(dt) {
@@ -1033,12 +1032,6 @@ function update(dt) {
     gateToast('night', '🌙', 'The biomes are closed at night', `They open again in ${Math.ceil(DAY + NIGHT - G.clock)} seconds`, true);
     player.x = HOME_W - 26; z = 'hub';
   }
-  if (z !== 'hub' && G.speed + 1e-6 < BIOMES[z].req) {
-    const B = BIOMES[z];
-    if ((toastGate['lock' + z] || 0) <= performance.now()) sfx.deny();
-    gateToast('lock' + z, '🔒', `The ${B.name} needs speed ${B.req}`, `You have ${Math.floor(G.speed)}. Run on the treadmill to build it up`, true);
-    player.x = ZX(z) - 26; z = zoneAt(player.x);
-  }
   if (z !== scene) changeZone(z);
 
   // a placed pet in reach can be adopted
@@ -1049,14 +1042,15 @@ function update(dt) {
   updateCam(dt);
 }
 
+let treadFT = 0;
 function updateHub(dt) {
   onTread = player.x > TM.x && player.x < TM.x + TM.w && player.y > TM.y && player.y < TM.y + TM.h;
-  setActionBtn(onTread ? 'run' : nearPet ? 'adopt' : null); nearEgg = null;
+  setActionBtn(nearPet ? 'adopt' : null); nearEgg = null;
   if (onTread) {
     if (!player.moving) { player.x += (TM.x + TM.w / 2 - player.x) * Math.min(1, dt * 8); player.y += (TM.y + TM.h / 2 - player.y) * Math.min(1, dt * 8); player.step += dt * (8 + tapHeat * 2); player.fx = 1; }
-    const cap = treadCap(G.tL);
-    G.speed = Math.min(cap, G.speed + treadIdle(G.tL) * dt);
-    beltPhase += dt * (80 + tapHeat * 40);
+    G.speed += treadIdle(G.tL) * dt;
+    treadFT -= dt; if (treadFT <= 0) { treadFT = 1; floatText(player.x + rand(-14, 14), player.y - 70, '+' + fmt(treadIdle(G.tL)), '#BFE0FF', .9); }
+    beltPhase += dt * (80 + Math.min(400, treadIdle(G.tL) * 2));
   } else beltPhase += dt * 10;
 
   // deposit
@@ -1199,7 +1193,13 @@ function updateBiome(dt) {
   pushOut(player, 16);
   // eggs: the closest one in reach can be picked up with Space or the GRAB button
   nearEgg = null; let best = 1e9;
+  const weak = G.speed + 1e-6 < B.req;
   if (!player.carry) for (const e of biome.eggs) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < best) { best = d; nearEgg = e; } }
+  if (weak && nearEgg) {
+    if ((toastGate['egg' + scene] || 0) <= performance.now()) sfx.deny();
+    gateToast('egg' + scene, '\ud83d\udd12', `You need speed ${B.req} to take eggs here`, `You have ${fmt(G.speed)}. Run on the treadmill to build it up`, true);
+    nearEgg = null;
+  }
   setActionBtn(nearEgg ? 'grab' : nearPet ? 'adopt' : null);
   for (let i = biome.respawn.length - 1; i >= 0; i--) { biome.respawn[i] -= dt; if (biome.respawn[i] <= 0) { biome.respawn.splice(i, 1); spawnEgg(scene); } }
   for (const e of biome.eggs) e.ph += dt;
@@ -1285,7 +1285,7 @@ function buy(which) {
   if (which === 'tread' && G.tL < TREAD_MAX) {
     const c = treadCost(G.tL); if (G.money < c) return;
     G.money -= c; G.tL++; sfx.buy();
-    toast('🏃', `Treadmill level ${G.tL}`, `Max speed is now ${treadCap(G.tL)}`);
+    toast('🏃', `Treadmill level ${G.tL}`, `You gain ${fmt(treadIdle(G.tL))} speed every second on it`);
   } else if (which === 'pen' && G.pL < PEN_MAX) {
     const c = penCost(G.pL); if (G.money < c) return;
     G.money -= c; G.pL++; sfx.buy();
@@ -1338,12 +1338,12 @@ function gateToast(key, em, t, s, bad) { const now = performance.now(); if ((toa
 let lastHud = '';
 function syncHud() {
   let rate = 0; for (const p of G.pen) if (!p.egg) rate += petInc(p);
-  const cap = treadCap(G.tL);
+  const nextB = BIOMES.find(b => b.req > G.speed), prevReq = BIOMES.filter(b => b.req <= G.speed).reduce((a, b) => Math.max(a, b.req), 0);
   $('money').textContent = fmt(G.money);
   $('rate').textContent = '+' + fmt(rate) + '/s';
-  $('spd').textContent = Math.floor(G.speed);
-  $('spdBar').style.width = (G.speed / cap * 100).toFixed(1) + '%';
-  $('spdCap').textContent = 'max ' + cap;
+  $('spd').textContent = fmt(G.speed);
+  $('spdBar').style.width = (nextB ? (G.speed - prevReq) / (nextB.req - prevReq) * 100 : 100).toFixed(1) + '%';
+  $('spdCap').textContent = '+' + fmt(treadIdle(G.tL)) + '/s';
   $('penCnt').textContent = `${G.pen.length}/${penSlots(G.pL)}`;
   $('bagCnt').textContent = G.inv.length;
   $('idxCnt').textContent = `${SPECIES.filter(s => G.found[s.id]).length}/${SPECIES.length}`;
@@ -1361,16 +1361,17 @@ function syncHud() {
     const next = BIOMES.find(b => b.req > G.speed);
     if (player.carry) h = G.pen.length >= penSlots(G.pL) ? 'Your pen is full. Sell a pet or upgrade the pen in the Shop.' : `Carry the ${RAR[player.carry.r].name.toLowerCase()} egg into your pen.`;
     else if (isNight()) h = `It's night. The biomes open again in ${Math.ceil(DAY + NIGHT - G.clock)} seconds.`;
-    else if (onTread) h = G.speed >= cap ? 'Speed maxed. Upgrade the treadmill in the Shop.' : 'Tap RUN or press Space to build speed.';
+    else if (onTread) h = `Stand on the treadmill to gain ${fmt(treadIdle(G.tL))} speed every second. Upgrade it in the Shop to gain more.`;
     else if (Object.values(fuseGroups()).some(l => l.length >= 3 && (l[0].f || 0) < FUSE.length - 1)) h = 'You have 3 of the same animal. Walk to the Fuse Machine to fuse them.';
     else if (!G.pen.length && !Object.keys(G.found).length) h = 'Run right into the Forest and grab an egg. Move with WASD, arrows or drag.';
-    else if (next && G.speed < next.req) h = `Reach speed ${next.req} on the treadmill to unlock the ${next.name}.`;
+    else if (next && G.speed < next.req) h = `Reach speed ${next.req} on the treadmill to take eggs in the ${next.name}.`;
   } else {
     const B = BIOMES[scene];
     const chased = Object.values(zones).some(z => z.guards.some(g => g.st === 'chase' || g.st === 'wait'));
     if (chased) h = 'A guardian is chasing you! Run all the way home.';
     else if (player.carry) h = `Got a ${RAR[player.carry.r].name.toLowerCase()} egg. Run left, back home to your pen.`;
     else if (nearEgg) h = 'Press Space or tap GRAB to pick up the egg.';
+    else if (G.speed + 1e-6 < B.req) h = `You can look around, but you need speed ${B.req} to take eggs in the ${B.name}.`;
     else h = `Walk up to an egg. The ${B.guard.name.toLowerCase()} only chases you once you take one of its eggs, and the rarest sit by its nest.`;
   }
   if (h !== lastHud) { $('hint').textContent = h; lastHud = h; }
@@ -1446,9 +1447,8 @@ function renderTab() {
         <div class="up">
           <div class="up-head"><h3>Treadmill</h3><span class="lv">Level ${G.tL}/${TREAD_MAX}</span></div>
           <ul>
-            <li>Max speed <b>${treadCap(G.tL)}${tMax ? '' : ` → <em>${treadCap(G.tL + 1)}</em>`}</b></li>
-            <li>Speed per second on it <b>${treadIdle(G.tL).toFixed(1)}${tMax ? '' : ` → <em>${treadIdle(G.tL + 1).toFixed(1)}</em>`}</b></li>
-            <li>Speed per tap <b>${treadTap(G.tL).toFixed(2)}${tMax ? '' : ` → <em>${treadTap(G.tL + 1).toFixed(2)}</em>`}</b></li>
+            <li>Speed every second on it <b>${fmt(treadIdle(G.tL))}${tMax ? '' : ` → <em>${fmt(treadIdle(G.tL + 1))}</em>`}</b></li>
+            <li>Speed limit <b>None</b></li>
           </ul>
           <button class="buy" data-buy="tread" data-cost="${tMax ? '' : treadCost(G.tL)}" ${tMax ? 'disabled' : ''}>${tMax ? 'Fully upgraded' : 'Upgrade · $' + fmt(treadCost(G.tL))}</button>
         </div>
@@ -1461,7 +1461,7 @@ function renderTab() {
           <button class="buy" data-buy="pen" data-cost="${pMax ? '' : penCost(G.pL)}" ${pMax ? 'disabled' : ''}>${pMax ? 'Fully upgraded' : 'Upgrade · $' + fmt(penCost(G.pL))}</button>
         </div>
       </div>
-      <h3>Biome gates</h3>
+      <h3>Speed needed to take eggs</h3>
       <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${b.req}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
       <p class="note">Carrying an egg slows you down: rare eggs by 8%, epic by 15%, legendary by 25%, mythic by 32%. Big eggs weigh 8% more and huge eggs 16% more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
       <div class="cloud-box"><p><b>Cloud save</b><br>${cloud ? (cloudState === 'error' ? 'Could not reach the cloud just now. It will try again.' : cloudAt ? `Saved ${Math.max(0, Math.round((Date.now() - cloudAt) / 1000))} seconds ago. Open the game on another device to keep playing.` : 'Saving…') : 'Your progress is saved in this browser. Play on the same device and browser to keep it.'}</p>${cloud ? '<button class="buy" id="cloudBtn">Save now</button>' : ''}</div>
@@ -1724,8 +1724,7 @@ function applyGift(g, from) {
     G.money += a; toast('🎁', `Gift: $${fmt(a)}`, from);
   } else if (g.kind === 'speed') {
     const a = int(g.amount, 0, 5000, 0); if (!a) return;
-    G.speed = Math.min(treadCap(TREAD_MAX), G.speed + a);
-    while (G.tL < TREAD_MAX && treadCap(G.tL) < G.speed) G.tL++;
+    G.speed += a;
     toast('⚡', `Gift: +${a} speed`, from);
   } else if (g.kind === 'pet') {
     const i = spIndex(String(g.sid)); if (i < 0) return;
@@ -1760,7 +1759,7 @@ function applyGift(g, from) {
   } else if (g.kind === 'pen') {
     G.pL = PEN_MAX; toast('🏡', 'Gift: max level pen', `${penSlots(G.pL)} slots and +${Math.round((penBonus(G.pL) - 1) * 100)}% income`);
   } else if (g.kind === 'tread') {
-    G.tL = TREAD_MAX; toast('🏃', 'Gift: max level treadmill', `Train your speed up to ${treadCap(G.tL)}`);
+    G.tL = TREAD_MAX; toast('🏃', 'Gift: max level treadmill', `You gain ${fmt(treadIdle(G.tL))} speed every second on it`);
   } else return;
   save(); syncHud(); if (modalOpen) renderTab();
 }
@@ -1811,7 +1810,7 @@ async function adminAction(what) {
   }
   const g = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), kind, at: Date.now() };
   if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
-  else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 5000);
+  else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 1e9);
   else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] || f.admMutK === 'mount' ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
   else if (kind === 'pet') Object.assign(g, { m: MUT[f.admPetMut] ? f.admPetMut : undefined, sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
   else if (kind === 'egg') Object.assign(g, { m: MUT[f.admGiftMut] ? f.admGiftMut : undefined, b: num(f.admGiftBiome), r: RORDER.includes(f.admGiftRar) ? f.admGiftRar : 'C', es: clamp(num(f.admGiftSize), 0, 2), n: clamp(num(f.admGiftN), 1, 10) });
@@ -1875,12 +1874,12 @@ function adminHTML() {
         <label>Amount<input id="admMoney" type="number" min="1" value="${esc(f.admMoney)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="money:to">Give</button></div></div>
       <div class="up"><h3>Speed</h3>
-        <label>Extra speed<input id="admSpeed" type="number" min="1" max="5000" value="${esc(f.admSpeed)}"></label>
+        <label>Extra speed<input id="admSpeed" type="number" min="1" max="1000000000" value="${esc(f.admSpeed)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="speed:to">Give</button></div></div>
       <div class="up"><h3>Unlocks</h3>
         <div class="unl"><b>Full Index</b><span>All ${SPECIES.length} animals found</span><div class="adm-btns"><button class="buy" data-adm="index:to">Give</button></div></div>
         <div class="unl"><b>Max level pen</b><span>Level ${PEN_MAX}: ${penSlots(PEN_MAX)} slots, +${Math.round((penBonus(PEN_MAX) - 1) * 100)}% income</span><div class="adm-btns"><button class="buy" data-adm="pen:to">Give</button></div></div>
-        <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: speed can be trained up to ${treadCap(TREAD_MAX)}</span><div class="adm-btns"><button class="buy" data-adm="tread:to">Give</button></div></div>
+        <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: +${fmt(treadIdle(TREAD_MAX))} speed every second</span><div class="adm-btns"><button class="buy" data-adm="tread:to">Give</button></div></div>
         <div class="unl"><b>Every cosmetic</b><span>All ${Object.values(COS).reduce((a, l) => a + l.filter(i => i.price > 0).length, 0)} shirts, hats, back items and trails from Style</span><div class="adm-btns"><button class="buy" data-adm="cos:to">Give</button></div></div>
       </div>
       <div class="up"><h3>Pet</h3>
@@ -2103,9 +2102,9 @@ const TR_EXACT = {
   'TREADMILL': 'KOŞU BANDI', 'FUSE MACHINE': 'BİRLEŞTİRME MAKİNESİ', '3 ready!': '3 hazır!', 'MAX': 'MAKS', 'SPACE': 'BOŞLUK', 'grab': 'al', 'adopt': 'sahiplen',
   '✨ Mythic egg inside!': '✨ İçeride mitik yumurta!', '🌙 closed for the night': '🌙 gece kapalı',
   // Shop
-  'Treadmill': 'Koşu bandı', 'Max speed': 'En yüksek hız', 'Speed per second on it': 'Üstündeyken saniyede hız', 'Speed per tap': 'Dokunuş başına hız',
+  'Treadmill': 'Koşu bandı', 'Max speed': 'En yüksek hız', 'Speed per second on it': 'Üstündeyken saniyede hız', 'Speed every second on it': 'Üstündeyken saniyede hız', 'Speed limit': 'Hız sınırı', 'Speed per tap': 'Dokunuş başına hız',
   'Fully upgraded': 'Tamamen geliştirildi', 'Slots for eggs and pets': 'Yumurta ve hayvan yeri', 'Pet income bonus': 'Hayvan gelir bonusu',
-  'Biome gates': 'Biyom kapıları', 'Cloud save': 'Bulut kaydı', 'Save now': 'Şimdi kaydet', 'Saving…': 'Kaydediliyor…', 'Reset progress': 'İlerlemeyi sıfırla',
+  'Biome gates': 'Biyom kapıları', 'Speed needed to take eggs': 'Yumurta almak için gereken hız', 'Cloud save': 'Bulut kaydı', 'Save now': 'Şimdi kaydet', 'Saving…': 'Kaydediliyor…', 'Reset progress': 'İlerlemeyi sıfırla',
   'Tap again to wipe all progress': 'Her şeyi silmek için tekrar dokun', 'Owner login': 'Sahip girişi', 'Language': 'Dil', 'Choose the language of the game.': 'Oyunun dilini seç.',
   'Could not reach the cloud just now. It will try again.': 'Şu an buluta ulaşılamadı. Tekrar deneyecek.',
   "Off. Sign in to claude.ai to save your progress across devices.": 'Kapalı. İlerlemeni cihazlar arasında kaydetmek için claude.ai\'ye giriş yap.',
@@ -2149,7 +2148,7 @@ const TR_EXACT = {
   'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
   'Extra speed': 'Ekstra hız', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Every cosmetic': 'Tüm kozmetikler', 'Gift: every cosmetic': 'Hediye: tüm kozmetikler', 'Open Style to wear them.': 'Giymek için Stil\'i aç.', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
   'Pet': 'Hayvan', 'Animal': 'Hayvan', 'Size': 'Boyut', 'Fusion': 'Birleşim', 'Normal': 'Normal', 'How many': 'Kaç tane', 'Give eggs': 'Yumurta ver', 'Biome': 'Biyom',
-  'Rarity': 'Nadirlik', 'Egg size': 'Yumurta boyu', 'None': 'Yok', 'Spawn eggs': 'Yumurta çıkar', 'Spawn for everyone': 'Herkes için çıkar', 'Place in the world': 'Dünyaya yerleştir',
+  'Rarity': 'Nadirlik', 'Egg size': 'Yumurta boyu', 'None': 'Yok', 'Yok': 'Yok', 'Spawn eggs': 'Yumurta çıkar', 'Spawn for everyone': 'Herkes için çıkar', 'Place in the world': 'Dünyaya yerleştir',
   'What': 'Ne', 'Pick a spot': 'Yer seç', 'Remove all placed': 'Yerleştirilenleri kaldır', 'Pet mutation': 'Hayvan mutasyonu', 'Pet size': 'Hayvan boyu', 'Pet fusion': 'Hayvan birleşimi',
   'Gifts waiting for players': 'Oyuncuları bekleyen hediyeler', 'None yet.': 'Henüz yok.', 'This panel is only for the game owner.': 'Bu panel sadece oyunun sahibi içindir.',
   'They go into the player\'s Bag, ready to put on an egg.': 'Oyuncunun Çantasına gider, bir yumurtaya konmaya hazır.',
@@ -2242,7 +2241,13 @@ const TR_RULES = [
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
   [/^Sold an? (.+)$/, '$1 satıldı'], [/^You made an? (.+)!$/, '$1 yaptın!'], [/^Earns \$(.+)\/s · freed 2 pen slots$/, '$$$1/sn kazandırır · ağılda 2 yer açıldı'],
   [/^You adopted an? (.+)!$/, '$1 sahiplendin!'], [/^Stored (a|your) (.+)$/, '$2 saklandı'], [/^(.+) is back in the pen$/, '$1 ağıla döndü'], [/^Earning \$(.+)\/s again\.$/, 'Yine $$$1/sn kazandırıyor.'],
-  [/^Treadmill level (\d+)$/, 'Koşu bandı seviye $1'], [/^Max speed is now (\d+)$/, 'En yüksek hız artık $1'], [/^Pen level (\d+)$/, 'Ağıl seviye $1'],
+  [/^Treadmill level (\d+)$/, 'Koşu bandı seviye $1'], [/^You gain (.+) speed every second on it$/, 'Üstünde saniyede $1 hız kazanırsın'],
+  [/^TREADMILL  LV (\d+)$/, 'KOŞU BANDI  SV $1'], [/^Level (\d+): \+(.+) speed every second$/, 'Seviye $1: saniyede +$2 hız'],
+  [/^Stand on the treadmill to gain (.+) speed every second\. Upgrade it in the Shop to gain more\.$/, 'Koşu bandında dur, saniyede $1 hız kazan. Daha fazlası için Mağaza\'dan geliştir.'],
+  [/^Reach speed (\d+) on the treadmill to take eggs in the (.+)\.$/, '$2 içinde yumurta almak için koşu bandında $1 hıza ulaş.'],
+  [/^You need speed (\d+) to take eggs here$/, 'Burada yumurta almak için $1 hız gerekli'], [/^You have (.+)\. Run on the treadmill to build it up$/, 'Hızın $1. Koşu bandında koşarak artır'],
+  [/^You can look around, but you need speed (\d+) to take eggs in the (.+)\.$/, 'Etrafa bakabilirsin ama $2 içinde yumurta almak için $1 hız gerekli.'],
+  [/^🔒 eggs need speed (\d+)$/, '🔒 yumurtalar için hız $1'], [/^Max speed is now (\d+)$/, 'En yüksek hız artık $1'], [/^Pen level (\d+)$/, 'Ağıl seviye $1'],
   [/^(\d+) slots, pets earn \+(\d+)%$/, '$1 yer, hayvanlar +%$2 kazandırır'], [/^Back to full speed \((\d+)\)\.$/, 'Tam hıza dönüldü ($1).'],
   [/^Party (.+) is ready$/, 'Parti $1 hazır'], [/^Joined party (.+)$/, 'Partiye katıldın: $1'], [/^Back in party (.+)$/, 'Partiye döndün: $1'],
   [/^(.+) joined the party$/, '$1 partiye katıldı'], [/^(.+) left the party$/, '$1 partiden ayrıldı'], [/^(.+) hatched an? (.+)!$/, '$1, bir $2 çıkardı!'],
@@ -3861,17 +3866,66 @@ function drawFuser(t, dt) {
   const ready = Object.values(fuseGroups()).some(l => l.length >= 3 && (l[0].f || 0) < FUSE.length - 1);
   if (ready) label('3 ready!', x, y + 66, 15, '#FFE066');
 }
+// every treadmill level has its own look: [frame, belt, stripes, effect]
+const TREAD_SKINS = [null,
+  ['#4A525C', '#23272C', '#343A42', ''], ['#5C6B7A', '#252B33', '#3E4A57', ''], ['#8A5A35', '#3A2A1E', '#5A3E28', 'wood'], ['#3F8A48', '#1E3A22', '#2F6E38', ''],
+  ['#2E6FD8', '#162A4E', '#24539E', ''], ['#D9443A', '#3A1A18', '#8A2A24', ''], ['#8A5CF0', '#2A1E48', '#5A3EA0', ''], ['#FF7AB8', '#4A1E34', '#B04A80', 'hearts'],
+  ['#F2A33A', '#3E2A12', '#A86A20', ''], ['#F2C230', '#4A3A10', '#C89A20', 'gold'], ['#3FD0E0', '#103A40', '#2A9AA8', 'bubbles'], ['#7FE07A', '#1E3A1E', '#4FA04A', ''],
+  ['#B07AF2', '#2A1A40', '#7F5BC8', 'gems'], ['#D8D8E6', '#2A2A3A', '#A8A8C0', 'gold'], ['#FF5A2A', '#2A100A', '#C8401A', 'fire'], ['#2A2238', '#0E0C14', '#3A3048', 'stars'],
+  ['#8FD3F5', '#0E2A40', '#5AB0E0', 'snow'], ['#FF8AC8', '#3A1A30', '#E86AB0', 'candy'], ['#7A5AA8', '#1A1428', '#5A4080', 'ghost'], ['rainbow', '#1A1A2A', 'rainbow', 'rainbow'],
+  ['#1FA86A', '#0A2A1C', '#2FD08A', 'gems'], ['#C81E3A', '#2A0810', '#FF3A5A', 'gems'], ['#1E4AD8', '#0A1440', '#3A7AFF', 'gems'], ['#9A2AD8', '#1E0A30', '#C85AFF', 'gems'],
+  ['#E8F6FF', '#1A2A3A', '#BFE6FF', 'diamond'], ['#FFB13B', '#3A1A00', '#FFE066', 'sun'], ['#C8C8F0', '#10102A', '#8A8AD8', 'moon'], ['#3A2A7A', '#0A0820', '#6A5AC8', 'galaxy'],
+  ['rainbow', '#F4F0FF', 'rainbow', 'prism'], ['#FFD23F', '#2A1A00', 'rainbow', 'legend'],
+];
+function drawTreadmill(t) {
+  const L = clamp(G.tL, 1, TREAD_MAX), [fr, belt, st, fx] = TREAD_SKINS[L], hue = (t * 90) % 360;
+  const col = c => c === 'rainbow' ? `hsl(${hue},85%,60%)` : c;
+  ctx.save();
+  if (L >= 20) { ctx.shadowColor = col(fr === 'rainbow' ? 'rainbow' : st === 'rainbow' ? 'rainbow' : fr); ctx.shadowBlur = 14 + Math.sin(t * 3) * 5; }
+  if (fr === 'rainbow') { const g = ctx.createLinearGradient(TM.x, 0, TM.x + TM.w, 0); for (let k = 0; k <= 6; k++) g.addColorStop(k / 6, `hsl(${(hue + k * 60) % 360},85%,60%)`); ctx.fillStyle = g; } else ctx.fillStyle = fr;
+  roundRect(ctx, TM.x - 10, TM.y - 4, TM.w + 20, TM.h + 8, 18); ctx.fill();
+  roundRect(ctx, TM.x + TM.w / 2 - 66, TM.y - 44, 132, 40, 10); ctx.fill();
+  ctx.restore();
+  if (fx === 'wood') { ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.lineWidth = 2; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.moveTo(TM.x - 6, TM.y + 2 + k * (TM.h / 4)); ctx.lineTo(TM.x + TM.w + 6, TM.y + 2 + k * (TM.h / 4)); ctx.stroke(); } }
+  // the belt: stripes, chevrons or dots, moving
+  ctx.save(); roundRect(ctx, TM.x, TM.y, TM.w, TM.h, 12); ctx.clip();
+  ctx.fillStyle = belt; ctx.fillRect(TM.x, TM.y, TM.w, TM.h);
+  const pat = L % 3, off = (-(beltPhase) % 28 + 28) % 28;
+  let k = 0;
+  for (let x = -40 + off; x < TM.w + 40; x += 28, k++) {
+    ctx.fillStyle = st === 'rainbow' ? `hsl(${(hue + k * 30) % 360},85%,60%)` : st;
+    if (pat === 1) ctx.fillRect(TM.x + x, TM.y, 10, TM.h);
+    else if (pat === 2) { ctx.beginPath(); ctx.moveTo(TM.x + x, TM.y); ctx.lineTo(TM.x + x + 12, TM.y + TM.h / 2); ctx.lineTo(TM.x + x, TM.y + TM.h); ctx.lineTo(TM.x + x + 8, TM.y + TM.h); ctx.lineTo(TM.x + x + 20, TM.y + TM.h / 2); ctx.lineTo(TM.x + x + 8, TM.y); ctx.closePath(); ctx.fill(); }
+    else for (let y = TM.y + 10; y < TM.y + TM.h; y += 22) { ctx.beginPath(); ctx.arc(TM.x + x + 6, y + (k % 2) * 11, 4.5, 0, 7); ctx.fill(); }
+  }
+  ctx.restore();
+  // extras on the frame
+  const edge = k2 => { const per = 2 * (TM.w + 20) + 2 * (TM.h + 8), d = ((k2 % per) + per) % per; if (d < TM.w + 20) return [TM.x - 10 + d, TM.y - 4]; if (d < TM.w + 20 + TM.h + 8) return [TM.x + TM.w + 10, TM.y - 4 + d - TM.w - 20]; if (d < 2 * (TM.w + 20) + TM.h + 8) return [TM.x + TM.w + 10 - (d - TM.w - 20 - TM.h - 8), TM.y + TM.h + 4]; return [TM.x - 10, TM.y + TM.h + 4 - (d - 2 * (TM.w + 20) - TM.h - 8)]; };
+  const n = 14;
+  for (let q = 0; q < n; q++) {
+    const [ex, ey] = edge(q * 2 * (TM.w + TM.h + 28) / n + (fx === 'rainbow' || fx === 'legend' || fx === 'prism' ? t * 30 : 0)), tw = .5 + .5 * Math.sin(t * 4 + q * 1.7);
+    if (fx === 'gold' || fx === 'legend') { ctx.fillStyle = `rgba(255,248,200,${tw})`; ctx.beginPath(); ctx.arc(ex, ey, 2.5 + tw * 1.5, 0, 7); ctx.fill(); }
+    else if (fx === 'hearts' && q % 2) label('♥', ex, ey + 5, 13, '#FFD6E8');
+    else if (fx === 'bubbles') { ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ex, ey - ((t * 20 + q * 7) % 16), 3, 0, 7); ctx.stroke(); }
+    else if (fx === 'gems' || fx === 'diamond') { ctx.fillStyle = fx === 'diamond' ? '#FFFFFF' : st; ctx.beginPath(); ctx.moveTo(ex, ey - 5); ctx.lineTo(ex + 4, ey); ctx.lineTo(ex, ey + 5); ctx.lineTo(ex - 4, ey); ctx.closePath(); ctx.fill(); if (fx === 'diamond') { ctx.fillStyle = `rgba(150,220,255,${tw})`; ctx.fillRect(ex - 1, ey - 8, 2, 16); } }
+    else if (fx === 'fire') { ctx.fillStyle = ['#FFB13B', '#FF7A2A', '#FFE066'][q % 3]; ctx.beginPath(); ctx.ellipse(ex, ey - 4 - tw * 4, 3, 5 + tw * 3, 0, 0, 7); ctx.fill(); }
+    else if (fx === 'stars' || fx === 'galaxy' || fx === 'moon') { ctx.fillStyle = `rgba(255,255,255,${tw})`; ctx.beginPath(); ctx.arc(ex, ey, 1.5 + tw * 1.5, 0, 7); ctx.fill(); }
+    else if (fx === 'snow') { ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(ex, ey, 3, 0, 7); ctx.fill(); }
+    else if (fx === 'candy') { ctx.fillStyle = q % 2 ? '#FFFFFF' : '#FF4F8A'; ctx.beginPath(); ctx.arc(ex, ey, 3.5, 0, 7); ctx.fill(); }
+    else if (fx === 'ghost') { ctx.fillStyle = `rgba(200,255,230,${tw * .7})`; ctx.beginPath(); ctx.arc(ex, ey - tw * 4, 3, 0, 7); ctx.fill(); }
+    else if (fx === 'sun') { ctx.fillStyle = `rgba(255,210,63,${.4 + tw * .6})`; ctx.beginPath(); ctx.arc(ex, ey, 3 + tw * 2, 0, 7); ctx.fill(); }
+    else if (fx === 'rainbow' || fx === 'prism') { ctx.fillStyle = `hsl(${(hue + q * 25) % 360},90%,65%)`; ctx.beginPath(); ctx.arc(ex, ey, 3.5, 0, 7); ctx.fill(); }
+  }
+  if (fx === 'moon') { ctx.fillStyle = '#FFF6D6'; ctx.beginPath(); ctx.arc(TM.x + TM.w + 4, TM.y - 2, 9, 0, 7); ctx.fill(); ctx.fillStyle = TREAD_SKINS[L][0]; ctx.beginPath(); ctx.arc(TM.x + TM.w + 8, TM.y - 5, 8, 0, 7); ctx.fill(); }
+  if (fx === 'legend') label('👑', TM.x + TM.w / 2, TM.y - 70, 22);
+}
 function drawHub(t, dt) {
   // treadmill belt + console
-  ctx.save(); roundRect(ctx, TM.x, TM.y, TM.w, TM.h, 12); ctx.clip();
-  ctx.fillStyle = '#23272C'; ctx.fillRect(TM.x, TM.y, TM.w, TM.h);
-  ctx.fillStyle = '#343A42';
-  for (let x = -40 + (-(beltPhase) % 28 + 28) % 28; x < TM.w + 40; x += 28) ctx.fillRect(TM.x + x, TM.y, 10, TM.h);
-  ctx.restore();
+  drawTreadmill(t);
   ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
   ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
-  ctx.fillText(Math.floor(G.speed) + ' / ' + treadCap(G.tL), TM.x + TM.w / 2, TM.y - 18);
-  label('TREADMILL', TM.x + TM.w / 2, TM.y - 52, 18);
+  ctx.fillText(fmt(G.speed) + '  +' + fmt(treadIdle(G.tL)) + '/s', TM.x + TM.w / 2, TM.y - 18);
+  label(`TREADMILL  LV ${G.tL}`, TM.x + TM.w / 2, TM.y - 52, 18);
   drawFuser(t, dt);
   label(`PEN  ${G.pen.length}/${penSlots(G.pL)}`, PEN.x + PEN.w / 2, PEN.y - 14, 22);
 
@@ -3951,7 +4005,7 @@ function drawSign(x, y, B, locked, note = '') {
   ctx.fillText(tr(note || (locked ? `🔒 needs speed ${B.req}` : `${B.guard.name} · pets ×${fmt(B.mult)}`)), x, y + 22);
 }
 function drawGate(i) {
-  const B = BIOMES[i], x = ZX(i), night = isNight(), locked = night || G.speed + 1e-6 < B.req;
+  const B = BIOMES[i], x = ZX(i), night = isNight(), locked = night, weak = G.speed + 1e-6 < B.req;
   if (locked) {
     ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(x - 4, 0, 18, BH);
     ctx.fillStyle = '#7A5235'; ctx.fillRect(x - 11, 0, 6, BH); ctx.fillRect(x + 5, 0, 6, BH);
@@ -3960,7 +4014,7 @@ function drawGate(i) {
     ctx.save(); ctx.strokeStyle = B.portal; ctx.globalAlpha = .6; ctx.lineWidth = 6; ctx.setLineDash([18, 16]);
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, BH); ctx.stroke(); ctx.restore();
   }
-  for (const sy of [BH * .2, BH * .5, BH * .8]) drawSign(x, sy, B, locked, night ? '🌙 closed for the night' : '');
+  for (const sy of [BH * .2, BH * .5, BH * .8]) drawSign(x, sy, B, locked || weak, night ? '🌙 closed for the night' : weak ? `🔒 eggs need speed ${B.req}` : '');
   if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'M')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('✨ Mythic egg inside!', x, sy - 44, 16, '#FFB8F0');
 }
 function drawGuard(g, B0, z, t) {
@@ -4003,7 +4057,9 @@ function drawWorld(t, dt) {
   for (const z of vis) if (z !== 'hub') {
     const zd = getZone(z), B = BIOMES[z];
     drawGate(z);
+    const weakZ = G.speed + 1e-6 < B.req; if (weakZ) ctx.globalAlpha = .55;
     for (const e of zd.eggs) drawEgg(e.x, e.y + Math.sin(e.ph * 3) * 2, 18 * EGG_SIZES[e.es || 0].scale, e.r, B.egg, e.ph);
+    ctx.globalAlpha = 1;
     if (nearEgg && zd.eggs.includes(nearEgg)) drawGrabPrompt(nearEgg, t);
   }
   // draw every guardian that is on screen, even one that chased you out of its own biome
