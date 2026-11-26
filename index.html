@@ -382,8 +382,9 @@ function fmt(n) {
   if (n < 1e12) return (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
   if (n < 1e15) return (n / 1e12).toFixed(2).replace(/\.?0+$/, '') + 'T';
   if (n < 1e18) return (n / 1e15).toFixed(2).replace(/\.?0+$/, '') + 'Qa';
-  if (n < 1e21) return (n / 1e18).toFixed(2).replace(/\.?0+$/, '') + 'Qi';
-  return (n / 1e21).toFixed(2).replace(/\.?0+$/, '') + 'Sx';
+  const SUF = ['Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'Ud', 'Dd'];
+  for (let k = 0; k < SUF.length; k++) if (n < 1e21 * 1000 ** k) return (n / (1e18 * 1000 ** k)).toFixed(2).replace(/\.?0+$/, '') + SUF[k];
+  return n.toExponential(2).replace('e+', 'e');
 }
 
 // ================= DATA =================
@@ -429,7 +430,7 @@ const BIOMES = [
 ];
 // Biomes were designed on a 1400x900 map; they are now this much bigger.
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
-BIOMES.forEach(b => { b.guard.speed = Math.round(b.guard.speed * 1.3); });   // guardians run 30% faster
+BIOMES.forEach(b => { b.guard.speed = Math.round(b.guard.speed * 1.5); });   // guardians run 50% faster
 BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
 const SPECIES = [
   ['bunny', 'Bunny', '🐰', 0, 'C'], ['squirrel', 'Squirrel', '🐿️', 0, 'C'], ['fox', 'Fox', '🦊', 0, 'R'], ['owl', 'Owl', '🦉', 0, 'R'], ['deer', 'Deer', '🦌', 0, 'E'], ['rooster', 'Golden Rooster', '🐓', 0, 'L'],
@@ -1251,7 +1252,9 @@ function updateGuards(dt) {
       if (g.st === 'chase' && !theirs) g.st = 'return';
       let tx, ty, sp;
       if (g.st === 'chase') {
-        tx = player.x; ty = player.y; sp = GD.speed;
+        // a chasing guardian is never much slower than you are when you're not carrying anything
+        const rq = rideP();
+        tx = player.x; ty = player.y; sp = Math.max(GD.speed, pxSpeed() * (rq && !G.slow ? RIDE_MULT[SPECIES[rq.sp].r] : 1) * .8);
         if (d < 30 && player.invuln <= 0) { caught({ guard: GD }, g); return; }
       } else if (g.st === 'return') {
         tx = g.hx; ty = g.hy; sp = GD.speed * .55;
@@ -1720,10 +1723,10 @@ async function claimGifts() {
 function applyGift(g, from) {
   const int = (v, lo, hi, d) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? clamp(n, lo, hi) : d; };
   if (g.kind === 'money') {
-    const a = int(g.amount, 0, 1e18, 0); if (!a) return;
+    const a = int(g.amount, 0, 1e36, 0); if (!a) return;
     G.money += a; toast('🎁', `Gift: $${fmt(a)}`, from);
   } else if (g.kind === 'speed') {
-    const a = int(g.amount, 0, 5000, 0); if (!a) return;
+    const a = int(g.amount, 0, 1e9, 0); if (!a) return;
     G.speed += a;
     toast('⚡', `Gift: +${a} speed`, from);
   } else if (g.kind === 'pet') {
@@ -1809,7 +1812,12 @@ async function adminAction(what) {
     return;
   }
   const g = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), kind, at: Date.now() };
-  if (kind === 'money') g.amount = clamp(num(f.admMoney), 1, 1e18);
+  if (kind === 'money') {
+    // "5Sx", "2.5 Qi", "1e30" or plain numbers all work
+    const m = String(f.admMoney).trim().replace(/,/g, '').match(/^([\d.]+(?:e\d+)?)\s*(k|m|b|t|qa|qi|sx|sp|oc|no|dc)?$/i);
+    const mul = { k: 1e3, m: 1e6, b: 1e9, t: 1e12, qa: 1e15, qi: 1e18, sx: 1e21, sp: 1e24, oc: 1e27, no: 1e30, dc: 1e33 };
+    g.amount = clamp(m ? Math.round(Number(m[1]) * (m[2] ? mul[m[2].toLowerCase()] : 1)) || 1 : 1, 1, 1e36);
+  }
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 1e9);
   else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] || f.admMutK === 'mount' ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
   else if (kind === 'pet') Object.assign(g, { m: MUT[f.admPetMut] ? f.admPetMut : undefined, sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
@@ -1871,7 +1879,8 @@ function adminHTML() {
     <div class="adm send-to"><label>Send gifts to${sel('admTo', [['all', 'Everyone'], ['me', 'Just me'], ...partyPeers.map(p => [p.by ? 'u:' + p.by : 'p:' + p.peer, 'Only ' + friendName(p) + ' (in your party)'])])}</label></div>
     <div class="ups adm">
       <div class="up"><h3>Money</h3>
-        <label>Amount<input id="admMoney" type="number" min="1" value="${esc(f.admMoney)}"></label>
+        <label>Amount<input id="admMoney" type="text" inputmode="numeric" value="${esc(f.admMoney)}"></label>
+        <span class="note" style="font-size:12px">You can type big amounts like 5Sx, 2Dc or 1e30. Up to 1000Dc.</span>
         <div class="adm-btns"><button class="buy" data-adm="money:to">Give</button></div></div>
       <div class="up"><h3>Speed</h3>
         <label>Extra speed<input id="admSpeed" type="number" min="1" max="1000000000" value="${esc(f.admSpeed)}"></label>
@@ -2146,7 +2155,7 @@ const TR_EXACT = {
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
   'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
-  'Extra speed': 'Ekstra hız', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Every cosmetic': 'Tüm kozmetikler', 'Gift: every cosmetic': 'Hediye: tüm kozmetikler', 'Open Style to wear them.': 'Giymek için Stil\'i aç.', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
+  'Extra speed': 'Ekstra hız', 'You can type big amounts like 5Sx, 2Dc or 1e30. Up to 1000Dc.': '5Sx, 2Dc ya da 1e30 gibi büyük miktarlar yazabilirsin. En fazla 1000Dc.', 'Unlocks': 'Kilit açma', 'Full Index': 'Tam koleksiyon', 'Every cosmetic': 'Tüm kozmetikler', 'Gift: every cosmetic': 'Hediye: tüm kozmetikler', 'Open Style to wear them.': 'Giymek için Stil\'i aç.', 'Max level pen': 'En yüksek seviye ağıl', 'Max level treadmill': 'En yüksek seviye koşu bandı',
   'Pet': 'Hayvan', 'Animal': 'Hayvan', 'Size': 'Boyut', 'Fusion': 'Birleşim', 'Normal': 'Normal', 'How many': 'Kaç tane', 'Give eggs': 'Yumurta ver', 'Biome': 'Biyom',
   'Rarity': 'Nadirlik', 'Egg size': 'Yumurta boyu', 'None': 'Yok', 'Yok': 'Yok', 'Spawn eggs': 'Yumurta çıkar', 'Spawn for everyone': 'Herkes için çıkar', 'Place in the world': 'Dünyaya yerleştir',
   'What': 'Ne', 'Pick a spot': 'Yer seç', 'Remove all placed': 'Yerleştirilenleri kaldır', 'Pet mutation': 'Hayvan mutasyonu', 'Pet size': 'Hayvan boyu', 'Pet fusion': 'Hayvan birleşimi',
