@@ -679,7 +679,7 @@ function getZone(i) {
   return zones[i];
 }
 function goHome() {
-  player.x = 650; player.y = 420; player.carry = null; scene = 'hub'; biome = null;
+  player.x = homeOff + 650; player.y = 420; player.carry = null; scene = 'hub'; biome = null;
   $('where').textContent = 'Home'; snapCam();
 }
 function changeZone(z) {
@@ -746,7 +746,7 @@ function getTile(z) {
   const keep = [scene, worldW, worldH, biome];
   scene = z; worldW = z === 'hub' ? HOME_W : BW; worldH = BH; biome = z === 'hub' ? null : { obst: getZone(z).obstL };
   const cvs = document.createElement('canvas');
-  try { buildBg(cvs); } finally { [scene, worldW, worldH, biome] = keep; }
+  try { if (z === 'hub') withBaseHome(() => buildBg(cvs)); else buildBg(cvs); } finally { [scene, worldW, worldH, biome] = keep; }
   tileCache.set(z, cvs);
   while (tileCache.size > 5) tileCache.delete(tileCache.keys().next().value);
   return cvs;
@@ -1287,7 +1287,7 @@ function startNight() {
   for (const k in zones) { const zd = zones[k]; zd.eggs = []; zd.respawn = []; zd.guards.forEach(g => { g.x = g.hx; g.y = g.hy; g.tx = g.hx; g.ty = g.hy; g.st = 'patrol'; g.carry = null; }); }
   nearEgg = null;
   if (scene !== 'hub') {
-    player.x = HOME_W - 160; player.y = 650; player.invuln = 0; scene = 'hub'; biome = null; $('where').textContent = 'Home'; snapCam();
+    player.x = homeOff + HOME_W - 160; player.y = 650; player.invuln = 0; scene = 'hub'; biome = null; $('where').textContent = 'Home'; snapCam();
     toast('🌙', 'Night fell, so you ran home', player.carry ? 'You kept your egg. The biomes open again at sunrise.' : 'The biomes open again at sunrise.');
   } else toast('🌙', 'Night has fallen', `The biomes are closed for ${NIGHT} seconds and every egg resets.`);
   save();
@@ -1601,7 +1601,7 @@ function friendColor(p) { const k = partyPeers.indexOf(p); return FRIEND_COLORS[
 // presence comes from another player's page: read it defensively
 function friendState(p) {
   const q = p.presence || {}, num = (v, lo, hi) => Number.isFinite(v) ? clamp(v, lo, hi) : null;
-  const x = num(q.x, 0, WORLD_W), y = num(q.y, 0, BH);
+  const x = num(q.x, -20 * PLOT_W, WORLD_W), y = num(q.y, 0, BH);
   if (x === null || y === null) return null;
   const z = Number.isInteger(q.z) && q.z >= 0 && q.z < BIOMES.length ? q.z : -1;
   const c = Array.isArray(q.c) && RAR[q.c[0]] && BIOMES[q.c[1]] ? { r: q.c[0], b: q.c[1], es: [0, 1, 2].includes(q.c[2]) ? q.c[2] : 0 } : null;
@@ -1642,7 +1642,7 @@ async function leaveParty(quiet) {
   const rm = party; party = null; partyPeers = []; partyViews = {}; hatchSeen = {}; partyCode = '';
   try { localStorage.removeItem(PARTY_KEY); } catch (e) {}
   if (rm) { try { await rm.leave(); } catch (e) {} }
-  if (hadParty) randomEggsAgain();
+  if (hadParty) { randomEggsAgain(); setHomeOff(0); }
   syncParty();
   if (!quiet) { toast('👋', 'You left the party', 'You can make or join another one any time.'); renderTab(); }
 }
@@ -1662,7 +1662,7 @@ function onPartyPeers(ch) {
       hatchSeen[p.peer] = h;
     }
   }
-  partyDirty = true; syncParty(); readFriends(); syncPartyClock();
+  partyDirty = true; updateHomeSlot(); syncParty(); readFriends(); syncPartyClock();
 }
 function sendPresence(force) {
   if (!party) return;
@@ -1683,7 +1683,6 @@ function partyFriends(dt) {
   if (!party) return out;
   for (const p of partyPeers) {
     const st = friendState(p); if (!st) continue;
-    if (st.z === -1 && st.x < HOME_W) { const j = sortedFriends().indexOf(p); if (j >= 0) st.x += plotX(j); }
     st.j = Number.isFinite(p.presence && p.presence.j) ? clamp(p.presence.j, 0, 200) : 0;
     let v = partyViews[p.peer];
     if (!v || Math.hypot(v.x - st.x, v.y - st.y) > 900) v = partyViews[p.peer] = { x: st.x, y: st.y, step: 0 };
@@ -2100,9 +2099,23 @@ function dropEgg(c, x, y) {
   if (party) { myDrops.push([id, e.x, e.y, e.r, e.b, e.es]); if (myDrops.length > 6) myDrops.shift(); }
 }
 // friends' pens and treadmills are to the left of your home, one plot each
-const sortedFriends = () => partyPeers.slice().sort((a, b) => a.peer < b.peer ? -1 : 1);
-const plotMinX = () => party ? -sortedFriends().length * PLOT_W : 0;
-const plotX = j => -(j + 1) * PLOT_W;
+// Everyone in a party uses the same map: the homes stand in a row, in the same order on every screen.
+// Home 0 is next to the Forest, home 1 is to its left, and so on. Your own pen, treadmill and fuse machine
+// move to your home's place in that row, so where a friend walks is the same spot in your game and in theirs.
+const memberIds = () => [myPeerId, ...partyPeers.map(q => q.peer)].filter(Boolean).sort();
+const slotX = k => -k * PLOT_W;
+const plotMinX = () => party ? slotX(Math.max(0, memberIds().length - 1)) : 0;
+let homeOff = 0;
+const BASE_HOME = { pen: PEN.x, tm: TM.x, fu: FUSER.x };
+function setHomeX(o) { PEN.x = BASE_HOME.pen + o; TM.x = BASE_HOME.tm + o; FUSER.x = BASE_HOME.fu + o; }
+function setHomeOff(off) {
+  if (off === homeOff) return;
+  const d = off - homeOff; homeOff = off; setHomeX(off);
+  for (const k in petPos) delete petPos[k];
+  if (zoneAt(player.x) === 'hub') { player.x += d; snapCam(); }
+}
+function withBaseHome(fn) { setHomeX(0); try { return fn(); } finally { setHomeX(homeOff); } }
+function updateHomeSlot() { const ids = memberIds(); setHomeOff(party && myPeerId && ids.includes(myPeerId) ? slotX(ids.indexOf(myPeerId)) : 0); }
 function readFriends() {
   if (!party) return;
   for (const p of partyPeers) {
@@ -2146,59 +2159,71 @@ function syncPartyClock() {
   }
 }
 function drawPlots(t, xs, xe) {
-  if (!party || xs > 0) return;
-  sortedFriends().forEach((p, j) => {
-    const ox = plotX(j); if (ox + PLOT_W < xs || ox > xe) return;
-    const q = p.presence || {}, name = friendName(p);
-    ctx.save(); ctx.translate(ox, 0);
-    // the same ground, path and pen as your home
-    ctx.drawImage(getTile('hub'), 0, 0, HOME_W, BH);
-    // the hedge between their home and the next one, with a gate where the path goes through
-    const gx = HOME_W, gw = PLOT_W - HOME_W, py = 650;
-    ctx.fillStyle = '#8DC966'; ctx.fillRect(gx, 0, gw, BH);
-    ctx.fillStyle = '#D9B77C'; ctx.fillRect(gx, py - 23, gw, 46); ctx.fillStyle = '#E5C68E'; ctx.fillRect(gx, py - 15, gw, 30);
-    for (let y = 30; y < BH; y += 46) {
-      if (Math.abs(y - py) < 80) continue;
-      ctx.fillStyle = '#2F6E38'; ctx.beginPath(); ctx.arc(gx + gw / 2, y + 4, 30, 0, 7); ctx.fill();
-      ctx.fillStyle = '#3E8A46'; ctx.beginPath(); ctx.arc(gx + gw / 2 - 6, y - 4, 22, 0, 7); ctx.fill();
-    }
-    // a big sign so you know whose home it is
-    for (const sy of [py - 150, py + 150]) {
-      ctx.fillStyle = '#4E3421'; ctx.fillRect(gx + gw / 2 - 4, sy, 8, 46);
-      ctx.fillStyle = '#6B4A2F'; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 56, 12); ctx.fill();
-      ctx.fillStyle = friendColor(p)[0]; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 9, 4); ctx.fill();
-      ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = '22px "Lilita One", system-ui, sans-serif';
-      ctx.fillText(tr(`${name}'s home`), gx + gw / 2, sy - 2);
-    }
-    drawFuser(t, 0, true);
-    // their treadmill
-    const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1, pl = Number.isInteger(q.pl) ? clamp(q.pl, 1, PEN_MAX) : 1;
-    drawTreadmill(t, tl);
-    ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
-    ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('+' + fmt(treadIdle(tl)) + '/s', TM.x + TM.w / 2, TM.y - 18);
-    label(`${name}'s TREADMILL  LV ${tl}`, TM.x + TM.w / 2, TM.y - 52, 18);
-    // their incubating eggs
-    const eggs = Array.isArray(q.pe) ? q.pe.slice(0, 24) : [];
-    let ei = 0;
-    for (const e of eggs) {
-      if (!Array.isArray(e) || !RAR[e[0]] || !BIOMES[e[1]]) continue;
-      const col = ei % 8, row = Math.floor(ei / 8); ei++;
-      const x = PEN.x + 46 + col * 50, y = PEN.y + 40 + row * 44, frac = clamp(+e[4] || 0, 0, 10) / 10;
-      ctx.fillStyle = '#A9874C'; ctx.beginPath(); ctx.ellipse(x, y + 12, 22, 9, 0, 0, 7); ctx.fill();
-      drawEgg(x, y, 18 * Math.min(1.4, EGG_SIZES[[0, 1, 2].includes(e[2]) ? e[2] : 0].scale), e[0], MUT[e[3]] ? MUT[e[3]].egg : BIOMES[e[1]].egg, t);
-      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, 0, 7); ctx.stroke();
-      ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
-    }
-    // their pets walk around like yours
-    const list = (Array.isArray(q.pp) ? q.pp.slice(0, 24) : []).map((pp, n) => {
-      if (!Array.isArray(pp)) return null; const si = spIndex(String(pp[0])); if (si < 0) return null;
-      return { id: p.peer + '|' + n + '|' + pp[0], sp: si, f: [0, 1, 2].includes(pp[1]) ? pp[1] : 0, z: [0, 1, 2].includes(pp[2]) ? pp[2] : 0, mut: MUT[pp[3]] ? pp[3] : undefined };
-    }).filter(Boolean);
-    drawPenAnimals(list, friendSpot, t, 1 / 60, false);
-    label(`${name}'s PEN  ${list.length + ei}/${penSlots(pl)}`, PEN.x + PEN.w / 2, PEN.y - 14, 22, '#FFE066');
-    ctx.restore();
+  if (!party) return;
+  memberIds().forEach((id, k) => {
+    const ox = slotX(k); if (ox + PLOT_W < xs || ox > xe) return;
+    const me = id === myPeerId, p = me ? null : partyPeers.find(q2 => q2.peer === id);
+    if (!me && !p) return;
+    const q = (p && p.presence) || {}, name = me ? 'You' : friendName(p);
+    withBaseHome(() => {
+      ctx.save(); ctx.translate(ox, 0);
+      if (!me) ctx.drawImage(getTile('hub'), 0, 0, HOME_W, BH);
+      // the hedge to the right of every home except the one next to the Forest, with a gate for the path
+      if (k > 0) {
+        const gx = HOME_W, gw = PLOT_W - HOME_W, py = 650;
+        ctx.fillStyle = '#8DC966'; ctx.fillRect(gx, 0, gw, BH);
+        ctx.fillStyle = '#D9B77C'; ctx.fillRect(gx, py - 23, gw, 46); ctx.fillStyle = '#E5C68E'; ctx.fillRect(gx, py - 15, gw, 30);
+        for (let y = 30; y < BH; y += 46) {
+          if (Math.abs(y - py) < 80) continue;
+          ctx.fillStyle = '#2F6E38'; ctx.beginPath(); ctx.arc(gx + gw / 2, y + 4, 30, 0, 7); ctx.fill();
+          ctx.fillStyle = '#3E8A46'; ctx.beginPath(); ctx.arc(gx + gw / 2 - 6, y - 4, 22, 0, 7); ctx.fill();
+        }
+        for (const sy of [py - 150, py + 150]) {
+          ctx.fillStyle = '#4E3421'; ctx.fillRect(gx + gw / 2 - 4, sy, 8, 46);
+          ctx.fillStyle = '#6B4A2F'; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 56, 12); ctx.fill();
+          ctx.fillStyle = me ? '#FF8A3D' : friendColor(p)[0]; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 9, 4); ctx.fill();
+          ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = '22px "Lilita One", system-ui, sans-serif';
+          ctx.fillText(tr(me ? 'Your home' : `${name}'s home`), gx + gw / 2, sy - 2);
+        }
+      }
+      if (!me) {
+      drawFuser(t, 0, true);
+      // their treadmill
+      const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1, pl = Number.isInteger(q.pl) ? clamp(q.pl, 1, PEN_MAX) : 1;
+      drawTreadmill(t, tl);
+      ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
+      ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('+' + fmt(treadIdle(tl)) + '/s', TM.x + TM.w / 2, TM.y - 18);
+      label(`${name}'s TREADMILL  LV ${tl}`, TM.x + TM.w / 2, TM.y - 52, 18);
+      // their incubating eggs
+      const eggs = Array.isArray(q.pe) ? q.pe.slice(0, 24) : [];
+      let ei = 0;
+      for (const e of eggs) {
+        if (!Array.isArray(e) || !RAR[e[0]] || !BIOMES[e[1]]) continue;
+        const col = ei % 8, row = Math.floor(ei / 8); ei++;
+        const x = PEN.x + 46 + col * 50, y = PEN.y + 40 + row * 44, frac = clamp(+e[4] || 0, 0, 10) / 10;
+        ctx.fillStyle = '#A9874C'; ctx.beginPath(); ctx.ellipse(x, y + 12, 22, 9, 0, 0, 7); ctx.fill();
+        drawEgg(x, y, 18 * Math.min(1.4, EGG_SIZES[[0, 1, 2].includes(e[2]) ? e[2] : 0].scale), e[0], MUT[e[3]] ? MUT[e[3]].egg : BIOMES[e[1]].egg, t);
+        ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, 0, 7); ctx.stroke();
+        ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
+      }
+      // their pets walk around like yours
+      const list = (Array.isArray(q.pp) ? q.pp.slice(0, 24) : []).map((pp, n) => {
+        if (!Array.isArray(pp)) return null; const si = spIndex(String(pp[0])); if (si < 0) return null;
+        return { id: p.peer + '|' + n + '|' + pp[0], sp: si, f: [0, 1, 2].includes(pp[1]) ? pp[1] : 0, z: [0, 1, 2].includes(pp[2]) ? pp[2] : 0, mut: MUT[pp[3]] ? pp[3] : undefined };
+      }).filter(Boolean);
+      drawPenAnimals(list, friendSpot, t, 1 / 60, false);
+      label(`${name}'s PEN  ${list.length + ei}/${penSlots(pl)}`, PEN.x + PEN.w / 2, PEN.y - 14, 22, '#FFE066');
+      }
+      ctx.restore();
+    });
   });
+  // the signs on the home next to the Forest
+  const ids = memberIds();
+  if (ids.length > 1 && xs < HOME_W && xe > 0) {
+    const id0 = ids[0], p0 = id0 === myPeerId ? null : partyPeers.find(q2 => q2.peer === id0);
+    label(tr(p0 ? `${friendName(p0)}'s home` : 'Your home'), HOME_W - 140, 60, 20, '#FFE066');
+  }
 }
 function drawLoose(t, xs, xe) {
   for (const e of loose) {
@@ -2384,7 +2409,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -4310,7 +4335,7 @@ function drawWorld(t, dt) {
   if (xs < HOME_W) vis.push('hub');
   if (xe > HOME_W) for (let i = zoneAt(Math.max(xs, HOME_W)); i <= zoneAt(xe); i++) vis.push(i);
   drawPlots(performance.now() / 1000, xs, xe);
-  for (const z of vis) ctx.drawImage(getTile(z), z === 'hub' ? 0 : ZX(z), 0, z === 'hub' ? HOME_W : BW, BH);
+  for (const z of vis) ctx.drawImage(getTile(z), z === 'hub' ? homeOff : ZX(z), 0, z === 'hub' ? HOME_W : BW, BH);
   if (vis.includes('hub')) drawHub(t, dt);
   drawObjs(xs, xe);
   drawLoose(t, xs, xe);
