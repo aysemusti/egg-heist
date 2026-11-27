@@ -1683,7 +1683,7 @@ function partyFriends(dt) {
   if (!party) return out;
   for (const p of partyPeers) {
     const st = friendState(p); if (!st) continue;
-    if (st.z === -1 && st.x < PLOT_W) { const j = sortedFriends().indexOf(p); if (j >= 0) st.x += plotX(j); }
+    if (st.z === -1 && st.x < HOME_W) { const j = sortedFriends().indexOf(p); if (j >= 0) st.x += plotX(j); }
     st.j = Number.isFinite(p.presence && p.presence.j) ? clamp(p.presence.j, 0, 200) : 0;
     let v = partyViews[p.peer];
     if (!v || Math.hypot(v.x - st.x, v.y - st.y) > 900) v = partyViews[p.peer] = { x: st.x, y: st.y, step: 0 };
@@ -2063,7 +2063,7 @@ function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list);
 // Taking an egg tells everyone through your presence, and it disappears for them too.
 let partyDay = 0, takenSet = new Set(), myTaken = [], myDrops = [], dropSeq = 0, knownLoose = new Set(), loose = [];
 let myPeerId = '', hitSeq = 0, swingSeq = 0, myHit = null, seenHit = {}, seenSwing = {}, lastFriends = [], clockT = 0;
-const PLOT_W = 860;
+const PLOT_W = HOME_W + 260;   // a whole home, plus a hedge between homes
 const friendPos = {};
 function friendSpot(p) {
   let s2 = friendPos[p.id];
@@ -2152,9 +2152,25 @@ function drawPlots(t, xs, xe) {
     const q = p.presence || {}, name = friendName(p);
     ctx.save(); ctx.translate(ox, 0);
     // the same ground, path and pen as your home
-    const tile = getTile('hub'), k = tile.width / HOME_W;
-    ctx.drawImage(tile, 0, 0, PLOT_W * k, tile.height, 0, 0, PLOT_W, BH);
-    ctx.fillStyle = '#6B4A2F'; ctx.fillRect(PLOT_W - 5, 0, 5, BH);
+    ctx.drawImage(getTile('hub'), 0, 0, HOME_W, BH);
+    // the hedge between their home and the next one, with a gate where the path goes through
+    const gx = HOME_W, gw = PLOT_W - HOME_W, py = 650;
+    ctx.fillStyle = '#8DC966'; ctx.fillRect(gx, 0, gw, BH);
+    ctx.fillStyle = '#D9B77C'; ctx.fillRect(gx, py - 23, gw, 46); ctx.fillStyle = '#E5C68E'; ctx.fillRect(gx, py - 15, gw, 30);
+    for (let y = 30; y < BH; y += 46) {
+      if (Math.abs(y - py) < 80) continue;
+      ctx.fillStyle = '#2F6E38'; ctx.beginPath(); ctx.arc(gx + gw / 2, y + 4, 30, 0, 7); ctx.fill();
+      ctx.fillStyle = '#3E8A46'; ctx.beginPath(); ctx.arc(gx + gw / 2 - 6, y - 4, 22, 0, 7); ctx.fill();
+    }
+    // a big sign so you know whose home it is
+    for (const sy of [py - 150, py + 150]) {
+      ctx.fillStyle = '#4E3421'; ctx.fillRect(gx + gw / 2 - 4, sy, 8, 46);
+      ctx.fillStyle = '#6B4A2F'; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 56, 12); ctx.fill();
+      ctx.fillStyle = friendColor(p)[0]; roundRect(ctx, gx + gw / 2 - 110, sy - 40, 220, 9, 4); ctx.fill();
+      ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = '22px "Lilita One", system-ui, sans-serif';
+      ctx.fillText(tr(`${name}'s home`), gx + gw / 2, sy - 2);
+    }
+    drawFuser(t, 0, true);
     // their treadmill
     const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1, pl = Number.isInteger(q.pl) ? clamp(q.pl, 1, PEN_MAX) : 1;
     drawTreadmill(t, tl);
@@ -2465,7 +2481,7 @@ const TR_RULES = [
   [/^(\d+)× Mount mutations$/, '$1× Binek mutasyonu'], [/^Gift: (an? |\d+ )Mount mutations?$/, 'Hediye: Binek mutasyonu'], [/^(.+)\. Open your Bag to put (it|them) on a pet\.$/, '$1. Bir hayvana koymak için Çantanı aç.'],
   [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
   [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
-  [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'],
+  [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'], [/^(.+)'s home$/, '$1 evi'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -4137,8 +4153,8 @@ function petSpot(p) {
   if (!s) { s = petPos[p.id] = { x: rand(PEN.x + 40, PEN.x + PEN.w - 40), y: rand(PEN.y + 190, PEN.y + PEN.h - 30), tx: 0, ty: 0, wait: rand(0, 2), fx: 1, hop: rand(0, 6) }; s.tx = s.x; s.ty = s.y; }
   return s;
 }
-function drawFuser(t, dt) {
-  const { x, y } = FUSER, pulse = .5 + .5 * Math.sin(t * 3), boom = fuseFx = Math.max(0, fuseFx - dt);
+function drawFuser(t, dt, other) {
+  const { x, y } = FUSER, pulse = .5 + .5 * Math.sin(t * 3), boom = other ? 0 : (fuseFx = Math.max(0, fuseFx - dt));
   const j = boom > 0 && !reduce ? Math.sin(t * 60) * 3 * boom : 0;
   ctx.save(); ctx.translate(x + j, y);
   ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(0, 34, 80, 16, 0, 0, 7); ctx.fill();
@@ -4153,6 +4169,7 @@ function drawFuser(t, dt) {
   ctx.fillStyle = g; ctx.globalAlpha = .6 + .4 * pulse; ctx.beginPath(); ctx.arc(0, 12, 26 + boom * 20, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   ctx.restore();
   label('FUSE MACHINE', x, y - 66, 18);
+  if (other) return;
   const ready = Object.values(fuseGroups()).some(l => l.length >= 3 && (l[0].f || 0) < FUSE.length - 1);
   if (ready) label('3 ready!', x, y + 66, 15, '#FFE066');
 }
