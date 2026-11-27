@@ -118,6 +118,9 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 
 .runbtn{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));width:96px;height:96px;border-radius:50%;border:0;cursor:pointer;
   background:var(--speed);color:#fff;font-family:var(--display);font-size:26px;box-shadow:0 6px 0 #1F6CBF,0 10px 24px rgba(0,0,0,.25);touch-action:manipulation}
+.runbtn.hitbtn{right:calc(max(18px,env(safe-area-inset-right,0px)) + 106px);background:#8A5A35;box-shadow:0 5px 0 #5A3A22;width:76px;height:76px;font-size:19px}
+.runbtn.jumpbtn{bottom:calc(124px + env(safe-area-inset-bottom,0px));width:66px;height:66px;font-size:16px;background:#3B95F0;box-shadow:0 5px 0 #24539E}
+@media (hover:hover) and (pointer:fine){.runbtn.jumpbtn{display:none}}
 .runbtn small{display:block;font-family:var(--body);font-size:11px;font-weight:700;opacity:.9}
 .runbtn:active{transform:translateY(4px);box-shadow:0 2px 0 #1F6CBF}
 
@@ -219,6 +222,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
   <div class="placebar" id="placeBar" hidden><span id="placeTxt"></span><button class="sell" id="placeDone">Done</button></div>
   <div class="hint" id="hint"></div>
   <button class="runbtn" id="runBtn" hidden>RUN<small>tap fast</small></button>
+  <button class="runbtn hitbtn" id="hitBtn" hidden>HIT<small>or F</small></button>
+  <button class="runbtn jumpbtn" id="jumpBtn">JUMP<small>or Space</small></button>
 
   <div class="modal" id="modal" hidden>
     <div class="sheet" role="dialog" aria-modal="true" aria-label="Egg Heist menu">
@@ -432,7 +437,7 @@ const BIOMES = [
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 // guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
-const speedPx = sp => 160 + 2.2 * Math.min(sp, 280) + 1.1 * Math.max(0, sp - 280);
+const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 300 * Math.log(1 + (sp - 280) / 280);
 // the same numbers are also the smallest speed you need to take eggs in that biome
 BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = b.guard.lv;   // guardians run 50% faster than the first list; you need that same speed to take eggs
   b.guard.speed = Math.round(speedPx(b.guard.lv)); });
@@ -633,7 +638,7 @@ const zones = {};                                       // runtime per biome: ob
 const PEN = { x: 70, y: 110, w: 450, h: 340 };
 const TM = { x: 545, y: 570, w: 210, h: 92 };
 const EXIT = { x: 72, y: BH / 2 };
-const player = { x: 650, y: 420, fx: 1, moving: false, carry: null, armed: true, invuln: 0, step: 0 };
+const player = { x: 650, y: 420, fx: 1, moving: false, carry: null, armed: true, invuln: 0, step: 0, jz: 0, vz: 0, fly: null, swingT: 0, batCd: 0 };
 let biome = null;                  // runtime: { obst, eggs, guards, respawn }
 let parts = [], floaters = [], petPos = {};
 let fuseArmed = true, fuseFx = 0;
@@ -669,7 +674,7 @@ function getZone(i) {
       i, x0, obstL, obst: obstL.map(o => ({ ...o, x: o.x + x0 })), eggs: [], respawn: [],
       guards: B.nests.map(([x, y]) => ({ x: x + x0, y, hx: x + x0, hy: y, tx: x + x0, ty: y, st: 'patrol', fx: -1, alert: 0 })),
     };
-    for (let k = 0; k < 10; k++) spawnEgg(i);
+    for (let k = 0; k < 10; k++) { if (party) spawnSlot(i, k, 0); else spawnEgg(i); }
   }
   return zones[i];
 }
@@ -687,9 +692,9 @@ function changeZone(z) {
   setTimeout(() => { const n = z === 'hub' ? 0 : z + 1; if (n < BIOMES.length) getTile(n); }, 60);
   save();
 }
-function pickRarity() {
+function pickRarity(R = Math.random) {
   const ks = ['C', 'R', 'E', 'L', 'M', 'D'];
-  let r = Math.random() * ks.reduce((s, k) => s + RAR[k].w, 0);
+  let r = R() * ks.reduce((s, k) => s + RAR[k].w, 0);
   for (const k of ks) { if ((r -= RAR[k].w) < 0) return k; }
   return 'C';
 }
@@ -714,18 +719,19 @@ function ensureMythic(list) {
 }
 // Every egg sits inside a guardian's ring, rarer ones closer to the nest.
 // `forced` puts back a specific egg (one a guardian took back from you).
-function spawnEgg(i, forced) {
-  const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(), see = B.guard.seeCarry;
+function spawnEgg(i, forced, R = Math.random, meta = null) {
+  const rnd = (a, b) => a + R() * (b - a);
+  const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(R), see = B.guard.seeCarry;
   for (let t = 0; t < 60; t++) {
-    const [nx, ny] = B.nests[Math.floor(Math.random() * B.nests.length)];
-    const a = rand(0, 6.28), d = r === 'C' ? rand(150, see - 40) : r === 'R' ? rand(100, 220) : r === 'E' ? rand(60, 150) : r === 'L' ? rand(35, 90) : r === 'M' ? rand(14, 45) : rand(0, 18);
+    const [nx, ny] = B.nests[Math.floor(R() * B.nests.length)];
+    const a = rnd(0, 6.28), d = r === 'C' ? rnd(150, see - 40) : r === 'R' ? rnd(100, 220) : r === 'E' ? rnd(60, 150) : r === 'L' ? rnd(35, 90) : r === 'M' ? rnd(14, 45) : rnd(0, 18);
     let x = nx + Math.cos(a) * d, y = ny + Math.sin(a) * d;
     if (x < 40 || x > BW - 40 || y < 40 || y > BH - 40) continue;
     x += zd.x0;
     if (zd.obst.some(o => dist(x, y, o.x, o.y) < o.r + 22)) continue;
     if (t < 45 && zd.eggs.some(e => dist(x, y, e.x, e.y) < 50)) continue;
-    const er = Math.random() * 100, es = forced ? forced.es || 0 : er < EGG_SIZES[2].w ? 2 : er < EGG_SIZES[2].w + EGG_SIZES[1].w ? 1 : 0;
-    zd.eggs.push({ x, y, r, es, b: i, ph: rand(0, 6) });
+    const er = R() * 100, es = forced ? forced.es || 0 : er < EGG_SIZES[2].w ? 2 : er < EGG_SIZES[2].w + EGG_SIZES[1].w ? 1 : 0;
+    zd.eggs.push(Object.assign({ x, y, r, es, b: i, ph: rnd(0, 6) }, meta || {}));
     if (r === 'M' && !forced) announceMythic(i);
     if (r === 'D' && !forced) setTimeout(() => toast(B.guard.m, `A DIVINE egg appeared in the ${B.name}!`, `It sits right on the ${B.guard.name.toLowerCase()}'s nest${G.speed + 1e-6 < B.req ? ` (needs speed ${B.req})` : ''}. The rarest egg there is!`, false, true, 'mythic'), 1200);
     return;
@@ -937,6 +943,7 @@ addEventListener('keydown', ev => {
   if (ev.key.startsWith('Arrow') || ev.key === ' ') ev.preventDefault();
   if ((ev.key === ' ' || ev.key === 'e' || ev.key === 'E') && !ev.repeat) tap();
   if ((ev.key === 'q' || ev.key === 'Q') && !ev.repeat) toggleSlow();
+  if ((ev.key === 'f' || ev.key === 'F') && !ev.repeat) swingBat();
 });
 addEventListener('keyup', ev => { keys[ev.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; joy = null; });
@@ -945,6 +952,8 @@ cv.addEventListener('pointermove', ev => { if (joy && joy.id === ev.pointerId) {
 const endJoy = ev => { if (joy && joy.id === ev.pointerId) joy = null; };
 cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
 $('runBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); tap(); });
+$('hitBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); swingBat(); });
+$('jumpBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); jump(); });
 function inputVec() {
   let x = 0, y = 0;
   if (keys['arrowleft'] || keys['a']) x -= 1; if (keys['arrowright'] || keys['d']) x += 1;
@@ -974,6 +983,9 @@ const sfx = {
   buy: () => { tone(784, .08); tone(1175, .14, 'triangle', .1, 1, .07); },
   portal: () => tone(300, .3, 'sine', .1, 3),
   deny: () => tone(200, .15, 'square', .05, .8),
+  jump: () => tone(420, .12, 'sine', .07, 1.8),
+  swing: () => tone(260, .08, 'sawtooth', .03, 2.2),
+  bonk: () => { tone(180, .12, 'square', .08, .6); tone(900, .06, 'triangle', .06, 1, .03); },
 };
 
 // ================= GAMEPLAY =================
@@ -987,18 +999,54 @@ function setActionBtn(mode) {
   if (mode === 'adopt') b.innerHTML = 'ADOPT<small>or Space</small>';
 }
 function tryGrab() {
-  const e = nearEgg; if (!e || player.carry || !biome) return;
-  const i = biome.eggs.indexOf(e); if (i < 0) return;
-  player.carry = { r: e.r, b: e.b, es: e.es || 0 };
-  biome.eggs.splice(i, 1); biome.respawn.push(3); nearEgg = null;
+  const e = nearEgg; if (!e || player.carry) return;
+  if (e.loose) {
+    const li = loose.indexOf(e); if (li < 0) return;
+    loose.splice(li, 1); markTaken(e.id);
+  } else {
+    if (!biome) return;
+    const i = biome.eggs.indexOf(e); if (i < 0) return;
+    biome.eggs.splice(i, 1);
+    if (e.id) { markTaken(e.id); slotRespawn(e); } else biome.respawn.push(3);
+  }
+  player.carry = { r: e.r, b: e.b, es: e.es || 0 }; nearEgg = null;
   sfx.grab(); burst(e.x, e.y, RAR[e.r].color, 12);
   floatText(e.x, e.y - 30, (e.es ? EGG_SIZES[e.es].name + ' ' : '') + RAR[e.r].name + ' egg!', RAR[e.r].color);
   const loss = carryLoss(player.carry); if (loss) floatText(player.x, player.y - 90, '-' + fmt(loss) + ' speed', '#FF9A8A', 1.4);
 }
 function tap() {
   if (modalOpen) return;
-  if (scene !== 'hub') { if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); return; }
-  if (nearPet) adoptPet();
+  if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); else jump();
+}
+// Space jumps when there is no egg or pet to pick up
+function jump() {
+  if (player.jz > 0 || player.fly) return;
+  player.vz = 560; sfx.jump();
+}
+// knocked away by a bat or a guardian: you drop your egg and fly a few metres
+function knock(dir, title, sub, icon) {
+  if (player.carry) { dropEgg(player.carry, player.x, player.y); player.carry = null; }
+  player.fly = { vx: (dir || 1) * 760, t: .42 }; player.vz = 430; player.invuln = 1.2;
+  sfx.caught(); if (!reduce) shake = 8;
+  burst(player.x, player.y - 30, '#FFFFFF', 14);
+  if (title) toast(icon || '💥', title, sub || '', true);
+  save();
+}
+function swingBat() {
+  if (modalOpen || !party || player.batCd > 0) return;
+  player.batCd = .55; player.swingT = .28; swingSeq++; sfx.swing();
+  // hit the closest friend in front of you
+  let best = null, bd = 1e9;
+  for (const fr of lastFriends) {
+    const dx = fr.v.x - player.x, dy = fr.v.y - player.y;
+    if (Math.abs(dy) > 60 || Math.abs(dx) > 95 || (dx * player.fx < -20)) continue;
+    const d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = fr; }
+  }
+  if (best) {
+    hitSeq++; myHit = [best.p.peer, hitSeq, Math.sign(best.v.x - player.x) || player.fx];
+    floatText(best.v.x, best.v.y - 80, 'BONK!', '#FFE066', 1); burst(best.v.x, best.v.y - 30, '#FFE066', 10); sfx.bonk();
+  }
+  sendPresence(true);
 }
 
 function update(dt) {
@@ -1026,13 +1074,21 @@ function update(dt) {
   if (modalOpen) return;
 
   // movement
-  const [ix, iy] = inputVec();
+  let [ix, iy] = inputVec();
+  player.batCd = Math.max(0, player.batCd - dt); player.swingT = Math.max(0, player.swingT - dt);
+  if (player.vz || player.jz > 0) { player.vz -= 1700 * dt; player.jz = Math.max(0, player.jz + player.vz * dt); if (player.jz === 0) player.vz = 0; }
+  if (player.fly) {
+    ix = iy = 0;
+    const n = Math.max(1, Math.ceil(Math.abs(player.fly.vx) * dt / 14));
+    for (let k = 0; k < n; k++) { player.x += player.fly.vx * dt / n; pushOut(player, 16); }
+    player.fly.vx *= Math.pow(.05, dt); player.fly.t -= dt; if (player.fly.t <= 0) player.fly = null;
+  }
   player.moving = ix !== 0 || iy !== 0;
   // carrying an egg takes speed away: its rarity and its size add together
   const rq = rideP(), v = (G.slow ? 200 : speedPx(Math.max(0, Math.min(G.speed, MOVE_SPEED_CAP) - carryLoss(player.carry)))) * (rq && !G.slow ? RIDE_MULT[SPECIES[rq.sp].r] : 1);
   if (player.moving && G.cos.trail !== 'none') { trailT -= dt; if (trailT <= 0) { trailT = .045; spawnTrail(player.x, player.y, G.cos.trail, performance.now() / 1000); } }
   if (player.moving) { const n = Math.max(1, Math.ceil(v * dt / 14)); for (let k = 0; k < n; k++) { player.x += ix * v * dt / n; player.y += iy * v * dt / n; pushOut(player, 16); } if (Math.abs(ix) > .1) player.fx = Math.sign(ix); player.step += dt * (6 + v / 40); }
-  player.x = clamp(player.x, 20, worldW - 20); player.y = clamp(player.y, 30, worldH - 20);
+  player.x = clamp(player.x, plotMinX() + 20, worldW - 20); player.y = clamp(player.y, 30, worldH - 20);
   player.invuln = Math.max(0, player.invuln - dt);
 
   // each biome starts with a gate that needs enough speed
@@ -1054,7 +1110,8 @@ function update(dt) {
 let treadFT = 0;
 function updateHub(dt) {
   onTread = player.x > TM.x && player.x < TM.x + TM.w && player.y > TM.y && player.y < TM.y + TM.h;
-  setActionBtn(nearPet ? 'adopt' : null); nearEgg = null;
+  nearEgg = null; if (!player.carry) { let bl = 1e9; for (const e of loose) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < bl) { bl = d; nearEgg = e; } } }
+  setActionBtn(nearEgg ? 'grab' : nearPet ? 'adopt' : null);
   if (onTread) {
     if (!player.moving) { player.x += (TM.x + TM.w / 2 - player.x) * Math.min(1, dt * 8); player.y += (TM.y + TM.h / 2 - player.y) * Math.min(1, dt * 8); player.step += dt * (8 + tapHeat * 2); player.fx = 1; }
     G.speed += treadIdle(G.tL) * dt;
@@ -1203,7 +1260,7 @@ function updateBiome(dt) {
   // eggs: the closest one in reach can be picked up with Space or the GRAB button
   nearEgg = null; let best = 1e9;
   const weak = G.speed + 1e-6 < B.req;
-  if (!player.carry) for (const e of biome.eggs) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < best) { best = d; nearEgg = e; } }
+  if (!player.carry) for (const e of biome.eggs.concat(loose)) { const d = dist(player.x, player.y, e.x, e.y); if (d < 46 + 8 * (e.es || 0) && d < best) { best = d; nearEgg = e; } }
   if (weak && nearEgg) {
     if ((toastGate['egg' + scene] || 0) <= performance.now()) sfx.deny();
     gateToast('egg' + scene, '\ud83d\udd12', `You need speed ${B.req} to take eggs here`, `You have ${fmt(G.speed)}. Run on the treadmill to build it up`, true);
@@ -1217,18 +1274,16 @@ function updateBiome(dt) {
 }
 
 function caught(B, catcher) {
+  // the guardian hits you: you drop the egg and fly a few metres, and it walks back to its nest
   const lost = player.carry;
-  // the guardian takes its egg back and carries it home to the nest
-  if (lost && catcher) catcher.carry = { r: lost.r, es: lost.es || 0 };
-  player.carry = null; player.x = (scene === 'hub' ? HOME_W - 160 : ZX(scene) + 120); player.y = BH / 2; player.invuln = 2; player.armed = false;
   for (const k in zones) for (const q of zones[k].guards) if (q.st === 'chase' || q.st === 'wait') q.st = 'return';
-  sfx.caught(); if (!reduce) shake = 10;
-  toast(B.guard.m, `The ${B.guard.name.toLowerCase()} caught you!`, lost ? `It took the ${RAR[lost.r].name.toLowerCase()} egg back to its nest` : 'Back to the start', true);
-  snapCam();
+  const dir = Math.sign(player.x - (catcher ? catcher.x : player.x + 1)) || -1;
+  knock(dir, `The ${B.guard.name.toLowerCase()} hit you!`, lost ? `You dropped the ${RAR[lost.r].name.toLowerCase()} egg. Grab it again if you dare!` : 'Ouch!', B.guard.m);
 }
 
 // guardians in biomes you have left walk back to their nests
 function startNight() {
+  loose = [];
   for (const k in zones) { const zd = zones[k]; zd.eggs = []; zd.respawn = []; zd.guards.forEach(g => { g.x = g.hx; g.y = g.hy; g.tx = g.hx; g.ty = g.hy; g.st = 'patrol'; g.carry = null; }); }
   nearEgg = null;
   if (scene !== 'hub') {
@@ -1239,9 +1294,10 @@ function startNight() {
 }
 function startDay() {
   mythicBatch = [];
-  for (const k in zones) for (let n = 0; n < 10; n++) spawnEgg(+k);
+  if (party) { partyDay++; takenSet = new Set(); myTaken = []; regenPartyEggs(); }
+  else for (const k in zones) for (let n = 0; n < 10; n++) spawnEgg(+k);
   const found = mythicBatch; mythicBatch = null;
-  ensureMythic(found);
+  if (!party) ensureMythic(found);
   dawnT = 2;
   toast('☀️', 'Good morning!', 'Fresh eggs are waiting in every biome.');
   toastMythic(found);
@@ -1382,6 +1438,7 @@ function syncHud() {
     if (chased) h = 'A guardian is chasing you! Run all the way home.';
     else if (player.carry) h = `Got a ${RAR[player.carry.r].name.toLowerCase()} egg. Run left, back home to your pen.`;
     else if (nearEgg) h = 'Press Space or tap GRAB to pick up the egg.';
+    else if (party && lastFriends.some(fr => Math.abs(fr.v.x - player.x) < 400)) h = 'Press F or tap HIT to swing your bat. A friend you hit drops their egg!';
     else if (G.speed + 1e-6 < B.req) h = `You can look around, but you need speed ${B.req} to take eggs in the ${B.name}.`;
     else h = `Walk up to an egg. The ${B.guard.name.toLowerCase()} only chases you once you take one of its eggs, and the rarest sit by its nest.`;
   }
@@ -1561,6 +1618,8 @@ async function joinParty(raw, how) {
     window.__partyJoinHow = how;   // lets the website version tell 'make' from 'join'
     const rm = await r.join('party-' + code.toLowerCase());
     party = rm; partyCode = code; partyMsg = ''; partyPeers = []; lastPres = '';
+    myPeerId = window.__partyMe || ''; partyDay = 0; takenSet = new Set(); myTaken = []; myDrops = []; myHit = null; seenHit = {}; seenSwing = {}; knownLoose = new Set();
+    regenPartyEggs();
     try { localStorage.setItem(PARTY_KEY, code); } catch (e) {}
     rm.onPeers(onPartyPeers, () => { if (party === rm) { party = null; partyPeers = []; partyMsg = 'The party connection ended. Join again with the same code.'; syncParty(); renderTab(); } });
     if (!meUser) { try { meUser = await window.claude.use('user'); } catch (e) {} }
@@ -1579,13 +1638,16 @@ async function joinParty(raw, how) {
   syncParty(); renderTab();
 }
 async function leaveParty(quiet) {
+  const hadParty = !!party;
   const rm = party; party = null; partyPeers = []; partyViews = {}; hatchSeen = {}; partyCode = '';
   try { localStorage.removeItem(PARTY_KEY); } catch (e) {}
   if (rm) { try { await rm.leave(); } catch (e) {} }
+  if (hadParty) randomEggsAgain();
   syncParty();
   if (!quiet) { toast('👋', 'You left the party', 'You can make or join another one any time.'); renderTab(); }
 }
 function onPartyPeers(ch) {
+  const meP = ch.peers.find(p => p.isMe); myPeerId = meP ? meP.peer : (window.__partyMe || myPeerId);
   partyPeers = ch.peers.filter(p => !p.isMe && p.kind === 'viewer');
   const ids = partyPeers.map(p => p.by).filter(Boolean);
   if (meUser && ids.length) meUser.profiles(ids).then(ps => { for (const id of ids) partyNames[id] = (ps[id] && ps[id].name) || ''; partyDirty = true; }).catch(() => {});
@@ -1600,13 +1662,16 @@ function onPartyPeers(ch) {
       hatchSeen[p.peer] = h;
     }
   }
-  partyDirty = true; syncParty();
+  partyDirty = true; syncParty(); readFriends(); syncPartyClock();
 }
 function sendPresence(force) {
   if (!party) return;
   const pres = { x: Math.round(player.x), y: Math.round(player.y), f: player.fx < 0 ? -1 : 1, m: player.moving ? 1 : 0,
     z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null,
-    lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone], rd: rideP() ? [rideP().sid, rideP().f || 0, rideP().mut || '', rideP().z || 0] : null };
+    lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone], rd: rideP() ? [rideP().sid, rideP().f || 0, rideP().mut || '', rideP().z || 0] : null,
+    j: Math.round(player.jz), tk: myTaken.slice(-30), dr: myDrops.slice(-6), hb: myHit, sw: swingSeq,
+    ck: [Math.floor(G.clock), partyDay], tl: G.tL, pe: G.pen.filter(q => q.egg).length,
+    pp: G.pen.filter(q => !q.egg).slice(0, 24).map(q => [q.sid, q.f || 0, q.z || 0, q.mut || '']) };
   const key = JSON.stringify(pres);
   if (!force && key === lastPres) return;
   lastPres = key; party.presence(pres).catch(() => {});
@@ -1617,12 +1682,16 @@ function partyFriends(dt) {
   if (!party) return out;
   for (const p of partyPeers) {
     const st = friendState(p); if (!st) continue;
+    if (st.z === -1 && st.x < PLOT_W) { const j = sortedFriends().indexOf(p); if (j >= 0) st.x += plotX(j); }
+    st.j = Number.isFinite(p.presence && p.presence.j) ? clamp(p.presence.j, 0, 200) : 0;
     let v = partyViews[p.peer];
     if (!v || Math.hypot(v.x - st.x, v.y - st.y) > 900) v = partyViews[p.peer] = { x: st.x, y: st.y, step: 0 };
     const k = Math.min(1, dt * 12); v.x += (st.x - v.x) * k; v.y += (st.y - v.y) * k;
     if (st.m) v.step += dt * 12;
+    v.swingT = Math.max(0, (v.swingT || 0) - dt);
     out.push({ p, st, v });
   }
+  lastFriends = out;
   return out;
 }
 function drawFriend(fr, t) {
@@ -1634,8 +1703,10 @@ function drawFriend(fr, t) {
     label(friendName(fr.p), fr.v.x, fr.v.y - lift - (fr.st.c ? 100 : 68), 15, '#FFE066');
     return;
   }
-  drawKid(fr.v.x, fr.v.y, fr.st.f, fr.st.m, fr.v.step, fr.st.c, friendLook(fr.p), t, 0);
-  label(friendName(fr.p), fr.v.x, fr.v.y - (fr.st.c ? 100 : 68), 15, '#FFE066');
+  const jz = fr.st.j || 0;
+  if (jz) { ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(fr.v.x, fr.v.y + 4, 14, 5, 0, 0, 7); ctx.fill(); }
+  drawKid(fr.v.x, fr.v.y - jz, fr.st.f, fr.st.m, fr.v.step, fr.st.c, Object.assign(friendLook(fr.p), { bat: party ? (fr.v.swingT ? 1 - fr.v.swingT / .28 : -1) : undefined, ns: jz ? 1 : 0 }), t, 0);
+  label(friendName(fr.p), fr.v.x, fr.v.y - jz - (fr.st.c ? 100 : 68), 15, '#FFE066');
 }
 // friends off screen get an arrow at the edge
 function drawFriendArrows() {
@@ -1657,6 +1728,7 @@ function syncParty() {
   const c = $('partyCnt'); if (!c) return;
   c.hidden = !party; c.textContent = party ? String(partyPeers.length + 1) : '';
   $('partyBtn').classList.toggle('on', !!party);
+  $('hitBtn').hidden = !party;
 }
 function partyHTML() {
   if (!party) return `
@@ -1983,6 +2055,126 @@ async function commitObjs(list) {
   const r = await getRoom(); if (r) { try { await r.emit('objs', { list: worldObjs }); } catch (e) {} }
 }
 function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list); }
+
+// ================= SHARED PARTY WORLD =================
+// In a party everyone sees the same eggs: each biome has 10 egg spots, and what grows in a spot comes from the
+// party code, the day and how many times that spot was emptied, so every player's game makes the same egg.
+// Taking an egg tells everyone through your presence, and it disappears for them too.
+let partyDay = 0, takenSet = new Set(), myTaken = [], myDrops = [], dropSeq = 0, knownLoose = new Set(), loose = [];
+let myPeerId = '', hitSeq = 0, swingSeq = 0, myHit = null, seenHit = {}, seenSwing = {}, lastFriends = [], clockT = 0;
+const PLOT_W = 860;
+function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 2147483646 + 1; }
+const slotKey = (z, slot, gen) => `${partyDay}.${z}.${slot}.${gen}`;
+function spawnSlot(z, slot, gen) {
+  if (!party || isNight() || !zones[z]) return;
+  let g = gen; while (takenSet.has(slotKey(z, slot, g)) && g < gen + 60) g++;
+  const id = slotKey(z, slot, g);
+  if (zones[z].eggs.some(e => e.id === id)) return;
+  spawnEgg(z, null, seeded(hashStr(partyCode + ':' + id)), { id, slot, gen: g, day: partyDay });
+}
+function slotRespawn(e) { const day = e.day; setTimeout(() => { if (party && partyDay === day) spawnSlot(e.b, e.slot, e.gen + 1); }, 3000); }
+function regenPartyEggs() {
+  for (const k in zones) { zones[k].eggs = []; zones[k].respawn = []; }
+  loose = []; nearEgg = null;
+  if (party && !isNight()) for (const k in zones) for (let s2 = 0; s2 < 10; s2++) spawnSlot(+k, s2, 0);
+}
+function randomEggsAgain() {
+  for (const k in zones) { zones[k].eggs = []; zones[k].respawn = []; if (!isNight()) for (let n = 0; n < 10; n++) spawnEgg(+k); }
+  loose = []; nearEgg = null;
+}
+function markTaken(id) {
+  if (!id) return; takenSet.add(id);
+  if (party) { myTaken.push(id); if (myTaken.length > 30) myTaken.shift(); sendPresence(true); }
+}
+function dropEgg(c, x, y) {
+  const id = (myPeerId || 'me') + ':' + (++dropSeq) + ':' + Date.now().toString(36);
+  const e = { id, x: Math.round(x), y: Math.round(clamp(y, 40, BH - 40)), r: c.r, b: c.b, es: c.es || 0, ph: 0, loose: true };
+  loose.push(e); knownLoose.add(id);
+  if (party) { myDrops.push([id, e.x, e.y, e.r, e.b, e.es]); if (myDrops.length > 6) myDrops.shift(); }
+}
+// friends' pens and treadmills are to the left of your home, one plot each
+const sortedFriends = () => partyPeers.slice().sort((a, b) => a.peer < b.peer ? -1 : 1);
+const plotMinX = () => party ? -sortedFriends().length * PLOT_W : 0;
+const plotX = j => -(j + 1) * PLOT_W;
+function readFriends() {
+  if (!party) return;
+  for (const p of partyPeers) {
+    const q = p.presence || {};
+    // eggs they took
+    if (Array.isArray(q.tk)) for (const id of q.tk.slice(-30)) {
+      if (typeof id !== 'string' || id.length > 60 || takenSet.has(id)) continue;
+      takenSet.add(id);
+      for (const k in zones) { const zd = zones[k], i = zd.eggs.findIndex(e => e.id === id); if (i >= 0) { const e = zd.eggs[i]; zd.eggs.splice(i, 1); if (nearEgg === e) nearEgg = null; slotRespawn(e); } }
+      const li = loose.findIndex(e => e.id === id); if (li >= 0) { if (nearEgg === loose[li]) nearEgg = null; loose.splice(li, 1); }
+    }
+    // eggs they dropped
+    if (Array.isArray(q.dr)) for (const d of q.dr.slice(-6)) {
+      if (!Array.isArray(d) || typeof d[0] !== 'string' || d[0].length > 60 || knownLoose.has(d[0]) || takenSet.has(d[0])) continue;
+      const x = +d[1], y = +d[2];
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !RAR[d[3]] || !BIOMES[d[4]] || ![0, 1, 2].includes(d[5])) continue;
+      knownLoose.add(d[0]); if (!isNight()) loose.push({ id: d[0], x: clamp(x, plotMinX(), WORLD_W), y: clamp(y, 40, BH - 40), r: d[3], b: d[4], es: d[5], ph: 0, loose: true });
+    }
+    // a friend hit you with their bat
+    if (Array.isArray(q.hb) && q.hb[0] === myPeerId && myPeerId) {
+      if (seenHit[p.peer] === undefined) seenHit[p.peer] = q.hb[1];
+      else if (q.hb[1] !== seenHit[p.peer]) { seenHit[p.peer] = q.hb[1]; knock(q.hb[2] === -1 ? -1 : 1, `${friendName(p)} hit you with a bat!`, player.carry ? 'You dropped your egg!' : 'Bonk!', '🏏'); }
+    } else if (seenHit[p.peer] === undefined) seenHit[p.peer] = null;
+    // they swung their bat
+    if (Number.isInteger(q.sw) && q.sw !== seenSwing[p.peer]) { if (seenSwing[p.peer] !== undefined && partyViews[p.peer]) partyViews[p.peer].swingT = .28; seenSwing[p.peer] = q.sw; }
+  }
+}
+// everyone in a party shares one clock (one player, the same for everyone, keeps it)
+function leaderId() { const ids = [myPeerId, ...partyPeers.map(p => p.peer)].filter(Boolean).sort(); return ids[0] || ''; }
+function syncPartyClock() {
+  if (!party || !myPeerId) return;
+  const L = leaderId(); if (L === myPeerId) return;
+  const lp = partyPeers.find(p => p.peer === L), ck = lp && lp.presence && lp.presence.ck;
+  if (!Array.isArray(ck) || !Number.isFinite(ck[0]) || !Number.isInteger(ck[1]) || ck[0] < 0 || ck[0] >= DAY + NIGHT || ck[1] < 0) return;
+  if (ck[1] !== partyDay) {
+    partyDay = ck[1]; takenSet = new Set(); myTaken = []; G.clock = ck[0] + .3;
+    if (isNight()) { for (const k in zones) { zones[k].eggs = []; zones[k].respawn = []; } loose = []; } else regenPartyEggs();
+  } else if (Math.abs(G.clock - ck[0]) > 2.5) {
+    const was = isNight(); G.clock = ck[0] + .3; const now = isNight();
+    if (!was && now) startNight(); else if (was && !now) regenPartyEggs();
+  }
+}
+function drawPlots(t, xs, xe) {
+  if (!party || xs > 0) return;
+  sortedFriends().forEach((p, j) => {
+    const ox = plotX(j); if (ox + PLOT_W < xs || ox > xe) return;
+    const q = p.presence || {}, name = friendName(p);
+    ctx.save(); ctx.translate(ox, 0);
+    ctx.fillStyle = j % 2 ? '#78B653' : '#82BE5C'; ctx.fillRect(0, 0, PLOT_W, BH);
+    ctx.fillStyle = '#6B4A2F'; ctx.fillRect(PLOT_W - 6, 0, 6, BH);
+    // their pen
+    ctx.fillStyle = '#C9A766'; roundRect(ctx, PEN.x, PEN.y, PEN.w, PEN.h, 18); ctx.fill();
+    ctx.strokeStyle = '#7A5235'; ctx.lineWidth = 6; roundRect(ctx, PEN.x, PEN.y, PEN.w, PEN.h, 18); ctx.stroke();
+    const pets = Array.isArray(q.pp) ? q.pp.slice(0, 24) : [];
+    pets.forEach((pp, k) => {
+      if (!Array.isArray(pp)) return; const i = spIndex(String(pp[0])); if (i < 0) return;
+      const sp = SPECIES[i], f = [0, 1, 2].includes(pp[1]) ? pp[1] : 0, z = [0, 1, 2].includes(pp[2]) ? pp[2] : 0, mut = MUT[pp[3]] ? pp[3] : null;
+      const col = k % 6, row = Math.floor(k / 6), x = PEN.x + 50 + col * 70, y = PEN.y + 80 + row * 72;
+      drawModel(sp.id, x, y + 20 - Math.abs(Math.sin(t * 3 + k)) * 4, Math.min(80, PSIZE[sp.r] * SIZES[z].scale * .85), Math.sin(t * .5 + k) > 0 ? 1 : -1, null, f, 0, 1, 1, mut);
+    });
+    if (!pets.length) label('(no pets yet)', PEN.x + PEN.w / 2, PEN.y + PEN.h / 2, 16, '#F3EAD8');
+    label(`${name}'s pen  ${pets.length} pets${q.pe ? ' · ' + q.pe + ' eggs' : ''}`, PEN.x + PEN.w / 2, PEN.y - 14, 20, '#FFE066');
+    // their treadmill
+    const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1;
+    drawTreadmill(t, tl);
+    ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
+    ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('+' + fmt(treadIdle(tl)) + '/s', TM.x + TM.w / 2, TM.y - 18);
+    label(`${name}'s TREADMILL  LV ${tl}`, TM.x + TM.w / 2, TM.y - 52, 16);
+    ctx.restore();
+  });
+}
+function drawLoose(t, xs, xe) {
+  for (const e of loose) {
+    if (e.x < xs - 60 || e.x > xe + 60) continue; e.ph += .016;
+    drawEgg(e.x, e.y + Math.sin(e.ph * 4) * 2, 18 * EGG_SIZES[e.es || 0].scale, e.r, BIOMES[e.b].egg, e.ph);
+    if (nearEgg === e) drawGrabPrompt(e, t);
+  }
+}
 // ================= PLACED GUARDIANS AND PETS =================
 let worldPets = [], nearPet = null, placing = null, placeSeq = 0;
 function drawWorldPet(wp, t) {
@@ -2160,6 +2352,8 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)',
+  'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
   'Admin panel': 'Yönetici paneli', 'Send gifts to': 'Hediyeleri gönder', 'Everyone': 'Herkes', 'Just me': 'Sadece ben', 'Money': 'Para', 'Amount': 'Miktar', 'Give': 'Ver',
@@ -2253,6 +2447,9 @@ const TR_RULES = [
   [/^Tap Pick a spot, then tap the map as many times as you like\. .* (\d+) placed\.$/, 'Yer seç\'e dokun, sonra haritaya istediğin kadar dokun. Nesneler herkes için kalır, oyun kapansa bile. $1 tane yerleştirildi.'],
   [/^You can place up to (\d+)\. Erase some first\.$/, 'En fazla $1 tane yerleştirebilirsin. Önce birkaçını sil.'],
   [/^(\d+)× Mount mutations$/, '$1× Binek mutasyonu'], [/^Gift: (an? |\d+ )Mount mutations?$/, 'Hediye: Binek mutasyonu'], [/^(.+)\. Open your Bag to put (it|them) on a pet\.$/, '$1. Bir hayvana koymak için Çantanı aç.'],
+  [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
+  [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
+  [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -3829,6 +4026,13 @@ function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
   c.beginPath(); c.moveTo(-11, -26); c.lineTo(-15, -16 - (carry ? 18 : leg)); c.moveTo(11, -26); c.lineTo(15, -16 - (carry ? 18 : -leg)); c.stroke();
   c.fillStyle = tone; c.beginPath(); c.arc(0, -42, 12, 0, 7); c.fill();
   drawHat(c, L.hat || 'cap', L.capColor);
+  if (L.bat !== undefined) {
+    c.save(); c.translate(13, -22); c.rotate(L.bat < 0 ? .5 : -1.9 + L.bat * 3.4);
+    c.fillStyle = '#B07A45'; c.strokeStyle = '#5A3A22'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(-1.6, 0); c.lineTo(-3.6, -30); c.quadraticCurveTo(0, -35, 3.6, -30); c.lineTo(1.6, 0); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#2B2219'; c.fillRect(-2, -2, 4, 5);
+    c.restore();
+  }
   c.fillStyle = '#1E2A1B'; c.beginPath(); c.arc(4, -40, 1.8, 0, 7); c.arc(-3, -40, 1.8, 0, 7); c.fill();
   c.restore();
   if (carry && c === ctx) drawEgg(x, y - 66 - bob - 6 * (carry.es || 0), 20 * EGG_SIZES[carry.es || 0].scale, carry.r, BIOMES[carry.b].egg, t);
@@ -3836,7 +4040,9 @@ function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
 function drawPlayer(t) {
   const rq = rideP(), mv = player.moving || onTread;
   if (rq) { const lift = drawMount(rq, player.x, player.y, player.fx, mv, player.step, t); drawKid(player.x, player.y - lift, player.fx, false, 0, player.carry, Object.assign(myLook(), { ns: 1 }), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0); return; }
-  drawKid(player.x, player.y, player.fx, player.moving || onTread, player.step, player.carry, myLook(), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0);
+  const jz = player.jz;
+  if (jz) { ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(player.x, player.y + 4, 14, 5, 0, 0, 7); ctx.fill(); }
+  drawKid(player.x, player.y - jz, player.fx, (player.moving || onTread) && !jz, player.step, player.carry, Object.assign(myLook(), { bat: party ? (player.swingT ? 1 - player.swingT / .28 : -1) : undefined, ns: jz ? 1 : 0 }), t, player.invuln > 0 && Math.floor(t * 12) % 2 ? .45 : 0);
 }
 
 function drawPortal(x, y, color, label, sub, locked, t) {
@@ -3894,8 +4100,8 @@ const TREAD_SKINS = [null,
   ['#E8F6FF', '#1A2A3A', '#BFE6FF', 'diamond'], ['#FFB13B', '#3A1A00', '#FFE066', 'sun'], ['#C8C8F0', '#10102A', '#8A8AD8', 'moon'], ['#3A2A7A', '#0A0820', '#6A5AC8', 'galaxy'],
   ['rainbow', '#F4F0FF', 'rainbow', 'prism'], ['#FFD23F', '#2A1A00', 'rainbow', 'legend'],
 ];
-function drawTreadmill(t) {
-  const L = clamp(G.tL, 1, TREAD_MAX), [fr, belt, st, fx] = TREAD_SKINS[L], hue = (t * 90) % 360;
+function drawTreadmill(t, Lv) {
+  const L = clamp(Lv || G.tL, 1, TREAD_MAX), [fr, belt, st, fx] = TREAD_SKINS[L], hue = (t * 90) % 360;
   const col = c => c === 'rainbow' ? `hsl(${hue},85%,60%)` : c;
   ctx.save();
   if (L >= 20) { ctx.shadowColor = col(fr === 'rainbow' ? 'rainbow' : st === 'rainbow' ? 'rainbow' : fr); ctx.shadowBlur = 14 + Math.sin(t * 3) * 5; }
@@ -4067,9 +4273,11 @@ function drawWorld(t, dt) {
   const xs = camX, xe = camX + W / Z, vis = [];
   if (xs < HOME_W) vis.push('hub');
   if (xe > HOME_W) for (let i = zoneAt(Math.max(xs, HOME_W)); i <= zoneAt(xe); i++) vis.push(i);
+  drawPlots(performance.now() / 1000, xs, xe);
   for (const z of vis) ctx.drawImage(getTile(z), z === 'hub' ? 0 : ZX(z), 0, z === 'hub' ? HOME_W : BW, BH);
   if (vis.includes('hub')) drawHub(t, dt);
   drawObjs(xs, xe);
+  drawLoose(t, xs, xe);
   const ents = [{ y: player.y, p: true }];
   for (const z of vis) if (z !== 'hub') {
     const zd = getZone(z), B = BIOMES[z];
@@ -4107,6 +4315,7 @@ function frame(now) {
   update(dt);
   hudT += dt; if (hudT > .1) { hudT = 0; syncHud(); }
   presT += dt; if (presT > .066) { presT = 0; sendPresence(false); }
+  clockT += dt; if (clockT > .5) { clockT = 0; if (party) { readFriends(); syncPartyClock(); } }
   saveT += dt; if (saveT > 4) { saveT = 0; save(); }
 
   // while a menu covers the screen, redraw the world only 4 times a second (the game keeps running)
@@ -4137,7 +4346,7 @@ function frame(now) {
 }
 function camTarget() {
   const vw = W / Z, vh = H / Z;
-  const tx = worldW <= vw ? (worldW - vw) / 2 : clamp(player.x - vw / 2, 0, worldW - vw);
+  const mx = plotMinX(), tx = worldW - mx <= vw ? mx + (worldW - mx - vw) / 2 : clamp(player.x - vw / 2, mx, worldW - vw);
   const top = -64 / Z, vh2 = vh - 64 / Z;
   const ty = worldH <= vh2 ? top + (worldH - vh2) / 2 : clamp(player.y - 30 - vh / 2, top, worldH - vh);
   return [tx, ty];
