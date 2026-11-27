@@ -434,7 +434,8 @@ const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
 const speedPx = sp => 160 + 2.2 * Math.min(sp, 280) + 1.1 * Math.max(0, sp - 280);
 // the same numbers are also the smallest speed you need to take eggs in that biome
-BIOMES.forEach((b, i) => { b.req = GUARD_SPEED[i] || 0; b.guard.lv = GUARD_SPEED[i] || 0; b.guard.speed = Math.round(speedPx(b.guard.lv)); });
+BIOMES.forEach((b, i) => { b.req = GUARD_SPEED[i] || 0; b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5);   // guardians run 50% faster than the speed you need
+  b.guard.speed = Math.round(speedPx(b.guard.lv)); });
 BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
 const SPECIES = [
   ['bunny', 'Bunny', '🐰', 0, 'C'], ['squirrel', 'Squirrel', '🐿️', 0, 'C'], ['fox', 'Fox', '🦊', 0, 'R'], ['owl', 'Owl', '🦉', 0, 'R'], ['deer', 'Deer', '🦌', 0, 'E'], ['rooster', 'Golden Rooster', '🐓', 0, 'L'],
@@ -476,9 +477,9 @@ const spIndex = id => SPECIES.findIndex(s => s.id === id);
 // upgrades
 const TREAD_MAX = 30, PEN_MAX = 22;
 // speed you gain every second while standing on the treadmill (no limit on how high it goes)
-const TREAD_GAIN = [0, 1, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 29, 32, 36, 40, 44, 48, 53, 58, 64, 70, 77, 84, 92, 100, 110, 120];
+const TREAD_GAIN = [0, 1, 5, 10, 15, 20, 30, 40, 50, 65, 80, 100, 120, 145, 170, 200, 240, 280, 330, 380, 450, 520, 600, 700, 800, 950, 1100, 1300, 1500, 1750, 2000];
 const treadIdle = L => TREAD_GAIN[L] || 1;
-const treadCost = L => (L <= 1 ? 2.5 : 15) * [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
+const treadCost = L => (L <= 1 ? 2.5 : 100) * [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
   500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
 // how running moves you: more speed is faster, but it levels off very high up
 const MOVE_SPEED_CAP = 100000;
