@@ -1072,7 +1072,7 @@ function update(dt) {
   G.money += rate * dt;
   // day and night
   const prevClock = G.clock; G.clock += dt;
-  for (const w of [30, 10]) if (scene !== 'hub' && prevClock < DAY - w && G.clock >= DAY - w) toast('🌙', `Night falls in ${w} seconds`, 'Head home before dark. The eggs reset at night.', true);
+  for (const w of [30, 10]) if (scene !== 'hub' && prevClock < DAY - w && G.clock >= DAY - w) toast('🌙', `Night falls in ${w} seconds`, 'Head home and put your egg in the pen before dark. Eggs you carry disappear at night.', true);
   if (prevClock < DAY && G.clock >= DAY) startNight();
   if (G.clock >= DAY + NIGHT) { G.clock -= DAY + NIGHT; startDay(); }
   incomeTick += dt;
@@ -1299,10 +1299,15 @@ function startNight() {
   loose = [];
   for (const k in zones) { const zd = zones[k]; zd.eggs = []; zd.respawn = []; zd.guards.forEach(g => { g.x = g.hx; g.y = g.hy; g.tx = g.hx; g.ty = g.hy; g.st = 'patrol'; g.carry = null; }); }
   nearEgg = null;
+  // an egg you are still carrying when night falls disappears
+  const lost = player.carry; player.carry = null;
+  if (lost) { burst(player.x, player.y - 66, '#BFD4FF', 16); floatText(player.x, player.y - 90, 'Poof!', '#BFD4FF', 1.4); }
+  const why = lost ? `Your ${RAR[lost.r].name.toLowerCase()} egg disappeared in the dark. ` : '';
   if (scene !== 'hub') {
     player.x = homeOff + HOME_W - 160; player.y = 650; player.invuln = 0; scene = 'hub'; biome = null; $('where').textContent = 'Home'; snapCam();
-    toast('🌙', 'Night fell, so you ran home', player.carry ? 'You kept your egg. The biomes open again at sunrise.' : 'The biomes open again at sunrise.');
-  } else toast('🌙', 'Night has fallen', `The biomes are closed for ${NIGHT} seconds and every egg resets.`);
+    toast('🌙', 'Night fell, so you ran home', why + 'The biomes open again at sunrise.', !!lost);
+  } else toast('🌙', 'Night has fallen', why + `The biomes are closed for ${NIGHT} seconds and every egg resets.`, !!lost);
+  if (party) sendPresence(true);
   save();
 }
 function startDay() {
@@ -2475,7 +2480,8 @@ const TR_EXACT = {
   // toasts
   'Good morning!': 'Günaydın!', 'Fresh eggs are waiting in every biome.': 'Her biyomda taze yumurtalar seni bekliyor.',
   'Night has fallen': 'Gece oldu', 'Night fell, so you ran home': 'Gece oldu, eve koştun', 'You kept your egg. The biomes open again at sunrise.': 'Yumurtan sende kaldı. Biyomlar güneş doğunca tekrar açılır.',
-  'The biomes open again at sunrise.': 'Biyomlar güneş doğunca tekrar açılır.', 'Head home before dark. The eggs reset at night.': 'Hava kararmadan eve dön. Yumurtalar gece sıfırlanır.',
+  'The biomes open again at sunrise.': 'Biyomlar güneş doğunca tekrar açılır.', 'Poof!': 'Puf!',
+  'Head home and put your egg in the pen before dark. Eggs you carry disappear at night.': 'Hava kararmadan eve dön ve yumurtanı ağıla koy. Taşıdığın yumurtalar gece kaybolur.', 'Head home before dark. The eggs reset at night.': 'Hava kararmadan eve dön. Yumurtalar gece sıfırlanır.',
   'The biomes are closed at night': 'Biyomlar gece kapalı', 'Your pen is full': 'Ağılın dolu', 'Your bag is full': 'Çantan dolu', 'Your pen and bag are full': 'Ağılın ve çantan dolu',
   'Store or sell something in the pen first, or upgrade it in the Shop.': 'Önce ağıldan bir şey sakla ya da sat, veya Mağaza\'dan geliştir.',
   'Make room first, then come back for it.': 'Önce yer aç, sonra onun için geri gel.', 'Sell some pets or upgrade the pen to make room': 'Yer açmak için hayvan sat ya da ağılı geliştir',
@@ -2549,6 +2555,7 @@ const TR_RULES = [
   [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
   [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
   [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'], [/^(.+)'s home$/, '$1 evi'],
+  [/^Your (\w+) egg disappeared in the dark\. (.+)$/, (m, r, rest) => r + ' yumurtan karanlıkta kayboldu. ' + (TR_EXACT[rest] || rest)],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
