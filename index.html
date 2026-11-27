@@ -89,6 +89,7 @@ canvas.placing{cursor:crosshair}
 .cloud-box p{margin:0;flex:1;min-width:200px;font-size:14px;line-height:1.4}
 .cloud-box .buy{margin:0;padding:8px 14px;font-size:16px}
 .mythicpill{background:linear-gradient(90deg,#D61FA8,#6A3FE0,#1F9EC0);font-size:13px;font-weight:800}
+.mythicpill.abusepill{background:linear-gradient(90deg,#F2C230,#FF7A2A,#E8402C);color:#2B1A00}
 .spacer{flex:1}
 .hbtn{pointer-events:auto;border:0;cursor:pointer;font-family:var(--display);font-size:17px;color:var(--ink);background:var(--panel);border-radius:14px;padding:8px 14px;box-shadow:0 4px 0 var(--line);display:flex;align-items:center;gap:6px}
 .hbtn:active{transform:translateY(2px);box-shadow:0 2px 0 var(--line)}
@@ -203,6 +204,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     <div class="pill clock" id="clock"><span class="ci" id="clockIcon"></span><b id="clockT">3:00</b><small id="clockL">until night</small></div>
     <div class="pill where" id="where">Home</div>
     <div class="pill mythicpill" id="mythicPill" hidden></div>
+    <div class="pill mythicpill abusepill" id="abusePill" hidden></div>
     <div class="pill cloudpill" id="cloudSt" hidden>☁</div>
     <div class="spacer"></div>
     <button class="hbtn shop" id="shopBtn">Shop</button>
@@ -697,8 +699,9 @@ function changeZone(z) {
 }
 function pickRarity(R = Math.random) {
   const ks = ['C', 'R', 'E', 'L', 'M', 'D'];
-  let r = R() * ks.reduce((s, k) => s + RAR[k].w, 0);
-  for (const k of ks) { if ((r -= RAR[k].w) < 0) return k; }
+  const w = k => RAR[k].w * (abuseOn() ? ABUSE_W[k] : 1);
+  let r = R() * ks.reduce((s, k) => s + w(k), 0);
+  for (const k of ks) { if ((r -= w(k)) < 0) return k; }
   return 'C';
 }
 // Mythic egg announcements. While mythicBatch is a list (morning, game start) they are collected into one message.
@@ -1066,7 +1069,7 @@ function update(dt) {
   // income and hatching continue everywhere, even with menus open
   let rate = 0, penChanged = false;
   for (const p of G.pen) {
-    if (p.egg) { p.left -= dt; if (p.left <= 0) { hatch(p); penChanged = true; } }
+    if (p.egg) { p.left -= dt * (abuseOn() ? 2 : 1); if (p.left <= 0) { hatch(p); penChanged = true; } }
     else rate += petInc(p);
   }
   G.money += rate * dt;
@@ -1131,6 +1134,15 @@ function updateHub(dt) {
     treadFT -= dt; if (treadFT <= 0) { treadFT = 1; floatText(player.x + rand(-14, 14), player.y - 70, '+' + fmt(treadIdle(G.tL)), '#BFE0FF', .9); }
     beltPhase += dt * (80 + Math.min(400, treadIdle(G.tL) * 2));
   } else beltPhase += dt * 10;
+  onAdminTread = false;
+  if (abuseOn()) {
+    const a = atmRect(homeOff);
+    if (player.x > a.x && player.x < a.x + a.w && player.y > a.y && player.y < a.y + a.h) {
+      if (!player.moving) { player.x += (a.x + a.w / 2 - player.x) * Math.min(1, dt * 8); player.y += (a.y + a.h / 2 - player.y) * Math.min(1, dt * 8); player.step += dt * 12; player.fx = 1; }
+      G.speed += ABUSE_GAIN * dt; onTread = true; onAdminTread = true;
+      treadFT -= dt; if (treadFT <= 0) { treadFT = 1; floatText(player.x + rand(-14, 14), player.y - 70, '+' + fmt(ABUSE_GAIN), '#FFE066', .9); }
+    }
+  }
 
   // deposit
   const inPen = player.x > PEN.x && player.x < PEN.x + PEN.w && player.y > PEN.y && player.y < PEN.y + PEN.h;
@@ -1467,6 +1479,7 @@ function syncHud() {
     const next = BIOMES.find(b => b.req > G.speed);
     if (player.carry) h = G.pen.length >= penSlots(G.pL) ? 'Your pen is full. Sell a pet or upgrade the pen in the Shop.' : `Carry the ${RAR[player.carry.r].name.toLowerCase()} egg into your pen.`;
     else if (isNight()) h = `It's night. The biomes open again in ${Math.ceil(DAY + NIGHT - G.clock)} seconds.`;
+    else if (onAdminTread) h = `The admin treadmill gives you ${fmt(ABUSE_GAIN)} speed every second!`;
     else if (onTread) h = `Stand on the treadmill to gain ${fmt(treadIdle(G.tL))} speed every second. Upgrade it in the Shop to gain more.`;
     else if (Object.values(fuseGroups()).some(l => l.length >= 3 && (l[0].f || 0) < FUSE.length - 1)) h = 'You have 3 of the same animal. Walk to the Fuse Machine to fuse them.';
     else if (!G.pen.length && !Object.keys(G.found).length) h = 'Run right into the Forest and grab an egg. Move with WASD, arrows or drag.';
@@ -1690,7 +1703,7 @@ function onPartyPeers(ch) {
   partyPeers = ch.peers.filter(p => !p.isMe && p.kind === 'viewer');
   const ids = partyPeers.map(p => p.by).filter(Boolean);
   if (meUser && ids.length) meUser.profiles(ids).then(ps => { for (const id of ids) partyNames[id] = (ps[id] && ps[id].name) || ''; partyDirty = true; }).catch(() => {});
-  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); if (isAdmin) setTimeout(() => getRoom().then(r => r && r.emit('times', { day: DAY, night: NIGHT })).catch(() => {}), 1700); }
+  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); if (isAdmin) setTimeout(() => getRoom().then(r => r && r.emit('times', { day: DAY, night: NIGHT })).catch(() => {}), 1700); if (isAdmin && abuseOn()) setTimeout(() => getRoom().then(r => r && r.emit('abuse', { until: abuseUntil })).catch(() => {}), 1900); }
   for (const p of ch.left) if (!p.isMe && p.kind === 'viewer') { delete partyViews[p.peer]; delete hatchSeen[p.peer]; toast('👋', `${friendName(p)} left the party`, ''); }
   for (const p of ch.updated) {
     if (p.isMe) continue;
@@ -1794,7 +1807,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '', admAbuseMin: '5' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1802,6 +1815,7 @@ async function adminInit() {
     if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
+      db.doc('admin/abuse').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setAbuse(d.until); }, () => {});
       db.doc('admin/times').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setTimes(d.day, d.night, !giftsLoaded); }, () => {});
       db.doc('admin/objects').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setObjs(d.list); }, () => {});
       db.doc('admin/gifts').onSnapshot(snap => {
@@ -1810,7 +1824,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); r.on('abuse', onAbuse, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1918,6 +1932,8 @@ async function adminAction(what) {
     return;
   }
   if (kind === 'place') { startPlacing(); return; }
+  if (kind === 'abuse') { await saveAbuse(Date.now() + clamp(num(f.admAbuseMin) || 5, 1, 180) * 60000); renderTab(); return; }
+  if (kind === 'abusestop') { await saveAbuse(1); renderTab(); return; }
   if (kind === 'times') { await saveTimesForAll(f.admDay || DAY, f.admNight || NIGHT); f.admDay = ''; f.admNight = ''; renderTab(); return; }
   if (kind === 'objplace' || kind === 'objerase') {
     const ok = OBJ_KINDS.find(k => k[0] === f.admObj) || OBJ_KINDS[0];
@@ -2042,6 +2058,11 @@ function adminHTML() {
         <div class="adm-row"><label>Pet size${sel('admPlaceSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Pet fusion${sel('admPlaceFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
         <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
+      <div class="up"><h3>Admin abuse</h3>
+        <span class="note" style="font-size:12px">For everyone: better eggs spawn, eggs hatch 2× faster, and an admin treadmill (+${fmt(ABUSE_GAIN)} speed every second) appears at every home.</span>
+        <label>How many minutes<input id="admAbuseMin" type="number" min="1" max="180" value="${esc(f.admAbuseMin)}"></label>
+        <span class="note" style="font-size:12px">${abuseOn() ? `Running now: ${Math.ceil((abuseUntil - Date.now()) / 60000)} minutes left.` : 'Not running.'}</span>
+        <div class="adm-btns"><button class="buy" data-adm="abuse">Start for everyone</button><button class="sell" data-adm="abusestop">Stop</button></div></div>
       <div class="up"><h3>Day and night</h3>
         <div class="adm-row"><label>Day (seconds)<input id="admDay" type="number" min="20" max="3600" value="${esc(f.admDay || DAY)}"></label><label>Night (seconds)<input id="admNight" type="number" min="5" max="600" value="${esc(f.admNight || NIGHT)}"></label></div>
         <span class="note" style="font-size:12px">Now: day ${DAY} seconds, night ${NIGHT} seconds. Day can be 20 to 3600 seconds, night 5 to 600.</span>
@@ -2103,6 +2124,53 @@ async function commitObjs(list) {
 }
 function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list); }
 
+// ================= ADMIN ABUSE (an event the game owner starts for everyone) =================
+// While it runs: rarer eggs spawn, eggs hatch twice as fast, and every home gets a golden admin treadmill.
+const ABUSE_KEY = 'egg-heist-abuse-v1', ABUSE_GAIN = 2500;
+const ABUSE_W = { C: .3, R: 1.5, E: 3, L: 6, M: 10, D: 10 };
+const ATM = { x: 545, y: 820, w: 210, h: 92 };
+const atmRect = ox => ({ x: ATM.x + ox, y: ATM.y, w: ATM.w, h: ATM.h });
+let abuseUntil = 0, abuseWas = false, onAdminTread = false;
+try { abuseUntil = +(localStorage.getItem(ABUSE_KEY) || 0) || 0; } catch (e) {}
+function abuseOn() { return Date.now() < abuseUntil; }
+function setAbuse(until) {
+  until = Math.round(+until || 0);
+  if (!Number.isFinite(until) || until === abuseUntil) return;
+  if (until > Date.now() + 3 * 3600e3) until = Date.now() + 3 * 3600e3;
+  abuseUntil = until;
+  try { localStorage.setItem(ABUSE_KEY, String(abuseUntil)); } catch (e) {}
+  checkAbuse();
+}
+// called often: notices when the event starts or ends
+function checkAbuse() {
+  const on = abuseOn();
+  if (on && !abuseWas) {
+    toast('⚡', 'ADMIN ABUSE!', `Better eggs, eggs hatch 2× faster, and an admin treadmill (+${fmt(ABUSE_GAIN)}/s) is at your home!`, false, true, 'mythic');
+    sfx.hatch(true);
+    if (party) regenPartyEggs(); else if (!isNight()) randomEggsAgain();
+  } else if (!on && abuseWas) toast('⚡', 'Admin abuse is over', 'Thanks for playing!');
+  abuseWas = on;
+  const pill = $('abusePill');
+  if (pill) { pill.hidden = !on; if (on) { const left = Math.ceil((abuseUntil - Date.now()) / 1000); pill.textContent = `⚡ ADMIN ABUSE ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; } }
+}
+function onAbuse(msg) { const d = msg && msg.data; if (d && !msg.isMe) setAbuse(d.until); }
+async function saveAbuse(until) {
+  setAbuse(until);
+  if (adminDb) { try { await adminDb.doc('admin/abuse').set({ until: abuseUntil }); } catch (e) {} }
+  const r = await getRoom(); if (r) { try { await r.emit('abuse', { until: abuseUntil }); } catch (e) {} }
+}
+function drawAdminTread(t, ox) {
+  if (!abuseOn()) return;
+  const a = atmRect(ox), keep = { x: TM.x, y: TM.y };
+  TM.x = a.x; TM.y = a.y;
+  try {
+    drawTreadmill(t, TREAD_MAX);
+    ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
+    ctx.fillStyle = '#FFE066'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('+' + fmt(ABUSE_GAIN) + '/s', TM.x + TM.w / 2, TM.y - 18);
+    label('⚡ ADMIN TREADMILL ⚡', TM.x + TM.w / 2, TM.y - 52, 18, '#FFE066');
+  } finally { TM.x = keep.x; TM.y = keep.y; }
+}
 // ================= HOW LONG DAY AND NIGHT LAST (set by the game owner) =================
 const TIMES_KEY = 'egg-heist-times-v1';
 function setTimes(d, n, quiet) {
@@ -2237,7 +2305,7 @@ function drawPlots(t, xs, xe) {
     const q = (p && p.presence) || {}, name = me ? 'You' : friendName(p);
     withBaseHome(() => {
       ctx.save(); ctx.translate(ox, 0);
-      if (!me) ctx.drawImage(getTile('hub'), 0, 0, HOME_W, BH);
+      if (!me) { ctx.drawImage(getTile('hub'), 0, 0, HOME_W, BH); drawAdminTread(t, 0); }
       // the hedge to the right of every home except the one next to the Forest, with a gate for the path
       if (k > 0) {
         const gx = HOME_W, gw = PLOT_W - HOME_W, py = 650;
@@ -2485,7 +2553,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2587,6 +2655,10 @@ const TR_RULES = [
   [/^Your (\w+) egg disappeared in the dark\. (.+)$/, (m, r, rest) => r + ' yumurtan karanlıkta kayboldu. ' + (TR_EXACT[rest] || rest)],
   [/^Day lasts (\d+) seconds and night lasts (\d+) seconds now\.$/, 'Gündüz artık $1 saniye, gece $2 saniye sürüyor.'], [/^Day (\d+) seconds, night (\d+) seconds\.$/, 'Gündüz $1 saniye, gece $2 saniye.'],
   [/^Now: day (\d+) seconds, night (\d+) seconds\..*$/, 'Şu an: gündüz $1 saniye, gece $2 saniye. Gündüz 20-3600, gece 5-600 saniye olabilir.'],
+  [/^⚡ ADMIN ABUSE (.+)$/, '⚡ YÖNETİCİ ÇILGINLIĞI $1'], [/^Running now: (\d+) minutes left\.$/, 'Şu an çalışıyor: $1 dakika kaldı.'],
+  [/^Better eggs, eggs hatch 2× faster, and an admin treadmill \(\+(.+)\/s\) is at your home!$/, 'Daha iyi yumurtalar, 2 kat hızlı çıkma ve evinde bir yönetici koşu bandı (+$1/sn)!'],
+  [/^For everyone: better eggs spawn.*$/, 'Herkes için: daha iyi yumurtalar çıkar, yumurtalar 2 kat hızlı çıkar ve her evde bir yönetici koşu bandı (saniyede +2.5k hız) belirir.'],
+  [/^The admin treadmill gives you (.+) speed every second!$/, 'Yönetici koşu bandı sana saniyede $1 hız veriyor!'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -4333,6 +4405,7 @@ function drawTreadmill(t, Lv) {
 }
 function drawHub(t, dt) {
   // treadmill belt + console
+  drawAdminTread(t, homeOff);
   drawTreadmill(t);
   ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
   ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
@@ -4456,7 +4529,7 @@ function frame(now) {
   update(dt);
   hudT += dt; if (hudT > .1) { hudT = 0; syncHud(); }
   presT += dt; if (presT > .066) { presT = 0; sendPresence(false); }
-  clockT += dt; if (clockT > .5) { clockT = 0; if (party) { readFriends(); syncPartyClock(); } }
+  clockT += dt; if (clockT > .5) { clockT = 0; checkAbuse(); if (party) { readFriends(); syncPartyClock(); } }
   saveT += dt; if (saveT > 4) { saveT = 0; save(); }
 
   // while a menu covers the screen, redraw the world only 4 times a second (the game keeps running)
