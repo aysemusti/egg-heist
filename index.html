@@ -1323,16 +1323,36 @@ function updateGuards(dt) {
       const d = dist(player.x, player.y, g.x, g.y), GD = g.def || B.guard;
       // guardians only care about you while you carry one of THEIR eggs (a placed one: any egg), and give up once you are home
       const theirs = !!player.carry && (g.wild || player.carry.b === zi) && !atHome;
-      if (g.st === 'patrol' && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = clamp(400 / GD.speed, .15, 1); g.alert = 1; sfx.alert(); }
+      // an egg of theirs lying on the ground in their biome: the guardian goes to get it back
+      if (g.st === 'patrol' && !theirs && !g.wild) {
+        const e = loose.find(o => o.b === zi && zoneAt(o.x) === zi && dist(o.x, o.y, g.hx, g.hy) > 90 && !zones[k].guards.some(o2 => o2 !== g && o2.fetchId === o.id));
+        if (e) { g.st = 'fetch'; g.fetchId = e.id; g.alert = 1; }
+      }
+      if ((g.st === 'patrol' || g.st === 'fetch') && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = clamp(400 / GD.speed, .15, 1); g.alert = 1; sfx.alert(); }
       if (g.st === 'wait') { g.fx = Math.sign(player.x - g.x) || g.fx; if (!theirs) g.st = 'return'; else if ((g.wait -= dt) <= 0) g.st = 'chase'; }
       if (g.st === 'chase' && !theirs) g.st = 'return';
       let tx, ty, sp;
       if (g.st === 'chase') {
         tx = player.x; ty = player.y; sp = GD.speed;
         if (d < 30 && player.invuln <= 0) { caught({ guard: GD }, g); return; }
+      } else if (g.st === 'fetch') {
+        const e = loose.find(o => o.id === g.fetchId);
+        if (!e || zoneAt(e.x) !== zi) { g.st = 'return'; g.fetchId = null; continue; }
+        tx = e.x; ty = e.y; sp = GD.speed;
+        if (dist(g.x, g.y, e.x, e.y) < 28) {
+          // picked it up: it disappears from the ground (for everyone in a party) and goes back to the nest
+          loose.splice(loose.indexOf(e), 1); if (nearEgg === e) nearEgg = null; markTaken(e.id);
+          g.carry = { r: e.r, es: e.es || 0 }; g.st = 'return'; g.fetchId = null;
+          if (scene === zi) floatText(g.x, g.y - 80, 'Got it back!', '#FFB8A8', 1.2);
+          continue;
+        }
       } else if (g.st === 'return') {
         tx = g.hx; ty = g.hy; sp = GD.speed * .55;
-        if (dist(g.x, g.y, g.hx, g.hy) < 20) { g.st = 'patrol'; g.x = g.hx; g.y = g.hy; if (g.carry) { spawnEgg(zi, g.carry); g.carry = null; } }
+        if (dist(g.x, g.y, g.hx, g.hy) < 20) {
+          g.st = 'patrol'; g.x = g.hx; g.y = g.hy;
+          // in a party the egg is put down by the nest where everyone can see it
+          if (g.carry) { if (party) dropEgg({ r: g.carry.r, b: zi, es: g.carry.es || 0 }, g.hx + 40, g.hy + 10); else spawnEgg(zi, g.carry); g.carry = null; }
+        }
       } else {
         // waiting, or standing guard on the nest and watching you
         if (g.st === 'patrol' && scene === zi) g.fx = Math.sign(player.x - g.x) || g.fx;
@@ -2429,7 +2449,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
