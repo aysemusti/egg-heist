@@ -2015,6 +2015,7 @@ const OBJ_KINDS = [['tree', 'Tree', 42], ['pine', 'Pine tree', 40], ['palm', 'Pa
   ['coral', 'Coral', 40], ['anemone', 'Anemone', 30], ['crystal', 'Crystal', 36], ['stalag', 'Cave rock', 38], ['crater', 'Crater', 46], ['moonrock', 'Moon rock', 34],
   ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28], ['mushroom', 'Giant mushroom', 38]];
 const OBJ_R = Object.fromEntries(OBJ_KINDS.map(k => [k[0], k[2]])), OBJ_SIZES = [[.6, 'Small'], [1, 'Normal'], [1.6, 'Big'], [2.4, 'Giant']];
+const LEFT_EDGE = -30000;   // friends' homes in a party are to the left of x = 0
 const OBJ_MAX = 400, OBJ_KEY = 'egg-heist-objs-v1';
 let worldObjs = [];
 const objCache = new Map();
@@ -2024,7 +2025,7 @@ function cleanObjs(list) {
   for (const o of list.slice(0, OBJ_MAX)) {
     if (!o || !OBJ_R[o.k]) continue;
     const x = +o.x, y = +o.y, sz = +o.s;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > WORLD_W || y < 0 || y > BH || !OBJ_SIZES.some(z => z[0] === sz)) continue;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < LEFT_EDGE || x > WORLD_W || y < 0 || y > BH || !OBJ_SIZES.some(z => z[0] === sz)) continue;
     out.push({ id: String(o.id || '').slice(0, 24) || Math.random().toString(36).slice(2, 9), k: o.k, x: Math.round(x), y: Math.round(y), s: sz });
   }
   return out;
@@ -2266,7 +2267,7 @@ function adoptPet() {
 function onPlace(msg) {
   const d = msg && msg.data || {}, num = v => Number.isFinite(Number(v)) ? Number(v) : null;
   const x = num(d.x), y = num(d.y);
-  if (x === null || y === null || x < 0 || x > WORLD_W || y < 0 || y > BH) return;
+  if (x === null || y === null || x < LEFT_EDGE || x > WORLD_W || y < 0 || y > BH) return;
   const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
   if (d.kind === 'guard') {
     const gi = int(d.g, 0, BIOMES.length - 1), zi = zoneAt(x);
@@ -2305,7 +2306,7 @@ async function placeAt(ev) {
   const rc = cv.getBoundingClientRect();
   const x = Math.round(camX + (ev.clientX - rc.left) / Z), y = Math.round(camY + (ev.clientY - rc.top) / Z);
   if (placing.kind === 'obj' || placing.kind === 'erase') {
-    if (y < 0 || y > BH || x < 0 || x > WORLD_W) return;
+    if (y < 0 || y > BH || x < LEFT_EDGE || x > WORLD_W) return;
     if (placing.kind === 'erase') {
       let best = null, bd = 1e9; for (const o of worldObjs) { const d = dist(x, y, o.x, o.y); if (d < objR(o) + 30 && d < bd) { bd = d; best = o; } }
       if (!best) { toast('\ud83d\udd0d', 'No object there', 'Tap right on the object you want to erase.', true); return; }
