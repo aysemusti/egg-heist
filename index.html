@@ -439,8 +439,7 @@ const BIOMES = [
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 // guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
-// more speed always makes you faster, but very high speeds grow gently so you can still see where you go
-const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 4 * Math.pow(sp - 280, 0.6);
+const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 300 * Math.log(1 + (sp - 280) / 280);
 // the same numbers are also the smallest speed you need to take eggs in that biome
 BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = b.guard.lv;   // guardians run 50% faster than the first list; you need that same speed to take eggs
   b.guard.speed = Math.round(speedPx(b.guard.lv)); });
@@ -490,7 +489,7 @@ const treadIdle = L => TREAD_GAIN[L] || 1;
 const treadCost = L => (L <= 1 ? 2.5 : 100) * [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
   500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
 // how running moves you: more speed is faster, but it levels off very high up
-const MOVE_SPEED_CAP = 1e12;
+const MOVE_SPEED_CAP = 80000;   // running speed stops growing at 80k, even if your speed number keeps going up
 const penSlots = L => 2 + L;
 const penCost = L => Math.round(25 * Math.pow(2.6, L - 1));
 const penBonus = L => 1 + 0.15 * (L - 1);
