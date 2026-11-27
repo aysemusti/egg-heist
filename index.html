@@ -2122,14 +2122,14 @@ function readFriends() {
     const q = p.presence || {};
     // eggs they took
     if (Array.isArray(q.tk)) for (const id of q.tk.slice(-30)) {
-      if (typeof id !== 'string' || id.length > 60 || takenSet.has(id)) continue;
+      if (typeof id !== 'string' || id.length > 160 || takenSet.has(id)) continue;
       takenSet.add(id);
       for (const k in zones) { const zd = zones[k], i = zd.eggs.findIndex(e => e.id === id); if (i >= 0) { const e = zd.eggs[i]; zd.eggs.splice(i, 1); if (nearEgg === e) nearEgg = null; slotRespawn(e); } }
       const li = loose.findIndex(e => e.id === id); if (li >= 0) { if (nearEgg === loose[li]) nearEgg = null; loose.splice(li, 1); }
     }
     // eggs they dropped
     if (Array.isArray(q.dr)) for (const d of q.dr.slice(-6)) {
-      if (!Array.isArray(d) || typeof d[0] !== 'string' || d[0].length > 60 || knownLoose.has(d[0]) || takenSet.has(d[0])) continue;
+      if (!Array.isArray(d) || typeof d[0] !== 'string' || d[0].length > 160 || knownLoose.has(d[0]) || takenSet.has(d[0])) continue;
       const x = +d[1], y = +d[2];
       if (!Number.isFinite(x) || !Number.isFinite(y) || !RAR[d[3]] || !BIOMES[d[4]] || ![0, 1, 2].includes(d[5])) continue;
       knownLoose.add(d[0]); if (!isNight()) loose.push({ id: d[0], x: clamp(x, plotMinX(), WORLD_W), y: clamp(y, 40, BH - 40), r: d[3], b: d[4], es: d[5], ph: 0, loose: true });
@@ -2227,8 +2227,14 @@ function drawPlots(t, xs, xe) {
 }
 function drawLoose(t, xs, xe) {
   for (const e of loose) {
-    if (e.x < xs - 60 || e.x > xe + 60) continue; e.ph += .016;
-    drawEgg(e.x, e.y + Math.sin(e.ph * 4) * 2, 18 * EGG_SIZES[e.es || 0].scale, e.r, BIOMES[e.b].egg, e.ph);
+    if (e.x < xs - 60 || e.x > xe + 60) continue; e.ph += .016; e.age = (e.age || 0) + .016;
+    // it pops out of their hands, bounces, and glows so everyone can see it
+    const pop = e.age < .55 ? Math.sin(e.age / .55 * Math.PI) * 70 : e.age < .8 ? Math.sin((e.age - .55) / .25 * Math.PI) * 14 : 0;
+    const pulse = .5 + .5 * Math.sin(e.ph * 6);
+    ctx.fillStyle = RAR[e.r].color; ctx.globalAlpha = .25 + .25 * pulse; ctx.beginPath(); ctx.ellipse(e.x, e.y + 12, 30 + pulse * 6, 11 + pulse * 2, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.ellipse(e.x, e.y + 12, 34, 13, 0, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    drawEgg(e.x, e.y - pop + Math.sin(e.ph * 4) * 2, 18 * EGG_SIZES[e.es || 0].scale * 1.15, e.r, BIOMES[e.b].egg, e.ph);
+    if (e.age < 4 && nearEgg !== e) { ctx.globalAlpha = Math.min(1, 4 - e.age); label('DROPPED!', e.x, e.y - 44 - pop, 16, '#FFE066'); ctx.globalAlpha = 1; }
     if (nearEgg === e) drawGrabPrompt(e, t);
   }
 }
@@ -2409,7 +2415,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
