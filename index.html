@@ -549,7 +549,7 @@ const EGG_SIZES = [
 ];
 const RORDER = ['C', 'R', 'E', 'L', 'M', 'D'];
 // Day and night: 3 minutes of day, then 10 seconds of night when the biomes close and eggs reset
-const DAY = 180, NIGHT = 10;
+let DAY = 180, NIGHT = 10;   // the game owner can change these in the admin panel
 const isNight = () => G.clock >= DAY;
 let dawnT = 0;
 // slow mode walks at a normal pace; your trained speed (and the biome gates) stay the same
@@ -1690,7 +1690,7 @@ function onPartyPeers(ch) {
   partyPeers = ch.peers.filter(p => !p.isMe && p.kind === 'viewer');
   const ids = partyPeers.map(p => p.by).filter(Boolean);
   if (meUser && ids.length) meUser.profiles(ids).then(ps => { for (const id of ids) partyNames[id] = (ps[id] && ps[id].name) || ''; partyDirty = true; }).catch(() => {});
-  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); }
+  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); if (isAdmin) setTimeout(() => getRoom().then(r => r && r.emit('times', { day: DAY, night: NIGHT })).catch(() => {}), 1700); }
   for (const p of ch.left) if (!p.isMe && p.kind === 'viewer') { delete partyViews[p.peer]; delete hatchSeen[p.peer]; toast('👋', `${friendName(p)} left the party`, ''); }
   for (const p of ch.updated) {
     if (p.isMe) continue;
@@ -1794,7 +1794,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1802,6 +1802,7 @@ async function adminInit() {
     if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
+      db.doc('admin/times').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setTimes(d.day, d.night, !giftsLoaded); }, () => {});
       db.doc('admin/objects').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setObjs(d.list); }, () => {});
       db.doc('admin/gifts').onSnapshot(snap => {
         const d = snap.exists ? snap.data() : null;
@@ -1809,7 +1810,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1917,6 +1918,7 @@ async function adminAction(what) {
     return;
   }
   if (kind === 'place') { startPlacing(); return; }
+  if (kind === 'times') { await saveTimesForAll(f.admDay || DAY, f.admNight || NIGHT); f.admDay = ''; f.admNight = ''; renderTab(); return; }
   if (kind === 'objplace' || kind === 'objerase') {
     const ok = OBJ_KINDS.find(k => k[0] === f.admObj) || OBJ_KINDS[0];
     placing = kind === 'objerase' ? { kind: 'erase' } : { kind: 'obj', k: ok[0], s: +f.admObjSize || 1 };
@@ -2040,6 +2042,10 @@ function adminHTML() {
         <div class="adm-row"><label>Pet size${sel('admPlaceSize', [[0, 'Normal'], [1, 'Big'], [2, 'Huge']])}</label><label>Pet fusion${sel('admPlaceFuse', [[0, 'Normal'], [1, 'Fused'], [2, 'Mega']])}</label></div>
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap anywhere on the map. Everyone playing right now sees it.</span>
         <div class="adm-btns"><button class="buy" data-adm="place">Pick a spot</button><button class="sell" data-adm="unplace">Remove all placed</button></div></div>
+      <div class="up"><h3>Day and night</h3>
+        <div class="adm-row"><label>Day (seconds)<input id="admDay" type="number" min="20" max="3600" value="${esc(f.admDay || DAY)}"></label><label>Night (seconds)<input id="admNight" type="number" min="5" max="600" value="${esc(f.admNight || NIGHT)}"></label></div>
+        <span class="note" style="font-size:12px">Now: day ${DAY} seconds, night ${NIGHT} seconds. Day can be 20 to 3600 seconds, night 5 to 600.</span>
+        <div class="adm-btns"><button class="buy" data-adm="times">Save for everyone</button></div></div>
       <div class="up"><h3>Place objects</h3>
         <div class="adm-row"><label>Object${sel('admObj', OBJ_KINDS.map(k => [k[0], k[1]]))}</label><label>Size${sel('admObjSize', OBJ_SIZES.map(z => [z[0], z[1]]))}</label></div>
         <span class="note" style="font-size:12px">Tap Pick a spot, then tap the map as many times as you like. Objects stay for everyone, even after the game is closed. ${worldObjs.length} placed.</span>
@@ -2097,6 +2103,29 @@ async function commitObjs(list) {
 }
 function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list); }
 
+// ================= HOW LONG DAY AND NIGHT LAST (set by the game owner) =================
+const TIMES_KEY = 'egg-heist-times-v1';
+function setTimes(d, n, quiet) {
+  d = Math.round(+d); n = Math.round(+n);
+  if (!Number.isFinite(d) || !Number.isFinite(n)) return;
+  d = clamp(d, 20, 3600); n = clamp(n, 5, 600);
+  if (d === DAY && n === NIGHT) return;
+  const wasNight = isNight();
+  DAY = d; NIGHT = n;
+  if (G.clock >= DAY + NIGHT) G.clock = 0;
+  if (wasNight && !isNight()) G.clock = 0;
+  try { localStorage.setItem(TIMES_KEY, JSON.stringify([DAY, NIGHT])); } catch (e) {}
+  syncHud();
+  if (!quiet) toast('🕑', 'Day and night changed', `Day lasts ${DAY} seconds and night lasts ${NIGHT} seconds now.`);
+}
+try { const tm = JSON.parse(localStorage.getItem(TIMES_KEY) || 'null'); if (Array.isArray(tm)) { DAY = clamp(+tm[0] || 180, 20, 3600); NIGHT = clamp(+tm[1] || 10, 5, 600); } } catch (e) {}
+function onTimes(msg) { const d = msg && msg.data; if (d && !msg.isMe) setTimes(d.day, d.night); }
+async function saveTimesForAll(d, n) {
+  setTimes(d, n, true);
+  if (adminDb) { try { await adminDb.doc('admin/times').set({ day: DAY, night: NIGHT }); } catch (e) {} }
+  const r = await getRoom(); if (r) { try { await r.emit('times', { day: DAY, night: NIGHT }); } catch (e) {} }
+  toast('🕑', 'Saved for everyone', `Day ${DAY} seconds, night ${NIGHT} seconds.`);
+}
 // ================= SHARED PARTY WORLD =================
 // In a party everyone sees the same eggs: each biome has 10 egg spots, and what grows in a spot comes from the
 // party code, the day and how many times that spot was emptied, so every player's game makes the same egg.
@@ -2456,7 +2485,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2556,6 +2585,8 @@ const TR_RULES = [
   [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
   [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'], [/^(.+)'s home$/, '$1 evi'],
   [/^Your (\w+) egg disappeared in the dark\. (.+)$/, (m, r, rest) => r + ' yumurtan karanlıkta kayboldu. ' + (TR_EXACT[rest] || rest)],
+  [/^Day lasts (\d+) seconds and night lasts (\d+) seconds now\.$/, 'Gündüz artık $1 saniye, gece $2 saniye sürüyor.'], [/^Day (\d+) seconds, night (\d+) seconds\.$/, 'Gündüz $1 saniye, gece $2 saniye.'],
+  [/^Now: day (\d+) seconds, night (\d+) seconds\..*$/, 'Şu an: gündüz $1 saniye, gece $2 saniye. Gündüz 20-3600, gece 5-600 saniye olabilir.'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
