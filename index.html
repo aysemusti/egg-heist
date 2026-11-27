@@ -1670,7 +1670,8 @@ function sendPresence(force) {
     z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null,
     lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone], rd: rideP() ? [rideP().sid, rideP().f || 0, rideP().mut || '', rideP().z || 0] : null,
     j: Math.round(player.jz), tk: myTaken.slice(-30), dr: myDrops.slice(-6), hb: myHit, sw: swingSeq,
-    ck: [Math.floor(G.clock), partyDay], tl: G.tL, pe: G.pen.filter(q => q.egg).length,
+    ck: [Math.floor(G.clock), partyDay], tl: G.tL, pl: G.pL,
+    pe: G.pen.filter(q => q.egg).slice(0, 24).map(q => [q.r, q.b, q.es || 0, q.mut || '', Math.round(clamp(1 - q.left / RAR[q.r].hatch, 0, 1) * 10)]),
     pp: G.pen.filter(q => !q.egg).slice(0, 24).map(q => [q.sid, q.f || 0, q.z || 0, q.mut || '']) };
   const key = JSON.stringify(pres);
   if (!force && key === lastPres) return;
@@ -2063,6 +2064,12 @@ function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list);
 let partyDay = 0, takenSet = new Set(), myTaken = [], myDrops = [], dropSeq = 0, knownLoose = new Set(), loose = [];
 let myPeerId = '', hitSeq = 0, swingSeq = 0, myHit = null, seenHit = {}, seenSwing = {}, lastFriends = [], clockT = 0;
 const PLOT_W = 860;
+const friendPos = {};
+function friendSpot(p) {
+  let s2 = friendPos[p.id];
+  if (!s2) { s2 = friendPos[p.id] = { x: rand(PEN.x + 40, PEN.x + PEN.w - 40), y: rand(PEN.y + 190, PEN.y + PEN.h - 30), tx: 0, ty: 0, wait: rand(0, 2), fx: 1, hop: rand(0, 6) }; s2.tx = s2.x; s2.ty = s2.y; }
+  return s2;
+}
 function hashStr(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) % 2147483646 + 1; }
 const slotKey = (z, slot, gen) => `${partyDay}.${z}.${slot}.${gen}`;
 function spawnSlot(z, slot, gen) {
@@ -2144,27 +2151,36 @@ function drawPlots(t, xs, xe) {
     const ox = plotX(j); if (ox + PLOT_W < xs || ox > xe) return;
     const q = p.presence || {}, name = friendName(p);
     ctx.save(); ctx.translate(ox, 0);
-    ctx.fillStyle = j % 2 ? '#78B653' : '#82BE5C'; ctx.fillRect(0, 0, PLOT_W, BH);
-    ctx.fillStyle = '#6B4A2F'; ctx.fillRect(PLOT_W - 6, 0, 6, BH);
-    // their pen
-    ctx.fillStyle = '#C9A766'; roundRect(ctx, PEN.x, PEN.y, PEN.w, PEN.h, 18); ctx.fill();
-    ctx.strokeStyle = '#7A5235'; ctx.lineWidth = 6; roundRect(ctx, PEN.x, PEN.y, PEN.w, PEN.h, 18); ctx.stroke();
-    const pets = Array.isArray(q.pp) ? q.pp.slice(0, 24) : [];
-    pets.forEach((pp, k) => {
-      if (!Array.isArray(pp)) return; const i = spIndex(String(pp[0])); if (i < 0) return;
-      const sp = SPECIES[i], f = [0, 1, 2].includes(pp[1]) ? pp[1] : 0, z = [0, 1, 2].includes(pp[2]) ? pp[2] : 0, mut = MUT[pp[3]] ? pp[3] : null;
-      const col = k % 6, row = Math.floor(k / 6), x = PEN.x + 50 + col * 70, y = PEN.y + 80 + row * 72;
-      drawModel(sp.id, x, y + 20 - Math.abs(Math.sin(t * 3 + k)) * 4, Math.min(80, PSIZE[sp.r] * SIZES[z].scale * .85), Math.sin(t * .5 + k) > 0 ? 1 : -1, null, f, 0, 1, 1, mut);
-    });
-    if (!pets.length) label('(no pets yet)', PEN.x + PEN.w / 2, PEN.y + PEN.h / 2, 16, '#F3EAD8');
-    label(`${name}'s pen  ${pets.length} pets${q.pe ? ' · ' + q.pe + ' eggs' : ''}`, PEN.x + PEN.w / 2, PEN.y - 14, 20, '#FFE066');
+    // the same ground, path and pen as your home
+    const tile = getTile('hub'), k = tile.width / HOME_W;
+    ctx.drawImage(tile, 0, 0, PLOT_W * k, tile.height, 0, 0, PLOT_W, BH);
+    ctx.fillStyle = '#6B4A2F'; ctx.fillRect(PLOT_W - 5, 0, 5, BH);
     // their treadmill
-    const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1;
+    const tl = Number.isInteger(q.tl) ? clamp(q.tl, 1, TREAD_MAX) : 1, pl = Number.isInteger(q.pl) ? clamp(q.pl, 1, PEN_MAX) : 1;
     drawTreadmill(t, tl);
     ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
     ctx.fillStyle = '#7CF29A'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('+' + fmt(treadIdle(tl)) + '/s', TM.x + TM.w / 2, TM.y - 18);
-    label(`${name}'s TREADMILL  LV ${tl}`, TM.x + TM.w / 2, TM.y - 52, 16);
+    label(`${name}'s TREADMILL  LV ${tl}`, TM.x + TM.w / 2, TM.y - 52, 18);
+    // their incubating eggs
+    const eggs = Array.isArray(q.pe) ? q.pe.slice(0, 24) : [];
+    let ei = 0;
+    for (const e of eggs) {
+      if (!Array.isArray(e) || !RAR[e[0]] || !BIOMES[e[1]]) continue;
+      const col = ei % 8, row = Math.floor(ei / 8); ei++;
+      const x = PEN.x + 46 + col * 50, y = PEN.y + 40 + row * 44, frac = clamp(+e[4] || 0, 0, 10) / 10;
+      ctx.fillStyle = '#A9874C'; ctx.beginPath(); ctx.ellipse(x, y + 12, 22, 9, 0, 0, 7); ctx.fill();
+      drawEgg(x, y, 18 * Math.min(1.4, EGG_SIZES[[0, 1, 2].includes(e[2]) ? e[2] : 0].scale), e[0], MUT[e[3]] ? MUT[e[3]].egg : BIOMES[e[1]].egg, t);
+      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, 0, 7); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
+    }
+    // their pets walk around like yours
+    const list = (Array.isArray(q.pp) ? q.pp.slice(0, 24) : []).map((pp, n) => {
+      if (!Array.isArray(pp)) return null; const si = spIndex(String(pp[0])); if (si < 0) return null;
+      return { id: p.peer + '|' + n + '|' + pp[0], sp: si, f: [0, 1, 2].includes(pp[1]) ? pp[1] : 0, z: [0, 1, 2].includes(pp[2]) ? pp[2] : 0, mut: MUT[pp[3]] ? pp[3] : undefined };
+    }).filter(Boolean);
+    drawPenAnimals(list, friendSpot, t, 1 / 60, false);
+    label(`${name}'s PEN  ${list.length + ei}/${penSlots(pl)}`, PEN.x + PEN.w / 2, PEN.y - 14, 22, '#FFE066');
     ctx.restore();
   });
 }
@@ -2449,7 +2465,7 @@ const TR_RULES = [
   [/^(\d+)× Mount mutations$/, '$1× Binek mutasyonu'], [/^Gift: (an? |\d+ )Mount mutations?$/, 'Hediye: Binek mutasyonu'], [/^(.+)\. Open your Bag to put (it|them) on a pet\.$/, '$1. Bir hayvana koymak için Çantanı aç.'],
   [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
   [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
-  [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'],
+  [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -4065,6 +4081,57 @@ function label(text, x, y, size = 18, color = '#fff') {
   ctx.textAlign = 'center'; ctx.font = `${size}px "Lilita One", system-ui, sans-serif`; ctx.lineJoin = 'round';
   ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(20,28,18,.8)'; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y);
 }
+function drawPenAnimals(pets, spot, t, dt, mine) {
+  const night = isNight();
+  for (const p of pets) {
+    const s = spot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id);
+    if (p.mut === 'singer' && !isNight() && Math.random() < dt * 1.1) floatText(s.x + rand(-12, 12), s.y - 40, Math.random() < .5 ? '\u266a' : '\u266b', '#FF5AB4', 1.3);
+    s.it = (s.it || 0) + dt;
+    s.wait -= dt;
+    if (s.wait <= 0) { s.tx = rand(PEN.x + 30, PEN.x + PEN.w - 30); s.ty = rand(PEN.y + 190, PEN.y + PEN.h - 26); s.wait = rand(2, 5); }
+    const dx = s.tx - s.x, dy = s.ty - s.y, m = Math.hypot(dx, dy);
+    s.moving = m > 2 && !night;
+    if (s.moving) {
+      const v = MOVE_SPEED[style];
+      s.x += dx / m * v * dt; s.y += dy / m * v * dt; s.fx = dx < 0 ? -1 : 1;
+      s.hop += dt * (style === 'hop' ? 7 : style === 'slither' ? 6 : 10);
+      // dust puffs on each footstep or landing
+      const step = Math.floor(s.hop / Math.PI);
+      if (step !== s.lastStep) { s.lastStep = step; if (style === 'walk' || style === 'hop') for (let k = 0; k < (style === 'hop' ? 4 : 1); k++) parts.push({ x: s.x - s.fx * 10, y: s.y + 12, vx: rand(-30, 30) - s.fx * 20, vy: rand(-50, -20), t: 0, life: .45, color: 'rgba(190,165,120,.75)', size: rand(2, 3.5) }); }
+    } else {
+      if (!night && Math.random() < dt * .25) s.fx *= -1;                 // looks around
+      if (!night && !s.jump && Math.random() < dt * .08) s.jump = .5;      // a happy little jump
+    }
+    if (s.jump) s.jump = Math.max(0, s.jump - dt);
+    if (night && Math.random() < dt * .35) floatText(s.x + 10, s.y - 30, 'z', '#BFD4FF', 1.4);
+    if (mine && !night && player.carry === null && dist(player.x, player.y, s.x, s.y) < 70 && Math.random() < dt * 1.2) floatText(s.x + rand(-8, 8), s.y - 34, '♥', '#FF7AB0', 1);
+  }
+  pets.sort((a, b) => spot(a).y - spot(b).y).forEach(p => {
+    const s = spot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id), ph = (typeof p.id === 'number' ? p.id : hashStr(String(p.id)) % 1000) * 1.7;
+    const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * (p.f || 0)) * SIZES[p.z || 0].scale);
+    const glow = (mutOf(p) && mutOf(p).glow) || sp.r === 'D' ? `hsl(46,100%,${78 + Math.sin(t * 4 + ph) * 12}%)` : sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
+    let lift = 0, rot = 0, sx = 1, sy = 1;
+    const h = s.hop, mv = s.moving;
+    if (night) { sy = 1 + Math.sin(t * 1.2 + ph) * .04; rot = .08 * (s.fx || 1); }        // asleep
+    else if (style === 'fly') {
+      lift = 20 + Math.sin(t * 4 + ph) * 5; sy = 1 + Math.sin(t * 22 + ph) * .05; rot = mv ? .12 * s.fx : Math.sin(t * 2 + ph) * .05;
+    } else if (style === 'swim') {
+      lift = 8 + Math.sin(t * 2 + ph) * 4; rot = Math.sin(t * 3 + ph) * .14; sx = 1 + Math.sin(t * 3 + ph) * .04;
+    } else if (mv && style === 'hop') {
+      const a = Math.abs(Math.sin(h)); lift = a * 16; sy = a > .2 ? 1.06 : .86; sx = a > .2 ? .95 : 1.1; rot = -.1 * s.fx * a;
+    } else if (mv && style === 'slither') {
+      sx = 1 + Math.sin(h) * .09; sy = 1 - Math.sin(h) * .06;
+    } else if (mv) {
+      lift = Math.abs(Math.sin(h)) * 4; rot = Math.sin(h) * .13; sy = 1 - .06 * Math.abs(Math.cos(h));
+    } else {
+      sy = 1 + Math.sin(t * 2.2 + ph) * .03; sx = 1 - Math.sin(t * 2.2 + ph) * .015;   // breathing
+    }
+    if (s.jump && !night && style !== 'fly' && style !== 'swim') { const k = Math.sin((1 - s.jump / .5) * Math.PI); lift += k * 14; sy *= 1 + k * .06; }
+    const sh = style === 'fly' || style === 'swim' ? .6 : 1 - Math.min(.4, lift / 40);
+    ctx.fillStyle = `rgba(0,0,0,${.18 * sh})`; ctx.beginPath(); ctx.ellipse(s.x, s.y + 14, 14 * sh, 5 * sh, 0, 0, 7); ctx.fill();
+    drawModel(sp.id, s.x, s.y + 14 - lift, size, s.fx, glow, p.f || 0, rot, sx, sy, p.mut);
+  });
+}
 function petSpot(p) {
   let s = petPos[p.id];
   if (!s) { s = petPos[p.id] = { x: rand(PEN.x + 40, PEN.x + PEN.w - 40), y: rand(PEN.y + 190, PEN.y + PEN.h - 30), tx: 0, ty: 0, wait: rand(0, 2), fx: 1, hop: rand(0, 6) }; s.tx = s.x; s.ty = s.y; }
@@ -4167,55 +4234,7 @@ function drawHub(t, dt) {
       ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(x + 20, y - 12, 7, -Math.PI / 2, -Math.PI / 2 + frac * 6.283); ctx.stroke();
     } else if (p.id !== G.ride || !p.mt) pets.push(p);
   }
-  const night = isNight();
-  for (const p of pets) {
-    const s = petSpot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id);
-    if (p.mut === 'singer' && !isNight() && Math.random() < dt * 1.1) floatText(s.x + rand(-12, 12), s.y - 40, Math.random() < .5 ? '\u266a' : '\u266b', '#FF5AB4', 1.3);
-    s.it = (s.it || 0) + dt;
-    s.wait -= dt;
-    if (s.wait <= 0) { s.tx = rand(PEN.x + 30, PEN.x + PEN.w - 30); s.ty = rand(PEN.y + 190, PEN.y + PEN.h - 26); s.wait = rand(2, 5); }
-    const dx = s.tx - s.x, dy = s.ty - s.y, m = Math.hypot(dx, dy);
-    s.moving = m > 2 && !night;
-    if (s.moving) {
-      const v = MOVE_SPEED[style];
-      s.x += dx / m * v * dt; s.y += dy / m * v * dt; s.fx = dx < 0 ? -1 : 1;
-      s.hop += dt * (style === 'hop' ? 7 : style === 'slither' ? 6 : 10);
-      // dust puffs on each footstep or landing
-      const step = Math.floor(s.hop / Math.PI);
-      if (step !== s.lastStep) { s.lastStep = step; if (style === 'walk' || style === 'hop') for (let k = 0; k < (style === 'hop' ? 4 : 1); k++) parts.push({ x: s.x - s.fx * 10, y: s.y + 12, vx: rand(-30, 30) - s.fx * 20, vy: rand(-50, -20), t: 0, life: .45, color: 'rgba(190,165,120,.75)', size: rand(2, 3.5) }); }
-    } else {
-      if (!night && Math.random() < dt * .25) s.fx *= -1;                 // looks around
-      if (!night && !s.jump && Math.random() < dt * .08) s.jump = .5;      // a happy little jump
-    }
-    if (s.jump) s.jump = Math.max(0, s.jump - dt);
-    if (night && Math.random() < dt * .35) floatText(s.x + 10, s.y - 30, 'z', '#BFD4FF', 1.4);
-    if (!night && player.carry === null && dist(player.x, player.y, s.x, s.y) < 70 && Math.random() < dt * 1.2) floatText(s.x + rand(-8, 8), s.y - 34, '♥', '#FF7AB0', 1);
-  }
-  pets.sort((a, b) => petSpot(a).y - petSpot(b).y).forEach(p => {
-    const s = petSpot(p), sp = SPECIES[p.sp], style = moveStyle(sp.id), ph = p.id * 1.7;
-    const size = Math.min(150, PSIZE[sp.r] * (1 + .14 * (p.f || 0)) * SIZES[p.z || 0].scale);
-    const glow = (mutOf(p) && mutOf(p).glow) || sp.r === 'D' ? `hsl(46,100%,${78 + Math.sin(t * 4 + ph) * 12}%)` : sp.r === 'M' ? rainbow(t) : p.f === 2 ? '#FFD23F' : p.f === 1 ? '#C86AFF' : sp.r === 'L' ? '#FFD23F' : null;
-    let lift = 0, rot = 0, sx = 1, sy = 1;
-    const h = s.hop, mv = s.moving;
-    if (night) { sy = 1 + Math.sin(t * 1.2 + ph) * .04; rot = .08 * (s.fx || 1); }        // asleep
-    else if (style === 'fly') {
-      lift = 20 + Math.sin(t * 4 + ph) * 5; sy = 1 + Math.sin(t * 22 + ph) * .05; rot = mv ? .12 * s.fx : Math.sin(t * 2 + ph) * .05;
-    } else if (style === 'swim') {
-      lift = 8 + Math.sin(t * 2 + ph) * 4; rot = Math.sin(t * 3 + ph) * .14; sx = 1 + Math.sin(t * 3 + ph) * .04;
-    } else if (mv && style === 'hop') {
-      const a = Math.abs(Math.sin(h)); lift = a * 16; sy = a > .2 ? 1.06 : .86; sx = a > .2 ? .95 : 1.1; rot = -.1 * s.fx * a;
-    } else if (mv && style === 'slither') {
-      sx = 1 + Math.sin(h) * .09; sy = 1 - Math.sin(h) * .06;
-    } else if (mv) {
-      lift = Math.abs(Math.sin(h)) * 4; rot = Math.sin(h) * .13; sy = 1 - .06 * Math.abs(Math.cos(h));
-    } else {
-      sy = 1 + Math.sin(t * 2.2 + ph) * .03; sx = 1 - Math.sin(t * 2.2 + ph) * .015;   // breathing
-    }
-    if (s.jump && !night && style !== 'fly' && style !== 'swim') { const k = Math.sin((1 - s.jump / .5) * Math.PI); lift += k * 14; sy *= 1 + k * .06; }
-    const sh = style === 'fly' || style === 'swim' ? .6 : 1 - Math.min(.4, lift / 40);
-    ctx.fillStyle = `rgba(0,0,0,${.18 * sh})`; ctx.beginPath(); ctx.ellipse(s.x, s.y + 14, 14 * sh, 5 * sh, 0, 0, 7); ctx.fill();
-    drawModel(sp.id, s.x, s.y + 14 - lift, size, s.fx, glow, p.f || 0, rot, sx, sy, p.mut);
-  });
+  drawPenAnimals(pets, petSpot, t, dt, true);
 
 }
 
