@@ -89,6 +89,7 @@ canvas.placing{cursor:crosshair}
 .cloud-box p{margin:0;flex:1;min-width:200px;font-size:14px;line-height:1.4}
 .cloud-box .buy{margin:0;padding:8px 14px;font-size:16px}
 .mythicpill{background:linear-gradient(90deg,#D61FA8,#6A3FE0,#1F9EC0);font-size:13px;font-weight:800}
+.mythicpill.divinepill{background:linear-gradient(90deg,#FFF1A8,#F2C230,#FFF1A8);color:#5A3A00;box-shadow:0 0 12px rgba(255,210,63,.8)}
 .mythicpill.abusepill{background:linear-gradient(90deg,#F2C230,#FF7A2A,#E8402C);color:#2B1A00}
 .spacer{flex:1}
 .hbtn{pointer-events:auto;border:0;cursor:pointer;font-family:var(--display);font-size:17px;color:var(--ink);background:var(--panel);border-radius:14px;padding:8px 14px;box-shadow:0 4px 0 var(--line);display:flex;align-items:center;gap:6px}
@@ -205,6 +206,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     <div class="pill where" id="where">Home</div>
     <div class="pill mythicpill" id="mythicPill" hidden></div>
     <div class="pill mythicpill abusepill" id="abusePill" hidden></div>
+    <div class="pill mythicpill divinepill" id="divinePill" hidden></div>
     <div class="pill cloudpill" id="cloudSt" hidden>☁</div>
     <div class="spacer"></div>
     <button class="hbtn shop" id="shopBtn">Shop</button>
@@ -1472,6 +1474,10 @@ function syncHud() {
   const mz = Object.values(zones).filter(z => z.eggs.some(e => e.r === 'M') && G.speed + 1e-6 >= BIOMES[z.i].req).map(z => BIOMES[z.i].name);
   const mp = $('mythicPill'), mt = mz.length ? '✨ Mythic egg in ' + mz.join(', ') : '';
   mp.hidden = !mz.length || night; if (mp.textContent !== mt) mp.textContent = mt;
+  // Divine eggs get their own gold banner (with a lock on the ones you can't take yet)
+  const dz = Object.values(zones).filter(z => z.eggs.some(e => e.r === 'D')).map(z => BIOMES[z.i].name + (G.speed + 1e-6 >= BIOMES[z.i].req ? '' : ' 🔒'));
+  const dp = $('divinePill'), dt2 = dz.length ? '🌟 DIVINE egg in ' + dz.join(', ') : '';
+  dp.hidden = !dz.length || night; if (dp.textContent !== dt2) dp.textContent = dt2;
   $('clockIcon').className = 'ci' + (night ? ' moon' : ''); $('clock').classList.toggle('night', night);
   // hint
   let h = '';
@@ -2161,15 +2167,46 @@ async function saveAbuse(until) {
 }
 function drawAdminTread(t, ox) {
   if (!abuseOn()) return;
-  const a = atmRect(ox), keep = { x: TM.x, y: TM.y };
-  TM.x = a.x; TM.y = a.y;
-  try {
-    drawTreadmill(t, TREAD_MAX);
-    ctx.fillStyle = '#1B2B22'; roundRect(ctx, TM.x + TM.w / 2 - 60, TM.y - 38, 120, 26, 6); ctx.fill();
-    ctx.fillStyle = '#FFE066'; ctx.font = '18px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('+' + fmt(ABUSE_GAIN) + '/s', TM.x + TM.w / 2, TM.y - 18);
-    label('⚡ ADMIN TREADMILL ⚡', TM.x + TM.w / 2, TM.y - 52, 18, '#FFE066');
-  } finally { TM.x = keep.x; TM.y = keep.y; }
+  const a = atmRect(ox), cx = a.x + a.w / 2, pulse = .5 + .5 * Math.sin(t * 5);
+  ctx.save();
+  // a red glow under it
+  const gl = ctx.createRadialGradient(cx, a.y + a.h / 2, 20, cx, a.y + a.h / 2, 190);
+  gl.addColorStop(0, `rgba(255,60,40,${.35 + .2 * pulse})`); gl.addColorStop(1, 'rgba(255,60,40,0)');
+  ctx.fillStyle = gl; ctx.fillRect(a.x - 120, a.y - 120, a.w + 240, a.h + 240);
+  // black and gold frame
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; roundRect(ctx, a.x - 8, a.y + 8, a.w + 16, a.h + 10, 18); ctx.fill();
+  ctx.fillStyle = '#1A0B0B'; roundRect(ctx, a.x - 12, a.y - 6, a.w + 24, a.h + 12, 18); ctx.fill();
+  ctx.strokeStyle = `hsl(46,100%,${55 + pulse * 15}%)`; ctx.lineWidth = 4; roundRect(ctx, a.x - 12, a.y - 6, a.w + 24, a.h + 12, 18); ctx.stroke();
+  // the belt: dark red with gold lightning bolts and the word ADMIN rolling by
+  ctx.save(); roundRect(ctx, a.x, a.y, a.w, a.h, 12); ctx.clip();
+  const bg = ctx.createLinearGradient(0, a.y, 0, a.y + a.h); bg.addColorStop(0, '#3A0808'); bg.addColorStop(.5, '#5A0E0E'); bg.addColorStop(1, '#3A0808');
+  ctx.fillStyle = bg; ctx.fillRect(a.x, a.y, a.w, a.h);
+  const off = -((beltPhase * 1.6) % 110);
+  for (let x = a.x + off - 110; x < a.x + a.w + 110; x += 110) {
+    ctx.fillStyle = '#FFD23F'; ctx.beginPath();
+    ctx.moveTo(x + 14, a.y + 8); ctx.lineTo(x + 4, a.y + 46); ctx.lineTo(x + 14, a.y + 46); ctx.lineTo(x + 6, a.y + 84); ctx.lineTo(x + 26, a.y + 38); ctx.lineTo(x + 16, a.y + 38); ctx.lineTo(x + 26, a.y + 8); ctx.closePath(); ctx.fill();
+    ctx.font = '22px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = `rgba(255,224,102,${.75 + .25 * pulse})`;
+    ctx.fillText('ADMIN', x + 36, a.y + a.h / 2 + 8);
+  }
+  ctx.restore();
+  // rubies in the corners
+  for (const [gx, gy] of [[a.x - 6, a.y], [a.x + a.w + 6, a.y], [a.x - 6, a.y + a.h], [a.x + a.w + 6, a.y + a.h]]) {
+    ctx.fillStyle = '#E8202C'; ctx.beginPath(); ctx.moveTo(gx, gy - 9); ctx.lineTo(gx + 7, gy); ctx.lineTo(gx, gy + 9); ctx.lineTo(gx - 7, gy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `rgba(255,255,255,${.4 + .6 * pulse})`; ctx.beginPath(); ctx.arc(gx - 2, gy - 3, 2, 0, 7); ctx.fill();
+  }
+  // little sparks jumping off it
+  for (let k = 0; k < 6; k++) {
+    const ph = (t * .8 + k / 6) % 1, sx = a.x + ((k * 53 + 17) % a.w), sy = a.y - ph * 50;
+    ctx.globalAlpha = 1 - ph; ctx.fillStyle = k % 2 ? '#FFE066' : '#FF7A2A'; ctx.beginPath(); ctx.arc(sx, sy, 3, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // console
+  ctx.fillStyle = '#1A0B0B'; roundRect(ctx, cx - 64, a.y - 42, 128, 30, 8); ctx.fill();
+  ctx.strokeStyle = '#FFD23F'; ctx.lineWidth = 2; roundRect(ctx, cx - 64, a.y - 42, 128, 30, 8); ctx.stroke();
+  ctx.fillStyle = '#FFE066'; ctx.font = '19px "Lilita One", system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('+' + fmt(ABUSE_GAIN) + '/s', cx, a.y - 20);
+  ctx.restore();
+  label('⚡ ADMIN TREADMILL ⚡', cx, a.y - 58, 19, '#FFE066');
 }
 // ================= HOW LONG DAY AND NIGHT LAST (set by the game owner) =================
 const TIMES_KEY = 'egg-heist-times-v1';
@@ -2510,7 +2547,7 @@ const TR_EXACT = {
   'Speed': 'Hız', 'Home': 'Ev', 'until night': 'geceye kadar', 'until morning': 'sabaha kadar', 'off': 'kapalı', 'on': 'açık', 'Fuse': 'Birleştir',
   'RUN': 'KOŞ', 'tap fast': 'hızlı bas', 'GRAB': 'AL', 'ADOPT': 'SAHİPLEN', 'or Space': 'veya Boşluk', 'Done': 'Tamam', 'NEW': 'YENİ',
   'TREADMILL': 'KOŞU BANDI', 'FUSE MACHINE': 'BİRLEŞTİRME MAKİNESİ', '3 ready!': '3 hazır!', 'MAX': 'MAKS', 'SPACE': 'BOŞLUK', 'grab': 'al', 'adopt': 'sahiplen',
-  '✨ Mythic egg inside!': '✨ İçeride mitik yumurta!', '🌙 closed for the night': '🌙 gece kapalı',
+  '✨ Mythic egg inside!': '✨ İçeride mitik yumurta!', '🌟 DIVINE egg inside!': '🌟 İçeride İLAHİ yumurta!', '🌙 closed for the night': '🌙 gece kapalı',
   // Shop
   'Treadmill': 'Koşu bandı', 'Max speed': 'En yüksek hız', 'Speed per second on it': 'Üstündeyken saniyede hız', 'Speed every second on it': 'Üstündeyken saniyede hız', 'Speed limit': 'Hız sınırı', 'Speed per tap': 'Dokunuş başına hız',
   'Fully upgraded': 'Tamamen geliştirildi', 'Slots for eggs and pets': 'Yumurta ve hayvan yeri', 'Pet income bonus': 'Hayvan gelir bonusu',
@@ -2659,6 +2696,7 @@ const TR_RULES = [
   [/^Better eggs, eggs hatch 2× faster, and an admin treadmill \(\+(.+)\/s\) is at your home!$/, 'Daha iyi yumurtalar, 2 kat hızlı çıkma ve evinde bir yönetici koşu bandı (+$1/sn)!'],
   [/^For everyone: better eggs spawn.*$/, 'Herkes için: daha iyi yumurtalar çıkar, yumurtalar 2 kat hızlı çıkar ve her evde bir yönetici koşu bandı (saniyede +2.5k hız) belirir.'],
   [/^The admin treadmill gives you (.+) speed every second!$/, 'Yönetici koşu bandı sana saniyede $1 hız veriyor!'],
+  [/^🌟 DIVINE egg in (.+)$/, '🌟 İLAHİ yumurta: $1'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -4452,6 +4490,7 @@ function drawGate(i) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, BH); ctx.stroke(); ctx.restore();
   }
   for (const sy of [BH * .2, BH * .5, BH * .8]) drawSign(x, sy, B, locked || weak, night ? '🌙 closed for the night' : weak ? `🔒 eggs need speed ${B.req}` : '');
+  if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'D')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('🌟 DIVINE egg inside!', x, sy - 64, 17, '#FFE066');
   if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'M')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('✨ Mythic egg inside!', x, sy - 44, 16, '#FFB8F0');
 }
 function drawGuard(g, B0, z, t) {
