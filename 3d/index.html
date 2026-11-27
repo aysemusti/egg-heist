@@ -216,9 +216,9 @@ const spIndex = id => SPECIES.findIndex(s => s.id === id);
 // upgrades
 const TREAD_MAX = 30, PEN_MAX = 22;
 // speed you gain every second while standing on the treadmill (no limit on how high it goes)
-const TREAD_GAIN = [0, 1, 5, 10, 15, 20, 30, 40, 50, 65, 80, 100, 120, 145, 170, 200, 240, 280, 330, 380, 450, 520, 600, 700, 800, 950, 1100, 1300, 1500, 1750, 2000];
+const TREAD_GAIN = [0, 1, 5, 6, 8, 10, 12, 15, 18, 21, 25, 29, 33, 38, 43, 49, 55, 62, 70, 78, 87, 96, 106, 117, 129, 142, 156, 171, 187, 205, 225];
 const treadIdle = L => TREAD_GAIN[L] || 1;
-const treadCost = L => [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
+const treadCost = L => (L <= 1 ? 1.5 : 5) * [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
   500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
 // how running moves you: more speed is faster, but it levels off very high up
 const MOVE_SPEED_CAP = 100000;
