@@ -119,6 +119,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .runbtn{position:absolute;right:max(18px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));width:96px;height:96px;border-radius:50%;border:0;cursor:pointer;
   background:var(--speed);color:#fff;font-family:var(--display);font-size:26px;box-shadow:0 6px 0 #1F6CBF,0 10px 24px rgba(0,0,0,.25);touch-action:manipulation}
 .runbtn.hitbtn{right:calc(max(18px,env(safe-area-inset-right,0px)) + 106px);background:#8A5A35;box-shadow:0 5px 0 #5A3A22;width:76px;height:76px;font-size:19px}
+.runbtn.dropbtn{right:calc(max(18px,env(safe-area-inset-right,0px)) + 106px);bottom:calc(112px + env(safe-area-inset-bottom,0px));width:66px;height:66px;font-size:15px;background:#E8402C;box-shadow:0 5px 0 #A82A1E}
 .runbtn.jumpbtn{bottom:calc(124px + env(safe-area-inset-bottom,0px));width:66px;height:66px;font-size:16px;background:#3B95F0;box-shadow:0 5px 0 #24539E}
 @media (hover:hover) and (pointer:fine){.runbtn.jumpbtn{display:none}}
 .runbtn small{display:block;font-family:var(--body);font-size:11px;font-weight:700;opacity:.9}
@@ -223,6 +224,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
   <div class="hint" id="hint"></div>
   <button class="runbtn" id="runBtn" hidden>RUN<small>tap fast</small></button>
   <button class="runbtn hitbtn" id="hitBtn" hidden>HIT<small>or F</small></button>
+  <button class="runbtn dropbtn" id="dropBtn" hidden>DROP<small>or X</small></button>
   <button class="runbtn jumpbtn" id="jumpBtn">JUMP<small>or Space</small></button>
 
   <div class="modal" id="modal" hidden>
@@ -437,7 +439,8 @@ const BIOMES = [
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 // guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
-const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 300 * Math.log(1 + (sp - 280) / 280);
+// more speed always makes you faster, but very high speeds grow gently so you can still see where you go
+const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 4 * Math.pow(sp - 280, 0.6);
 // the same numbers are also the smallest speed you need to take eggs in that biome
 BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = b.guard.lv;   // guardians run 50% faster than the first list; you need that same speed to take eggs
   b.guard.speed = Math.round(speedPx(b.guard.lv)); });
@@ -487,7 +490,7 @@ const treadIdle = L => TREAD_GAIN[L] || 1;
 const treadCost = L => (L <= 1 ? 2.5 : 100) * [0, 40, 300, 1800, 9000, 40000, 180000, 800000, 3500000, 15000000, 70e6, 300e6, 1.3e9, 6e9, 30e9, 150e9, 800e9, 4e12, 20e12, 100e12,
   500e12, 2.5e15, 12e15, 60e15, 300e15, 1.5e18, 7.5e18, 40e18, 200e18, 1e21][L];       // cost to go from L to L+1
 // how running moves you: more speed is faster, but it levels off very high up
-const MOVE_SPEED_CAP = 100000;
+const MOVE_SPEED_CAP = 1e12;
 const penSlots = L => 2 + L;
 const penCost = L => Math.round(25 * Math.pow(2.6, L - 1));
 const penBonus = L => 1 + 0.15 * (L - 1);
@@ -944,6 +947,7 @@ addEventListener('keydown', ev => {
   if ((ev.key === ' ' || ev.key === 'e' || ev.key === 'E') && !ev.repeat) tap();
   if ((ev.key === 'q' || ev.key === 'Q') && !ev.repeat) toggleSlow();
   if ((ev.key === 'f' || ev.key === 'F') && !ev.repeat) swingBat();
+  if ((ev.key === 'x' || ev.key === 'X') && !ev.repeat) dropCarry();
 });
 addEventListener('keyup', ev => { keys[ev.key.toLowerCase()] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; joy = null; });
@@ -953,6 +957,7 @@ const endJoy = ev => { if (joy && joy.id === ev.pointerId) joy = null; };
 cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
 $('runBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); tap(); });
 $('hitBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); swingBat(); });
+$('dropBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); dropCarry(); });
 $('jumpBtn').addEventListener('pointerdown', ev => { ev.preventDefault(); audioOn(); jump(); });
 function inputVec() {
   let x = 0, y = 0;
@@ -1017,6 +1022,14 @@ function tryGrab() {
 function tap() {
   if (modalOpen) return;
   if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); else jump();
+}
+// put down the egg you are carrying, right where you stand (in a party everyone sees it)
+function dropCarry() {
+  if (modalOpen || !player.carry) return;
+  const c = player.carry; player.carry = null;
+  dropEgg(c, player.x + player.fx * 30, player.y + 10);
+  sfx.drop(); floatText(player.x, player.y - 80, 'Dropped!', '#FFE066', 1);
+  sendPresence(true); save();
 }
 // Space jumps when there is no egg or pet to pick up
 function jump() {
@@ -1411,6 +1424,7 @@ function syncHud() {
   $('spd').textContent = fmt(G.speed);
   $('spdBar').style.width = (nextB ? (G.speed - prevReq) / (nextB.req - prevReq) * 100 : 100).toFixed(1) + '%';
   $('spdCap').textContent = '+' + fmt(treadIdle(G.tL)) + '/s';
+  $('dropBtn').hidden = !player.carry;
   $('penCnt').textContent = `${G.pen.length}/${penSlots(G.pL)}`;
   $('bagCnt').textContent = G.inv.length;
   $('idxCnt').textContent = `${SPECIES.filter(s => G.found[s.id]).length}/${SPECIES.length}`;
@@ -1436,7 +1450,7 @@ function syncHud() {
     const B = BIOMES[scene];
     const chased = Object.values(zones).some(z => z.guards.some(g => g.st === 'chase' || g.st === 'wait'));
     if (chased) h = 'A guardian is chasing you! Run all the way home.';
-    else if (player.carry) h = `Got a ${RAR[player.carry.r].name.toLowerCase()} egg. Run left, back home to your pen.`;
+    else if (player.carry) h = `Got a ${RAR[player.carry.r].name.toLowerCase()} egg. Run left, back home to your pen. (X drops it.)`;
     else if (nearEgg) h = 'Press Space or tap GRAB to pick up the egg.';
     else if (party && lastFriends.some(fr => Math.abs(fr.v.x - player.x) < 400)) h = 'Press F or tap HIT to swing your bat. A friend you hit drops their egg!';
     else if (G.speed + 1e-6 < B.req) h = `You can look around, but you need speed ${B.req} to take eggs in the ${B.name}.`;
@@ -2416,7 +2430,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2491,7 +2505,7 @@ const TR_RULES = [
   [/^Tap anywhere to place (.+)$/, 'Yerleştirmek için bir yere dokun: $1'], [/^✨ Mythic egg in (.+)$/, '✨ Mitik yumurta: $1'],
   [/^PEN  (.+)$/, 'AĞIL  $1'], [/^🔒 needs speed (\d+)$/, '🔒 hız $1 gerekli'],
   // hints
-  [/^Got an? (\w+) egg\. Run left, back home to your pen\.$/, '$1 bir yumurta aldın. Sola, evine ve ağılına koş.'],
+  [/^Got an? (\w+) egg\. Run left, back home to your pen\. \(X drops it\.\)$/, '$1 bir yumurta aldın. Sola, evine ve ağılına koş. (X ile bırakırsın.)'], [/^Got an? (\w+) egg\. Run left, back home to your pen\.$/, '$1 bir yumurta aldın. Sola, evine ve ağılına koş.'],
   [/^It's night\. The biomes open again in (\d+) seconds\.$/, 'Gece oldu. Biyomlar $1 saniye sonra tekrar açılır.'],
   [/^Reach speed (\d+) on the treadmill to unlock the (.+)\.$/, '$2 kilidini açmak için koşu bandında $1 hıza ulaş.'],
   [/^Walk up to an egg\. The (.+) only chases you once you take one of its eggs, and the rarest sit by its nest\.$/, 'Bir yumurtaya yürü. $1 sadece yumurtalarından birini alınca seni kovalar; en nadir olanlar yuvasının yanında durur.'],
