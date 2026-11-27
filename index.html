@@ -560,7 +560,7 @@ const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
 const CARRY_LOSS = { C: 0, R: 30, E: 100, L: 250, M: 300, D: 2000 }, SIZE_LOSS = [0, 600, 2000];
 const carryLoss = c => c ? (CARRY_LOSS[c.r] || 0) + (SIZE_LOSS[c.es || 0] || 0) : 0;
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', born: Date.now(), mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -580,6 +580,7 @@ function loadSave(obj) {
     }
     g.cos = Object.assign(freshSave().cos, g.cos && typeof g.cos === 'object' ? g.cos : {}); if (!Array.isArray(g.cos.own)) g.cos.own = [];
     if (g.lang !== 'tr') g.lang = 'en';
+    g.born = 'born' in obj ? Math.max(0, +obj.born || 0) : 0;   // saves from before this existed may still get waiting gifts
     g.mounts = Math.max(0, Math.floor(+g.mounts || 0)); g.ride = +g.ride || 0;
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
     g.speed = Math.max(0, +g.speed || 0); g.money = Math.max(0, +g.money || 0);
@@ -1512,7 +1513,7 @@ $('modal').addEventListener('click', ev => {
   else if (b.id === 'leaveParty') leaveParty(false);
   else if (b.id === 'copyCode') { const code = partyCode; navigator.clipboard?.writeText(code).then(() => toast('\ud83d\udccb', 'Party code copied', code)).catch(() => { const r = document.createRange(); const el = document.querySelector('.party-code b'); if (el) { r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r); } }); }
   else if (b.id === 'resetBtn') {
-    if (b.dataset.armed) { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} const m = G.muted; G = freshSave(); G.muted = m; petPos = {}; goHome(); closeModal(); toast('🥚', 'Fresh start', 'All progress was wiped'); syncHud(); }
+    if (b.dataset.armed) { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} const m = G.muted, gifts = G.gifts; G = freshSave(); G.muted = m; G.gifts = Array.isArray(gifts) ? gifts : []; petPos = {}; goHome(); closeModal(); toast('🥚', 'Fresh start', 'All progress was wiped'); syncHud(); }
     else { b.dataset.armed = '1'; b.textContent = 'Tap again to wipe all progress'; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = 'Reset progress'; } }, 3000); }
   }
 });
@@ -1824,7 +1825,8 @@ async function claimGifts() {
     let got = 0;
     for (const g of fresh) {
       if (G.gifts.includes(g.id)) continue;
-      if (!seen.has(g.id)) { applyGift(g, 'From the game owner'); got++; }
+      const old = (+g.at || 0) < (G.born || 0) - 60000;   // sent before this save began
+      if (!seen.has(g.id) && !old) { applyGift(g, 'From the game owner'); got++; }
       G.gifts.push(g.id);
     }
     G.gifts = G.gifts.slice(-300); save(); if (got) cloudPush();
