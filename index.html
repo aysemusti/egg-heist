@@ -1339,7 +1339,11 @@ function caught(B, catcher) {
   const dir = Math.sign(player.x - (catcher ? catcher.x : player.x + 1)) || -1;
   // guardians from later biomes hit harder: from 1x in the Forest up to 4x in the last biome
   const gi = Math.max(0, BIOMES.findIndex(b2 => b2.guard === B.guard)), power = 1 + 3 * gi / Math.max(1, BIOMES.length - 1);
-  knock(dir, `The ${B.guard.name.toLowerCase()} hit you!`, lost ? `You dropped the ${RAR[lost.r].name.toLowerCase()} egg. Grab it again if you dare!` : 'Ouch!', B.guard.m, power);
+  const before = loose.length;
+  knock(dir, `The ${B.guard.name.toLowerCase()} hit you!`, lost ? `The ${B.guard.name.toLowerCase()} grabbed the ${RAR[lost.r].name.toLowerCase()} egg back!` : 'Ouch!', B.guard.m, power);
+  // the guardian snatches the egg you dropped straight away, then carries it home
+  const dropped = loose.length > before ? loose[loose.length - 1] : null;
+  if (catcher && dropped && !catcher.wild) { catcher.st = 'fetch'; catcher.fetchId = dropped.id; }
 }
 
 // guardians in biomes you have left walk back to their nests
@@ -2928,7 +2932,7 @@ const TR_RULES = [
   [/^Tap Pick a spot, then tap the map as many times as you like\. .* (\d+) placed\.$/, 'Yer seç\'e dokun, sonra haritaya istediğin kadar dokun. Nesneler herkes için kalır, oyun kapansa bile. $1 tane yerleştirildi.'],
   [/^You can place up to (\d+)\. Erase some first\.$/, 'En fazla $1 tane yerleştirebilirsin. Önce birkaçını sil.'],
   [/^(\d+)× Mount mutations$/, '$1× Binek mutasyonu'], [/^Gift: (an? |\d+ )Mount mutations?$/, 'Hediye: Binek mutasyonu'], [/^(.+)\. Open your Bag to put (it|them) on a pet\.$/, '$1. Bir hayvana koymak için Çantanı aç.'],
-  [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
+  [/^The (.+) hit you!$/, (m, g) => g.charAt(0).toUpperCase() + g.slice(1) + ' sana vurdu!'], [/^The (.+) grabbed the (\w+) egg back!$/, (m, g, r) => g.charAt(0).toUpperCase() + g.slice(1) + ' ' + r + ' yumurtayı geri kaptı!'], [/^You dropped the (\w+) egg\. Grab it again if you dare!$/, '$1 yumurtayı düşürdün. Cesaretin varsa tekrar al!'],
   [/^(.+) hit you with a bat!$/, '$1 sana sopayla vurdu!'], [/^(.+)'s pen  (\d+) pets(.*)$/, (m, n, k, e) => n + ' ağılı  ' + k + ' hayvan' + (e ? e.replace(/ eggs$/, ' yumurta') : '')],
   [/^(.+)'s TREADMILL  LV (\d+)$/, '$1 KOŞU BANDI  SV $2'], [/^(.+)'s PEN  (\d+)\/(\d+)$/, '$1 AĞILI  $2/$3'], [/^(.+)'s home$/, '$1 evi'],
   [/^Your (\w+) egg disappeared in the dark\. (.+)$/, (m, r, rest) => r + ' yumurtan karanlıkta kayboldu. ' + (TR_EXACT[rest] || rest)],
