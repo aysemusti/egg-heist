@@ -75,6 +75,7 @@ canvas.placing{cursor:crosshair}
 .cos img{width:72px;height:84px}.cos b{font-size:13px;line-height:1.2}
 .cos .buy,.cos .sell{margin:0;padding:6px 10px;font-size:13px;width:100%}
 .cos .buy{font-family:var(--body);font-weight:800}
+.events-box{border:2px solid #F2C230}.ev-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}.ev{background:#fff;border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:4px}.ev span{font-size:12px;color:var(--muted)}.ev .adm-btns{margin-top:auto}
 .party-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 #partyCode{font-family:var(--display);font-size:26px;letter-spacing:.18em;text-transform:uppercase;padding:8px 12px;border-radius:12px;border:2px solid var(--line);background:#fff;color:var(--ink);width:100%;box-sizing:border-box;-webkit-user-select:text;user-select:text}
 #partyCode:focus{outline:3px solid var(--speed);outline-offset:1px}
@@ -90,6 +91,7 @@ canvas.placing{cursor:crosshair}
 .cloud-box .buy{margin:0;padding:8px 14px;font-size:16px}
 .mythicpill{background:linear-gradient(90deg,#D61FA8,#6A3FE0,#1F9EC0);font-size:13px;font-weight:800}
 .mythicpill.divinepill{background:linear-gradient(90deg,#FFF1A8,#F2C230,#FFF1A8);color:#5A3A00;box-shadow:0 0 12px rgba(255,210,63,.8)}
+.mythicpill.eventpill{background:linear-gradient(90deg,#3DBB5C,#9BE86A);color:#0E3A18}
 .mythicpill.abusepill{background:linear-gradient(90deg,#F2C230,#FF7A2A,#E8402C);color:#2B1A00}
 .spacer{flex:1}
 .hbtn{pointer-events:auto;border:0;cursor:pointer;font-family:var(--display);font-size:17px;color:var(--ink);background:var(--panel);border-radius:14px;padding:8px 14px;box-shadow:0 4px 0 var(--line);display:flex;align-items:center;gap:6px}
@@ -209,6 +211,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     <div class="pill where" id="where">Home</div>
     <div class="pill mythicpill" id="mythicPill" hidden></div>
     <div class="pill mythicpill abusepill" id="abusePill" hidden></div>
+    <div class="pill mythicpill eventpill" id="eventPill" hidden></div>
     <div class="pill mythicpill divinepill" id="divinePill" hidden></div>
     <div class="pill cloudpill" id="cloudSt" hidden>☁</div>
     <div class="spacer"></div>
@@ -547,7 +550,7 @@ function drawMount(q, x, y, fx, moving, step, t) {
 }
 const mutOf = p => p && MUT[p.mut] ? MUT[p.mut] : null;
 function pickMut() { let r = Math.random() * MUT_KEYS.reduce((a, k) => a + MUT[k].w, 0); for (const k of MUT_KEYS) { if ((r -= MUT[k].w) < 0) return k; } return 'bronze'; }
-const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
+const petInc = p => petIncome(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1) * (evOn('money') ? 2 : 1);
 const petSell = p => sellValue(SPECIES[p.sp]) * FUSE[p.f || 0].mult * SIZES[p.z || 0].mult * (mutOf(p) ? mutOf(p).mult : 1);
 const petName = p => [SIZES[p.z || 0].name, mutOf(p) ? mutOf(p).name : '', FUSE[p.f || 0].name, SPECIES[p.sp].name].filter(Boolean).join(' ');
 const FUSER = { x: 175, y: 640 };
@@ -1739,7 +1742,7 @@ function onPartyPeers(ch) {
   partyPeers = ch.peers.filter(p => !p.isMe && p.kind === 'viewer');
   const ids = partyPeers.map(p => p.by).filter(Boolean);
   if (meUser && ids.length) meUser.profiles(ids).then(ps => { for (const id of ids) partyNames[id] = (ps[id] && ps[id].name) || ''; partyDirty = true; }).catch(() => {});
-  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); if (isAdmin) setTimeout(() => getRoom().then(r => r && r.emit('times', { day: DAY, night: NIGHT })).catch(() => {}), 1700); if (isAdmin && abuseOn()) setTimeout(() => getRoom().then(r => r && r.emit('abuse', { until: abuseUntil })).catch(() => {}), 1900); }
+  for (const p of ch.joined) if (!p.isMe && p.kind === 'viewer') { hatchSeen[p.peer] = (p.presence && p.presence.h) || ''; setTimeout(() => toast('👋', `${friendName(p)} joined the party`, 'Look for them in the world.'), 600); if (isAdmin && worldObjs.length) setTimeout(() => getRoom().then(r => r && r.emit('objs', { list: worldObjs })).catch(() => {}), 1500); if (isAdmin) setTimeout(() => getRoom().then(r => r && r.emit('times', { day: DAY, night: NIGHT })).catch(() => {}), 1700); if (isAdmin && evOn('money')) setTimeout(() => getRoom().then(r => r && r.emit('event', { name: 'money', until: evUntil.money })).catch(() => {}), 2100); if (isAdmin && meteorUntil > Date.now()) setTimeout(() => getRoom().then(r => r && r.emit('meteor', { until: meteorUntil, block: meteorBlock })).catch(() => {}), 2300); if (isAdmin && abuseOn()) setTimeout(() => getRoom().then(r => r && r.emit('abuse', { until: abuseUntil })).catch(() => {}), 1900); }
   for (const p of ch.left) if (!p.isMe && p.kind === 'viewer') { delete partyViews[p.peer]; delete hatchSeen[p.peer]; toast('👋', `${friendName(p)} left the party`, ''); }
   for (const p of ch.updated) {
     if (p.isMe) continue;
@@ -1843,7 +1846,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '', admAbuseMin: '5' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '', admAbuseMin: '5', admEvMin: '5' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1851,7 +1854,8 @@ async function adminInit() {
     if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
-      db.doc('admin/meteor').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setMeteor(d.until); }, () => {});
+      db.doc('admin/meteor').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setMeteor(d.until, d.block); }, () => {});
+      db.doc('admin/events').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setEvent('money', d.money); }, () => {});
       db.doc('admin/abuse').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setAbuse(d.until); }, () => {});
       db.doc('admin/times').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setTimes(d.day, d.night, !giftsLoaded); }, () => {});
       db.doc('admin/objects').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setObjs(d.list); }, () => {});
@@ -1861,7 +1865,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); r.on('abuse', onAbuse, () => {}); r.on('meteor', onMeteor, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); r.on('abuse', onAbuse, () => {}); r.on('meteor', onMeteor, () => {}); r.on('event', onEvent, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1970,7 +1974,15 @@ async function adminAction(what) {
   }
   if (kind === 'place') { startPlacing(); return; }
   if (kind === 'abuse') { await saveAbuse(Date.now() + clamp(num(f.admAbuseMin) || 5, 1, 180) * 60000); renderTab(); return; }
-  if (kind === 'meteor') { await startMeteorForAll(); toast('☄️', 'Meteor rain started', 'Thunder Peaks, for 1 minute.'); return; }
+  if (kind === 'ev') {
+    const mins = clamp(num(f.admEvMin) || 5, 1, 180), ms = mins * 60000, ev = target;
+    if (ev === 'meteor') { await startMeteorForAll(ms); toast('☄️', 'Meteor rain started', `Thunder Peaks, for ${mins} minutes.`); }
+    else if (ev === 'meteorstop') { await startMeteorForAll(0, true); toast('☄️', 'Meteor rain stopped', ''); }
+    else if (ev === 'abuse') { await saveAbuse(Date.now() + ms); }
+    else if (ev === 'money' || ev === 'moneystop') { await startEvent(ev, ms); if (ev === 'moneystop') toast('💰', 'Double money stopped', ''); }
+    else if (['eggstorm', 'night', 'day'].includes(ev)) await startEvent(ev);
+    renderTab(); return;
+  }
   if (kind === 'abusestop') { await saveAbuse(1); renderTab(); return; }
   if (kind === 'times') { await saveTimesForAll(f.admDay || DAY, f.admNight || NIGHT); f.admDay = ''; f.admNight = ''; renderTab(); return; }
   if (kind === 'objplace' || kind === 'objerase') {
@@ -2053,6 +2065,17 @@ function adminHTML() {
   return `
     <div><h3>Admin panel</h3><p class="note">Only you can see this. On the website, gifts, spawned eggs and placed things reach the players in your party right now.</p></div>
     <div class="adm send-to"><label>Send gifts to${sel('admTo', [['all', 'Everyone'], ['me', 'Just me'], ...partyPeers.map(p => [p.by ? 'u:' + p.by : 'p:' + p.peer, 'Only ' + friendName(p) + ' (in your party)'])])}</label></div>
+    <div class="up events-box"><h3>Events</h3>
+      <span class="note" style="font-size:12px">Start an event for everyone. Timed events last as many minutes as you choose.</span>
+      <div class="adm" style="max-width:220px"><label>How many minutes<input id="admEvMin" type="number" min="1" max="180" value="${esc(f.admEvMin)}"></label></div>
+      <div class="ev-grid">
+        <div class="ev"><b>☄️ Meteor rain</b><span>Rocks fall in Thunder Peaks${meteorOn() ? ' · running' : ''}</span><div class="adm-btns"><button class="buy" data-adm="ev:meteor">Start</button><button class="sell" data-adm="ev:meteorstop">Stop</button></div></div>
+        <div class="ev"><b>💰 Double money</b><span>Every pet earns 2×${evOn('money') ? ' · running' : ''}</span><div class="adm-btns"><button class="buy" data-adm="ev:money">Start</button><button class="sell" data-adm="ev:moneystop">Stop</button></div></div>
+        <div class="ev"><b>⚡ Admin abuse</b><span>Better eggs, 2× hatching, admin treadmill${abuseOn() ? ' · running' : ''}</span><div class="adm-btns"><button class="buy" data-adm="ev:abuse">Start</button><button class="sell" data-adm="abusestop">Stop</button></div></div>
+        <div class="ev"><b>🥚 Egg storm</b><span>10 extra eggs in every biome until night</span><div class="adm-btns"><button class="buy" data-adm="ev:eggstorm">Start</button></div></div>
+        <div class="ev"><b>🌙 Night now</b><span>Makes it night for everyone</span><div class="adm-btns"><button class="buy" data-adm="ev:night">Start</button></div></div>
+        <div class="ev"><b>☀️ Day now</b><span>Makes it morning for everyone</span><div class="adm-btns"><button class="buy" data-adm="ev:day">Start</button></div></div>
+      </div></div>
     <div class="ups adm">
       <div class="up"><h3>Money</h3>
         <label>Amount<input id="admMoney" type="text" inputmode="numeric" value="${esc(f.admMoney)}"></label>
@@ -2101,7 +2124,6 @@ function adminHTML() {
         <label>How many minutes<input id="admAbuseMin" type="number" min="1" max="180" value="${esc(f.admAbuseMin)}"></label>
         <span class="note" style="font-size:12px">${abuseOn() ? `Running now: ${Math.ceil((abuseUntil - Date.now()) / 60000)} minutes left.` : 'Not running.'}</span>
         <div class="adm-btns"><button class="buy" data-adm="abuse">Start for everyone</button><button class="sell" data-adm="abusestop">Stop</button></div></div>
-      <div class="up"><h3>Meteor rain</h3><span class="note" style="font-size:12px">Starts 1 minute of meteor rain in Thunder Peaks for everyone. (It also happens by itself now and then.)</span><div class="adm-btns"><button class="buy" data-adm="meteor">Start meteor rain</button></div></div>
       <div class="up"><h3>Day and night</h3>
         <div class="adm-row"><label>Day (seconds)<input id="admDay" type="number" min="20" max="3600" value="${esc(f.admDay || DAY)}"></label><label>Night (seconds)<input id="admNight" type="number" min="5" max="600" value="${esc(f.admNight || NIGHT)}"></label></div>
         <span class="note" style="font-size:12px">Now: day ${DAY} seconds, night ${NIGHT} seconds. Day can be 20 to 3600 seconds, night 5 to 600.</span>
@@ -2170,18 +2192,23 @@ const traderPos = () => ({ x: ZX(THUNDER) + TRADER.x, y: TRADER.y });
 // Meteor rain comes now and then, at the same moments for everyone (it follows the real clock):
 // every 2.5 minutes there is a 1 in 3 chance of 45 seconds of meteors. The owner can also start one.
 const METEOR_WIN = 150000, METEOR_LEN = 45000;
-let meteorUntil = 0, meteors = [], rocksOnGround = [], meteorT = 0, meteorWas = false, nearTrader = false;
+let meteorBlock = 0, meteorUntil = 0, meteors = [], rocksOnGround = [], meteorT = 0, meteorWas = false, nearTrader = false;
 function meteorOn() {
   if (isNight()) return false;
   const now = Date.now(), w = Math.floor(now / METEOR_WIN);
+  if (now < meteorBlock) return false;
   return now < meteorUntil || (hashStr('meteor:' + w) % 3 === 0 && now - w * METEOR_WIN < METEOR_LEN);
 }
-function setMeteor(until) { until = Math.round(+until || 0); if (Number.isFinite(until) && until > 0) meteorUntil = Math.min(until, Date.now() + 600000); }
-function onMeteor(msg) { const d = msg && msg.data; if (d && !msg.isMe) setMeteor(d.until); }
-async function startMeteorForAll() {
-  setMeteor(Date.now() + 60000);
-  const r = await getRoom(); if (r) { try { await r.emit('meteor', { until: meteorUntil }); } catch (e) {} }
-  if (adminDb) { try { await adminDb.doc('admin/meteor').set({ until: meteorUntil }); } catch (e) {} }
+function setMeteor(until, block) {
+  until = Math.round(+until || 0); if (Number.isFinite(until) && until >= 0) meteorUntil = Math.min(until, Date.now() + 3600e3);
+  block = Math.round(+block || 0); if (Number.isFinite(block) && block >= 0) meteorBlock = Math.min(block, Date.now() + METEOR_WIN);
+}
+function onMeteor(msg) { const d = msg && msg.data; if (d && !msg.isMe) setMeteor(d.until, d.block); }
+async function startMeteorForAll(ms, stop) {
+  // stopping also blocks the natural rain until its 2.5 minute window is over
+  if (stop) setMeteor(0, (Math.floor(Date.now() / METEOR_WIN) + 1) * METEOR_WIN); else setMeteor(Date.now() + (ms || 60000), 0);
+  const r = await getRoom(); if (r) { try { await r.emit('meteor', { until: meteorUntil, block: meteorBlock }); } catch (e) {} }
+  if (adminDb) { try { await adminDb.doc('admin/meteor').set({ until: meteorUntil, block: meteorBlock }); } catch (e) {} }
 }
 function updateMeteors(dt) {
   const on = meteorOn();
@@ -2280,6 +2307,43 @@ function doTrade(v) {
     G.rocks -= cost; sfx.buy(); toast('🥚', `Traded for a ${RAR[item.r].name} egg`, G.pen.includes(item) ? 'It is hatching in your pen.' : 'Your pen is full, so it went into your bag.');
   }
   save(); syncHud(); renderTab();
+}
+// ================= EVENTS THE OWNER CAN START =================
+const evUntil = { money: 0 }, evWas = {};
+function evOn(name) { return Date.now() < (evUntil[name] || 0); }
+function setEvent(name, until) { until = Math.round(+until || 0); if (name in evUntil && Number.isFinite(until) && until >= 0) evUntil[name] = Math.min(until, Date.now() + 3 * 3600e3); }
+function checkEvents() {
+  const on = evOn('money');
+  if (on && !evWas.money) toast('💰', 'DOUBLE MONEY!', 'Every pet earns 2× money while it lasts.', false, true, 'mythic');
+  if (!on && evWas.money) toast('💰', 'Double money is over', '');
+  evWas.money = on;
+  const pl = $('eventPill');
+  if (pl) { pl.hidden = !on; if (on) { const left = Math.ceil((evUntil.money - Date.now()) / 1000); pl.textContent = `💰 DOUBLE MONEY ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`; } }
+}
+// one-time events: an egg storm, or making it night or day right now
+function runEvent(name) {
+  if (name === 'eggstorm') {
+    if (isNight()) return;
+    for (const k in zones) for (let n = 0; n < 10; n++) { if (party) spawnSlot(+k, 10 + n, 0); else spawnEgg(+k); }
+    toast('🥚', 'EGG STORM!', 'Lots of extra eggs just appeared in every biome!', false, true, 'mythic');
+  } else if (name === 'night') { if (!isNight()) G.clock = DAY - .05; }
+  else if (name === 'day') { if (isNight()) G.clock = DAY + NIGHT - .05; else G.clock = 0; }
+}
+function onEvent(msg) {
+  const d = msg && msg.data; if (!d || msg.isMe) return;
+  if (d.name === 'money') setEvent('money', d.until);
+  else if (['eggstorm', 'night', 'day'].includes(d.name)) runEvent(d.name);
+}
+async function startEvent(name, ms) {
+  const r = await getRoom();
+  if (name === 'money' || name === 'moneystop') {
+    setEvent('money', name === 'money' ? Date.now() + ms : 0);
+    if (adminDb) { try { await adminDb.doc('admin/events').set({ money: evUntil.money }); } catch (e) {} }
+    if (r) { try { await r.emit('event', { name: 'money', until: evUntil.money }); } catch (e) {} }
+  } else {
+    runEvent(name);
+    if (r) { try { await r.emit('event', { name }); } catch (e) {} }
+  }
 }
 // ================= ADMIN ABUSE (an event the game owner starts for everyone) =================
 // While it runs: rarer eggs spawn, eggs hatch twice as fast, and every home gets a golden admin treadmill.
@@ -2742,7 +2806,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Events': 'Etkinlikler', 'Start': 'Başlat', 'DOUBLE MONEY!': 'ÇİFT PARA!', 'Every pet earns 2× money while it lasts.': 'Sürdüğü sürece her hayvan 2 kat para kazandırır.', 'Double money is over': 'Çift para bitti', 'EGG STORM!': 'YUMURTA FIRTINASI!', 'Lots of extra eggs just appeared in every biome!': 'Her biyomda bir sürü yumurta belirdi!', 'Meteor rain stopped': 'Meteor yağmuru durdu', 'Double money stopped': 'Çift para durduruldu', '☄️ Meteor rain': '☄️ Meteor yağmuru', '💰 Double money': '💰 Çift para', '⚡ Admin abuse': '⚡ Yönetici çılgınlığı', '🥚 Egg storm': '🥚 Yumurta fırtınası', '🌙 Night now': '🌙 Şimdi gece', '☀️ Day now': '☀️ Şimdi gündüz', 'Makes it night for everyone': 'Herkes için gece yapar', 'Makes it morning for everyone': 'Herkes için sabah yapar', '10 extra eggs in every biome until night': 'Gece olana kadar her biyomda 10 ekstra yumurta', 'Start an event for everyone. Timed events last as many minutes as you choose.': 'Herkes için bir etkinlik başlat. Süreli etkinlikler seçtiğin kadar dakika sürer.', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2858,6 +2922,9 @@ const TR_RULES = [
   [/^Collect meteor rocks in Thunder Peaks.*$/, 'Meteor yağmurunda Gök Gürültüsü Tepeleri\'nde meteor taşı topla. Yumurtalar ağılına, ağıl doluysa çantana gider.'],
   [/^Starts 1 minute of meteor rain.*$/, 'Herkes için Gök Gürültüsü Tepeleri\'nde 1 dakikalık meteor yağmuru başlatır. (Ara sıra kendiliğinden de olur.)'],
   [/^A (SECRET|ETERNAL) egg appeared in the (.+)!$/, (m, r, b) => (r === 'SECRET' ? 'GİZLİ' : 'EBEDİ') + ' yumurta çıktı: ' + b + '!'],
+  [/^💰 DOUBLE MONEY (.+)$/, '💰 ÇİFT PARA $1'], [/^Thunder Peaks, for (\d+) minutes\.$/, 'Gök Gürültüsü Tepeleri, $1 dakika.'],
+  [/^Rocks fall in Thunder Peaks(.*)$/, (m, a) => 'Gök Gürültüsü Tepeleri\'ne taş yağar' + (a ? ' · çalışıyor' : '')], [/^Every pet earns 2×(.*)$/, (m, a) => 'Her hayvan 2 kat kazandırır' + (a ? ' · çalışıyor' : '')],
+  [/^Better eggs, 2× hatching, admin treadmill(.*)$/, (m, a) => 'Daha iyi yumurtalar, 2 kat çıkma, yönetici koşu bandı' + (a ? ' · çalışıyor' : '')],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -4764,7 +4831,7 @@ function frame(now) {
   hudT += dt; if (hudT > .1) { hudT = 0; syncHud(); }
   presT += dt; if (presT > .066) { presT = 0; sendPresence(false); }
   if (THUNDER >= 0) updateMeteors(dt);
-  clockT += dt; if (clockT > .5) { clockT = 0; checkAbuse(); if (party) { readFriends(); syncPartyClock(); } }
+  clockT += dt; if (clockT > .5) { clockT = 0; checkAbuse(); checkEvents(); if (party) { readFriends(); syncPartyClock(); } }
   saveT += dt; if (saveT > 4) { saveT = 0; save(); }
 
   // while a menu covers the screen, redraw the world only 4 times a second (the game keeps running)
