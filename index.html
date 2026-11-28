@@ -1846,7 +1846,7 @@ function partyHTML() {
 // Every player's page claims each gift once, into their own save. Egg spawns go live to everyone
 // playing right now on the "spawn" room topic, which only owners and editors can send.
 let isAdmin = false, adminDb = null, giftList = [], giftsLoaded = false, myUid = null;
-const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '', admAbuseMin: '5', admEvMin: '5' };
+const admForm = { admMoney: '1000000', admSpeed: '100', admPet: 'phoenix', admPetSize: '0', admPetFuse: '0', admPetN: '1', admBiome: '0', admRar: 'L', admEggSize: '0', admEggN: '3', admPlace: 'g:0', admPlaceSize: '0', admPlaceFuse: '0', admTo: 'all', admGiftBiome: '0', admGiftRar: 'L', admGiftSize: '0', admGiftN: '1', admGiftMut: '', admMutK: 'golden', admMutN: '1', admPetMut: '', admPlaceMut: '', admObj: 'tree', admObjSize: '1', admDay: '', admNight: '', admAbuseMin: '5', admEvMin: '5', admRocks: '100' };
 async function adminInit() {
   try {
     if (!window.claude || !window.claude.use) return;
@@ -1901,6 +1901,9 @@ function applyGift(g, from) {
   if (g.kind === 'money') {
     const a = int(g.amount, 0, 1e36, 0); if (!a) return;
     G.money += a; toast('🎁', `Gift: $${fmt(a)}`, from);
+  } else if (g.kind === 'rocks') {
+    const a = int(g.amount, 0, 1e9, 0); if (!a) return;
+    G.rocks = (G.rocks || 0) + a; toast('🪨', `Gift: ${fmt(a)} meteor rocks`, from + '. Trade them with the trader in Thunder Peaks.');
   } else if (g.kind === 'speed') {
     const a = int(g.amount, 0, 1e9, 0); if (!a) return;
     G.speed += a;
@@ -2006,6 +2009,7 @@ async function adminAction(what) {
     const mul = { k: 1e3, m: 1e6, b: 1e9, t: 1e12, qa: 1e15, qi: 1e18, sx: 1e21, sp: 1e24, oc: 1e27, no: 1e30, dc: 1e33 };
     g.amount = clamp(m ? Math.round(Number(m[1]) * (m[2] ? mul[m[2].toLowerCase()] : 1)) || 1 : 1, 1, 1e36);
   }
+  else if (kind === 'rocks') g.amount = clamp(num(f.admRocks), 1, 1e9);
   else if (kind === 'speed') g.amount = clamp(num(f.admSpeed), 1, 1e9);
   else if (kind === 'mut') Object.assign(g, { k: MUT[f.admMutK] || f.admMutK === 'mount' ? f.admMutK : 'golden', n: clamp(num(f.admMutN), 1, 50) });
   else if (kind === 'pet') Object.assign(g, { m: MUT[f.admPetMut] ? f.admPetMut : undefined, sid: f.admPet, z: clamp(num(f.admPetSize), 0, 2), f: clamp(num(f.admPetFuse), 0, 2), n: clamp(num(f.admPetN), 1, 10) });
@@ -2043,6 +2047,7 @@ function giftText(g) {
   if (g.kind === 'mut' && g.k === 'mount') return `${g.n > 1 ? g.n + '\u00d7 ' : ''}Mount mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'mut' && MUT[g.k]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${MUT[g.k].name} mutation${g.n > 1 ? 's' : ''}`;
   if (g.kind === 'egg' && RAR[g.r] && BIOMES[g.b]) return `${g.n > 1 ? g.n + '\u00d7 ' : ''}${RAR[g.r].name} ${BIOMES[g.b].name} egg${g.n > 1 ? 's' : ''}`;
+  if (g.kind === 'rocks') return `${fmt(g.amount)} meteor rocks`;
   if (g.kind === 'index') return 'Full Index';
   if (g.kind === 'cos') return 'Every cosmetic';
   if (g.kind === 'pen') return 'Max level pen';
@@ -2081,6 +2086,10 @@ function adminHTML() {
         <label>Amount<input id="admMoney" type="text" inputmode="numeric" value="${esc(f.admMoney)}"></label>
         <span class="note" style="font-size:12px">You can type big amounts like 5Sx, 2Dc or 1e30. Up to 1000Dc.</span>
         <div class="adm-btns"><button class="buy" data-adm="money:to">Give</button></div></div>
+      <div class="up"><h3>Meteor rocks</h3>
+        <label>How many rocks<input id="admRocks" type="number" min="1" max="1000000000" value="${esc(f.admRocks)}"></label>
+        <span class="note" style="font-size:12px">Players trade rocks with the trader in Thunder Peaks.</span>
+        <div class="adm-btns"><button class="buy" data-adm="rocks:to">Give</button></div></div>
       <div class="up"><h3>Speed</h3>
         <label>Extra speed<input id="admSpeed" type="number" min="1" max="1000000000" value="${esc(f.admSpeed)}"></label>
         <div class="adm-btns"><button class="buy" data-adm="speed:to">Give</button></div></div>
@@ -2806,7 +2815,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Events': 'Etkinlikler', 'Start': 'Başlat', 'DOUBLE MONEY!': 'ÇİFT PARA!', 'Every pet earns 2× money while it lasts.': 'Sürdüğü sürece her hayvan 2 kat para kazandırır.', 'Double money is over': 'Çift para bitti', 'EGG STORM!': 'YUMURTA FIRTINASI!', 'Lots of extra eggs just appeared in every biome!': 'Her biyomda bir sürü yumurta belirdi!', 'Meteor rain stopped': 'Meteor yağmuru durdu', 'Double money stopped': 'Çift para durduruldu', '☄️ Meteor rain': '☄️ Meteor yağmuru', '💰 Double money': '💰 Çift para', '⚡ Admin abuse': '⚡ Yönetici çılgınlığı', '🥚 Egg storm': '🥚 Yumurta fırtınası', '🌙 Night now': '🌙 Şimdi gece', '☀️ Day now': '☀️ Şimdi gündüz', 'Makes it night for everyone': 'Herkes için gece yapar', 'Makes it morning for everyone': 'Herkes için sabah yapar', '10 extra eggs in every biome until night': 'Gece olana kadar her biyomda 10 ekstra yumurta', 'Start an event for everyone. Timed events last as many minutes as you choose.': 'Herkes için bir etkinlik başlat. Süreli etkinlikler seçtiğin kadar dakika sürer.', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Meteor rocks': 'Meteor taşları', 'How many rocks': 'Kaç taş', 'Players trade rocks with the trader in Thunder Peaks.': 'Oyuncular taşları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas eder.', 'Events': 'Etkinlikler', 'Start': 'Başlat', 'DOUBLE MONEY!': 'ÇİFT PARA!', 'Every pet earns 2× money while it lasts.': 'Sürdüğü sürece her hayvan 2 kat para kazandırır.', 'Double money is over': 'Çift para bitti', 'EGG STORM!': 'YUMURTA FIRTINASI!', 'Lots of extra eggs just appeared in every biome!': 'Her biyomda bir sürü yumurta belirdi!', 'Meteor rain stopped': 'Meteor yağmuru durdu', 'Double money stopped': 'Çift para durduruldu', '☄️ Meteor rain': '☄️ Meteor yağmuru', '💰 Double money': '💰 Çift para', '⚡ Admin abuse': '⚡ Yönetici çılgınlığı', '🥚 Egg storm': '🥚 Yumurta fırtınası', '🌙 Night now': '🌙 Şimdi gece', '☀️ Day now': '☀️ Şimdi gündüz', 'Makes it night for everyone': 'Herkes için gece yapar', 'Makes it morning for everyone': 'Herkes için sabah yapar', '10 extra eggs in every biome until night': 'Gece olana kadar her biyomda 10 ekstra yumurta', 'Start an event for everyone. Timed events last as many minutes as you choose.': 'Herkes için bir etkinlik başlat. Süreli etkinlikler seçtiğin kadar dakika sürer.', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2925,6 +2934,7 @@ const TR_RULES = [
   [/^💰 DOUBLE MONEY (.+)$/, '💰 ÇİFT PARA $1'], [/^Thunder Peaks, for (\d+) minutes\.$/, 'Gök Gürültüsü Tepeleri, $1 dakika.'],
   [/^Rocks fall in Thunder Peaks(.*)$/, (m, a) => 'Gök Gürültüsü Tepeleri\'ne taş yağar' + (a ? ' · çalışıyor' : '')], [/^Every pet earns 2×(.*)$/, (m, a) => 'Her hayvan 2 kat kazandırır' + (a ? ' · çalışıyor' : '')],
   [/^Better eggs, 2× hatching, admin treadmill(.*)$/, (m, a) => 'Daha iyi yumurtalar, 2 kat çıkma, yönetici koşu bandı' + (a ? ' · çalışıyor' : '')],
+  [/^Gift: (.+) meteor rocks$/, 'Hediye: $1 meteor taşı'], [/^(.+)\. Trade them with the trader in Thunder Peaks\.$/, (m, a) => (TR_EXACT[a] || a) + '. Onları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas et.'], [/^(.+) meteor rocks$/, '$1 meteor taşı'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
