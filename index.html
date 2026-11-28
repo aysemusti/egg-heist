@@ -91,6 +91,8 @@ canvas.placing{cursor:crosshair}
 .cloud-box .buy{margin:0;padding:8px 14px;font-size:16px}
 .mythicpill{background:linear-gradient(90deg,#D61FA8,#6A3FE0,#1F9EC0);font-size:13px;font-weight:800}
 .mythicpill.divinepill{background:linear-gradient(90deg,#FFF1A8,#F2C230,#FFF1A8);color:#5A3A00;box-shadow:0 0 12px rgba(255,210,63,.8)}
+.mythicpill.eternalpill{background:linear-gradient(90deg,#3FD8E8,#E4FBFF,#3FD8E8);color:#0A4A55;box-shadow:0 0 12px rgba(63,216,232,.8)}
+.mythicpill.secretpill{background:linear-gradient(90deg,#1E1828,#5A2E8A,#1E1828);color:#F3E8FF;box-shadow:0 0 12px rgba(154,74,224,.8)}
 .mythicpill.eventpill{background:linear-gradient(90deg,#3DBB5C,#9BE86A);color:#0E3A18}
 .mythicpill.abusepill{background:linear-gradient(90deg,#F2C230,#FF7A2A,#E8402C);color:#2B1A00}
 .spacer{flex:1}
@@ -213,6 +215,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
     <div class="pill mythicpill abusepill" id="abusePill" hidden></div>
     <div class="pill mythicpill eventpill" id="eventPill" hidden></div>
     <div class="pill mythicpill divinepill" id="divinePill" hidden></div>
+    <div class="pill mythicpill eternalpill" id="eternalPill" hidden></div>
+    <div class="pill mythicpill secretpill" id="secretPill" hidden></div>
     <div class="pill cloudpill" id="cloudSt" hidden>☁</div>
     <div class="spacer"></div>
     <button class="hbtn shop" id="shopBtn">Shop</button>
@@ -575,7 +579,7 @@ const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
 const CARRY_LOSS = { C: 0, R: 30, E: 100, L: 250, M: 300, S: 600, T: 1000, D: 2000 }, SIZE_LOSS = [0, 600, 2000];
 const carryLoss = c => c ? (CARRY_LOSS[c.r] || 0) + (SIZE_LOSS[c.es || 0] || 0) : 0;
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', rocks: 0, born: Date.now(), mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', rocks: 0, bats: [], bat: 'wood', born: Date.now(), mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -596,6 +600,7 @@ function loadSave(obj) {
     g.cos = Object.assign(freshSave().cos, g.cos && typeof g.cos === 'object' ? g.cos : {}); if (!Array.isArray(g.cos.own)) g.cos.own = [];
     if (g.lang !== 'tr') g.lang = 'en';
     g.rocks = Math.max(0, Math.floor(+g.rocks || 0));
+    g.bats = Array.isArray(g.bats) ? g.bats.filter(id => BATS.some(b => b.id === id)) : []; if (!BATS.some(b => b.id === g.bat) || !(g.bat === 'wood' || g.bats.includes(g.bat))) g.bat = 'wood';
     g.born = 'born' in obj ? Math.max(0, +obj.born || 0) : 0;   // saves from before this existed may still get waiting gifts
     g.mounts = Math.max(0, Math.floor(+g.mounts || 0)); g.ride = +g.ride || 0;
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
@@ -1066,9 +1071,9 @@ function jump() {
   player.vz = 560; sfx.jump();
 }
 // knocked away by a bat or a guardian: you drop your egg and fly a few metres
-function knock(dir, title, sub, icon) {
+function knock(dir, title, sub, icon, power = 1) {
   if (player.carry) { dropEgg(player.carry, player.x, player.y); player.carry = null; }
-  player.fly = { vx: (dir || 1) * 760, t: .42 }; player.vz = 430; player.invuln = 1.2;
+  player.fly = { vx: (dir || 1) * 760 * power, t: .42 + .06 * (power - 1) }; player.vz = 430 + 60 * (power - 1); player.invuln = 1.2;
   sfx.caught(); if (!reduce) shake = 8;
   burst(player.x, player.y - 30, '#FFFFFF', 14);
   if (title) toast(icon || '💥', title, sub || '', true);
@@ -1085,7 +1090,7 @@ function swingBat() {
     const d = Math.hypot(dx, dy); if (d < bd) { bd = d; best = fr; }
   }
   if (best) {
-    hitSeq++; myHit = [best.p.peer, hitSeq, Math.sign(best.v.x - player.x) || player.fx];
+    hitSeq++; myHit = [best.p.peer, hitSeq, Math.sign(best.v.x - player.x) || player.fx, batItem(G.bat).power];
     floatText(best.v.x, best.v.y - 80, 'BONK!', '#FFE066', 1); burst(best.v.x, best.v.y - 30, '#FFE066', 10); sfx.bonk();
   }
   sendPresence(true);
@@ -1501,11 +1506,16 @@ function syncHud() {
   // live list of reachable biomes that have a Mythic egg right now
   const mz = Object.values(zones).filter(z => z.eggs.some(e => e.r === 'M') && G.speed + 1e-6 >= BIOMES[z.i].req).map(z => BIOMES[z.i].name);
   const mp = $('mythicPill'), mt = mz.length ? '✨ Mythic egg in ' + mz.join(', ') : '';
-  mp.hidden = !mz.length || night; if (mp.textContent !== mt) mp.textContent = mt;
+  mp.hidden = true;   // the Mythic banner is gone; Secret, Eternal and Divine have their own
   // Divine eggs get their own gold banner (with a lock on the ones you can't take yet)
   const dz = Object.values(zones).filter(z => z.eggs.some(e => e.r === 'D')).map(z => BIOMES[z.i].name + (G.speed + 1e-6 >= BIOMES[z.i].req ? '' : ' 🔒'));
   const dp = $('divinePill'), dt2 = dz.length ? '🌟 DIVINE egg in ' + dz.join(', ') : '';
   dp.hidden = !dz.length || night; if (dp.textContent !== dt2) dp.textContent = dt2;
+  for (const [rr, id, icon, word] of [['T', 'eternalPill', '🩵', 'ETERNAL'], ['S', 'secretPill', '🟣', 'SECRET']]) {
+    const zz = Object.values(zones).filter(z => z.eggs.some(e => e.r === rr)).map(z => BIOMES[z.i].name + (G.speed + 1e-6 >= BIOMES[z.i].req ? '' : ' 🔒'));
+    const el = $(id), txt = zz.length ? `${icon} ${word} egg in ` + zz.join(', ') : '';
+    el.hidden = !zz.length || night; if (el.textContent !== txt) el.textContent = txt;
+  }
   $('clockIcon').className = 'ci' + (night ? ' moon' : ''); $('clock').classList.toggle('night', night);
   // hint
   let h = '';
@@ -1558,6 +1568,7 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.bagsell) sellFromBag(+b.dataset.bagsell);
   else if (b.dataset.bag === 'carry') storeCarry();
   else if (b.dataset.cos) cosAction(b.dataset.cos);
+  else if (b.dataset.bat) batAction(b.dataset.bat);
   else if (b.dataset.trade) doTrade(b.dataset.trade);
   else if (b.dataset.ride) toggleRide(+b.dataset.ride);
   else if (b.dataset.mountapply) applyMount();
@@ -1618,6 +1629,7 @@ function renderTab() {
           <button class="buy" data-buy="pen" data-cost="${pMax ? '' : penCost(G.pL)}" ${pMax ? 'disabled' : ''}>${pMax ? 'Fully upgraded' : 'Upgrade · $' + fmt(penCost(G.pL))}</button>
         </div>
       </div>
+      ${batsHTML()}
       <h3>Speed needed to take eggs</h3>
       <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${b.req}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
       <p class="note">Carrying an egg takes away speed: rare eggs −30, epic −100, legendary −250, mythic −300, divine −2000 (common eggs −0). Big eggs take −600 more and huge eggs −2000 more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
@@ -1760,7 +1772,7 @@ function sendPresence(force) {
   const pres = { x: Math.round(player.x), y: Math.round(player.y), f: player.fx < 0 ? -1 : 1, m: player.moving ? 1 : 0,
     z: scene === 'hub' ? -1 : scene, c: player.carry ? [player.carry.r, player.carry.b, player.carry.es || 0] : null, h: lastHatch || null,
     lk: [G.cos.shirt, G.cos.hat, G.cos.back, G.cos.tone], rd: rideP() ? [rideP().sid, rideP().f || 0, rideP().mut || '', rideP().z || 0] : null,
-    j: Math.round(player.jz), tk: myTaken.slice(-30), dr: myDrops.slice(-6), hb: myHit, sw: swingSeq,
+    j: Math.round(player.jz), bt: G.bat || 'wood', tk: myTaken.slice(-30), dr: myDrops.slice(-6), hb: myHit, sw: swingSeq,
     ck: [Math.floor(G.clock), partyDay], tl: G.tL, pl: G.pL,
     pe: G.pen.filter(q => q.egg).slice(0, 24).map(q => [q.r, q.b, q.es || 0, q.mut || '', Math.round(clamp(1 - q.left / RAR[q.r].hatch, 0, 1) * 10)]),
     pp: G.pen.filter(q => !q.egg).slice(0, 24).map(q => [q.sid, q.f || 0, q.z || 0, q.mut || '']) };
@@ -1934,6 +1946,8 @@ function applyGift(g, from) {
   } else if (g.kind === 'index') {
     for (const sp of SPECIES) G.found[sp.id] = Math.max(1, G.found[sp.id] || 0);
     toast('📖', 'Gift: the full Index', `All ${SPECIES.length} animals are unlocked`);
+  } else if (g.kind === 'bats') {
+    G.bats = BATS.filter(b => b.price > 0).map(b => b.id); toast('🏏', 'Gift: every bat', 'Open the Shop to pick one.'); sendPresence(true);
   } else if (g.kind === 'cos') {
     for (const cat in COS) for (const it of COS[cat]) { const k = cat + ':' + it.id; if (it.price > 0 && !G.cos.own.includes(k)) G.cos.own.push(k); }
     toast('\ud83d\udc51', 'Gift: every cosmetic', 'Open Style to wear them.');
@@ -2050,6 +2064,7 @@ function giftText(g) {
   if (g.kind === 'rocks') return `${fmt(g.amount)} meteor rocks`;
   if (g.kind === 'index') return 'Full Index';
   if (g.kind === 'cos') return 'Every cosmetic';
+  if (g.kind === 'bats') return 'Every bat';
   if (g.kind === 'pen') return 'Max level pen';
   if (g.kind === 'tread') return 'Max level treadmill';
   const i = spIndex(String(g.sid));
@@ -2097,6 +2112,7 @@ function adminHTML() {
         <div class="unl"><b>Full Index</b><span>All ${SPECIES.length} animals found</span><div class="adm-btns"><button class="buy" data-adm="index:to">Give</button></div></div>
         <div class="unl"><b>Max level pen</b><span>Level ${PEN_MAX}: ${penSlots(PEN_MAX)} slots, +${Math.round((penBonus(PEN_MAX) - 1) * 100)}% income</span><div class="adm-btns"><button class="buy" data-adm="pen:to">Give</button></div></div>
         <div class="unl"><b>Max level treadmill</b><span>Level ${TREAD_MAX}: +${fmt(treadIdle(TREAD_MAX))} speed every second</span><div class="adm-btns"><button class="buy" data-adm="tread:to">Give</button></div></div>
+        <div class="unl"><b>Every bat</b><span>All ${BATS.length - 1} bats from the Shop</span><div class="adm-btns"><button class="buy" data-adm="bats:to">Give</button></div></div>
         <div class="unl"><b>Every cosmetic</b><span>All ${Object.values(COS).reduce((a, l) => a + l.filter(i => i.price > 0).length, 0)} shirts, hats, back items and trails from Style</span><div class="adm-btns"><button class="buy" data-adm="cos:to">Give</button></div></div>
       </div>
       <div class="up"><h3>Pet</h3>
@@ -2536,7 +2552,7 @@ function readFriends() {
     // a friend hit you with their bat
     if (Array.isArray(q.hb) && q.hb[0] === myPeerId && myPeerId) {
       if (seenHit[p.peer] === undefined) seenHit[p.peer] = q.hb[1];
-      else if (q.hb[1] !== seenHit[p.peer]) { seenHit[p.peer] = q.hb[1]; knock(q.hb[2] === -1 ? -1 : 1, `${friendName(p)} hit you with a bat!`, player.carry ? 'You dropped your egg!' : 'Bonk!', '🏏'); }
+      else if (q.hb[1] !== seenHit[p.peer]) { seenHit[p.peer] = q.hb[1]; knock(q.hb[2] === -1 ? -1 : 1, `${friendName(p)} hit you with a bat!`, player.carry ? 'You dropped your egg!' : 'Bonk!', '🏏', clamp(+q.hb[3] || 1, 1, 4)); }
     } else if (seenHit[p.peer] === undefined) seenHit[p.peer] = null;
     // they swung their bat
     if (Number.isInteger(q.sw) && q.sw !== seenSwing[p.peer]) { if (seenSwing[p.peer] !== undefined && partyViews[p.peer]) partyViews[p.peer].swingT = .28; seenSwing[p.peer] = q.sw; }
@@ -2815,7 +2831,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Meteor rocks': 'Meteor taşları', 'How many rocks': 'Kaç taş', 'Players trade rocks with the trader in Thunder Peaks.': 'Oyuncular taşları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas eder.', 'Events': 'Etkinlikler', 'Start': 'Başlat', 'DOUBLE MONEY!': 'ÇİFT PARA!', 'Every pet earns 2× money while it lasts.': 'Sürdüğü sürece her hayvan 2 kat para kazandırır.', 'Double money is over': 'Çift para bitti', 'EGG STORM!': 'YUMURTA FIRTINASI!', 'Lots of extra eggs just appeared in every biome!': 'Her biyomda bir sürü yumurta belirdi!', 'Meteor rain stopped': 'Meteor yağmuru durdu', 'Double money stopped': 'Çift para durduruldu', '☄️ Meteor rain': '☄️ Meteor yağmuru', '💰 Double money': '💰 Çift para', '⚡ Admin abuse': '⚡ Yönetici çılgınlığı', '🥚 Egg storm': '🥚 Yumurta fırtınası', '🌙 Night now': '🌙 Şimdi gece', '☀️ Day now': '☀️ Şimdi gündüz', 'Makes it night for everyone': 'Herkes için gece yapar', 'Makes it morning for everyone': 'Herkes için sabah yapar', '10 extra eggs in every biome until night': 'Gece olana kadar her biyomda 10 ekstra yumurta', 'Start an event for everyone. Timed events last as many minutes as you choose.': 'Herkes için bir etkinlik başlat. Süreli etkinlikler seçtiğin kadar dakika sürer.', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Bats': 'Sopalar', 'Use': 'Kullan', 'Using': 'Kullanılıyor', 'normal hit': 'normal vuruş', 'Every bat': 'Tüm sopalar', 'Gift: every bat': 'Hediye: tüm sopalar', 'Open the Shop to pick one.': 'Birini seçmek için Mağaza\'yı aç.', 'Hit friends in a party with F or the HIT button. Better bats knock them farther.': 'Partide arkadaşlarına F ya da VUR düğmesiyle vur. Daha iyi sopalar onları daha uzağa fırlatır.', 'Wooden bat': 'Tahta sopa', 'Stone bat': 'Taş sopa', 'Iron bat': 'Demir sopa', 'Golden bat': 'Altın sopa', 'Ruby bat': 'Yakut sopa', 'Ice bat': 'Buz sopa', 'Fire bat': 'Ateş sopa', 'Lightning bat': 'Şimşek sopa', 'Rainbow bat': 'Gökkuşağı sopa', 'Cosmic bat': 'Kozmik sopa', '🩵 ETERNAL egg inside!': '🩵 İçeride EBEDİ yumurta!', '🟣 SECRET egg inside!': '🟣 İçeride GİZLİ yumurta!', 'Meteor rocks': 'Meteor taşları', 'How many rocks': 'Kaç taş', 'Players trade rocks with the trader in Thunder Peaks.': 'Oyuncular taşları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas eder.', 'Events': 'Etkinlikler', 'Start': 'Başlat', 'DOUBLE MONEY!': 'ÇİFT PARA!', 'Every pet earns 2× money while it lasts.': 'Sürdüğü sürece her hayvan 2 kat para kazandırır.', 'Double money is over': 'Çift para bitti', 'EGG STORM!': 'YUMURTA FIRTINASI!', 'Lots of extra eggs just appeared in every biome!': 'Her biyomda bir sürü yumurta belirdi!', 'Meteor rain stopped': 'Meteor yağmuru durdu', 'Double money stopped': 'Çift para durduruldu', '☄️ Meteor rain': '☄️ Meteor yağmuru', '💰 Double money': '💰 Çift para', '⚡ Admin abuse': '⚡ Yönetici çılgınlığı', '🥚 Egg storm': '🥚 Yumurta fırtınası', '🌙 Night now': '🌙 Şimdi gece', '☀️ Day now': '☀️ Şimdi gündüz', 'Makes it night for everyone': 'Herkes için gece yapar', 'Makes it morning for everyone': 'Herkes için sabah yapar', '10 extra eggs in every biome until night': 'Gece olana kadar her biyomda 10 ekstra yumurta', 'Start an event for everyone. Timed events last as many minutes as you choose.': 'Herkes için bir etkinlik başlat. Süreli etkinlikler seçtiğin kadar dakika sürer.', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2935,6 +2951,8 @@ const TR_RULES = [
   [/^Rocks fall in Thunder Peaks(.*)$/, (m, a) => 'Gök Gürültüsü Tepeleri\'ne taş yağar' + (a ? ' · çalışıyor' : '')], [/^Every pet earns 2×(.*)$/, (m, a) => 'Her hayvan 2 kat kazandırır' + (a ? ' · çalışıyor' : '')],
   [/^Better eggs, 2× hatching, admin treadmill(.*)$/, (m, a) => 'Daha iyi yumurtalar, 2 kat çıkma, yönetici koşu bandı' + (a ? ' · çalışıyor' : '')],
   [/^Gift: (.+) meteor rocks$/, 'Hediye: $1 meteor taşı'], [/^(.+)\. Trade them with the trader in Thunder Peaks\.$/, (m, a) => (TR_EXACT[a] || a) + '. Onları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas et.'], [/^(.+) meteor rocks$/, '$1 meteor taşı'],
+  [/^×(.+) farther$/, '×$1 daha uzağa'], [/^It knocks friends ×(.+) farther\.$/, 'Arkadaşları ×$1 daha uzağa fırlatır.'], [/^All (\d+) bats from the Shop$/, 'Mağazadaki $1 sopanın hepsi'],
+  [/^🩵 ETERNAL egg in (.+)$/, '🩵 EBEDİ yumurta: $1'], [/^🟣 SECRET egg in (.+)$/, '🟣 GİZLİ yumurta: $1'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -3040,7 +3058,7 @@ const COS = {
 const COS_CATS = [['shirt', 'Shirts'], ['hat', 'Hats'], ['back', 'On your back'], ['trail', 'Trails'], ['tone', 'Skin color']];
 const cosItem = (cat, id) => (COS[cat] || []).find(i => i.id === id) || null;
 const cosOwned = (cat, id) => { const it = cosItem(cat, id); return !!it && (it.price === 0 || G.cos.own.includes(cat + ':' + id)); };
-const myLook = () => ({ shirt: G.cos.shirt, hat: G.cos.hat, back: G.cos.back, tone: G.cos.tone });
+const myLook = () => ({ shirt: G.cos.shirt, hat: G.cos.hat, back: G.cos.back, tone: G.cos.tone, batType: G.bat || 'wood' });
 function drawBack(c, id, step, moving, t) {
   if (id === 'backpack') { c.fillStyle = '#8A5A35'; roundRect(c, -20, -31, 9, 20, 3); c.fill(); c.fillStyle = '#6B4426'; c.fillRect(-19, -24, 7, 3); }
   else if (id === 'cape') { const sw = Math.sin(step) * 3; c.fillStyle = '#D9443A'; c.beginPath(); c.moveTo(-11, -31); c.lineTo(11, -31); c.lineTo(15 + sw, -1); c.lineTo(-16 + sw, -1); c.closePath(); c.fill(); c.fillStyle = '#B8342C'; c.fillRect(-11, -32, 22, 3); }
@@ -3110,9 +3128,67 @@ function drawStylePreview() {
 // a friend's look, read defensively from what their page sent
 function friendLook(p) {
   const lk = p.presence && Array.isArray(p.presence.lk) ? p.presence.lk : null, [shirt, cap] = friendColor(p);
-  if (!lk) return { shirtColor: shirt, capColor: cap, hat: 'cap', back: 'none', tone: 't1' };
+  const bt = p.presence && BATS.some(b => b.id === p.presence.bt) ? p.presence.bt : 'wood';
+  if (!lk) return { shirtColor: shirt, capColor: cap, hat: 'cap', back: 'none', tone: 't1', batType: bt };
   const pick = (cat, v, d) => cosItem(cat, String(v)) ? String(v) : d;
-  return { shirt: pick('shirt', lk[0], 'orange'), hat: pick('hat', lk[1], 'cap'), back: pick('back', lk[2], 'none'), tone: pick('tone', lk[3], 't1') };
+  return { shirt: pick('shirt', lk[0], 'orange'), hat: pick('hat', lk[1], 'cap'), back: pick('back', lk[2], 'none'), tone: pick('tone', lk[3], 't1'), batType: bt };
+}
+// ================= BATS (bought in the Shop; better bats knock friends farther) =================
+const BATS = [
+  { id: 'wood', name: 'Wooden bat', price: 0, power: 1 },
+  { id: 'stone', name: 'Stone bat', price: 5000, power: 1.25 },
+  { id: 'iron', name: 'Iron bat', price: 100000, power: 1.5 },
+  { id: 'gold', name: 'Golden bat', price: 5e6, power: 1.8 },
+  { id: 'ruby', name: 'Ruby bat', price: 2e8, power: 2.1 },
+  { id: 'ice', name: 'Ice bat', price: 1e10, power: 2.4 },
+  { id: 'fire', name: 'Fire bat', price: 5e11, power: 2.8 },
+  { id: 'lightning', name: 'Lightning bat', price: 2e13, power: 3.2 },
+  { id: 'rainbow', name: 'Rainbow bat', price: 1e15, power: 3.6 },
+  { id: 'cosmic', name: 'Cosmic bat', price: 5e16, power: 4 },
+];
+const batItem = id => BATS.find(b => b.id === id) || BATS[0];
+const batOwned = id => batItem(id).price === 0 || (G.bats || []).includes(id);
+// the bat shape, drawn along -y from the handle at (0, 0)
+function drawBatShape(c, type, t) {
+  const body = () => { c.beginPath(); c.moveTo(-1.6, 0); c.lineTo(-3.8, -30); c.quadraticCurveTo(0, -35.5, 3.8, -30); c.lineTo(1.6, 0); c.closePath(); };
+  const fills = { wood: '#B07A45', stone: '#8E8E96', iron: '#C8D0DA', gold: '#F2C230', ruby: '#D8203C', ice: '#BFEFFF', fire: '#3A1A10', lightning: '#2B2E48', cosmic: '#2A1E5A' };
+  c.lineWidth = 1.5; c.strokeStyle = type === 'ice' ? '#5AB0E0' : type === 'gold' ? '#A87A10' : '#3A2418';
+  if (type === 'rainbow') { const g = c.createLinearGradient(0, 0, 0, -34); for (let k = 0; k <= 6; k++) g.addColorStop(k / 6, `hsl(${(k * 55 + t * 120) % 360},90%,60%)`); c.fillStyle = g; }
+  else c.fillStyle = fills[type] || fills.wood;
+  if (type === 'fire' || type === 'lightning' || type === 'cosmic' || type === 'rainbow' || type === 'gold') { c.shadowColor = type === 'fire' ? '#FF7A2A' : type === 'lightning' ? '#FFE066' : type === 'cosmic' ? '#B07AF2' : type === 'gold' ? '#FFE066' : '#FFFFFF'; c.shadowBlur = 8; }
+  body(); c.fill(); c.shadowBlur = 0; c.stroke();
+  c.save(); body(); c.clip();
+  if (type === 'stone') { c.fillStyle = '#6E6E76'; [[-1, -10], [1.5, -18], [-1.5, -25]].forEach(([a, b]) => { c.beginPath(); c.arc(a, b, 1.2, 0, 7); c.fill(); }); }
+  if (type === 'iron' || type === 'gold' || type === 'ice') { c.fillStyle = 'rgba(255,255,255,.6)'; c.fillRect(-2.2, -30, 1.2, 26); }
+  if (type === 'ruby') { c.fillStyle = '#FF8A9A'; for (let k = 0; k < 4; k++) { c.beginPath(); c.moveTo(0, -8 - k * 6); c.lineTo(2, -11 - k * 6); c.lineTo(0, -14 - k * 6); c.lineTo(-2, -11 - k * 6); c.closePath(); c.fill(); } }
+  if (type === 'fire') { for (let k = 0; k < 5; k++) { c.fillStyle = ['#FF7A2A', '#FFB13B', '#E8402C'][k % 3]; c.beginPath(); c.ellipse(Math.sin(t * 9 + k) * 1.4, -6 - k * 6, 2.4, 3.6 + Math.sin(t * 12 + k), 0, 0, 7); c.fill(); } }
+  if (type === 'lightning') { c.strokeStyle = '#FFE066'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(1.5, -4); c.lineTo(-1.5, -12); c.lineTo(1.8, -16); c.lineTo(-1.8, -24); c.lineTo(1.5, -30); c.stroke(); }
+  if (type === 'cosmic') { [[-1, -8], [1.5, -14], [-1.8, -20], [1, -26], [0, -31]].forEach(([a, b], k) => { c.fillStyle = k % 2 ? '#FFFFFF' : '#FFE066'; c.globalAlpha = .5 + .5 * Math.sin(t * 6 + k); c.beginPath(); c.arc(a, b, .9, 0, 7); c.fill(); }); c.globalAlpha = 1; }
+  c.restore();
+  c.fillStyle = type === 'gold' ? '#A87A10' : '#2B2219'; c.fillRect(-2, -2, 4, 5);
+}
+const batThumbCache = {};
+function batThumb(id) {
+  if (batThumbCache[id]) return batThumbCache[id];
+  const cv2 = document.createElement('canvas'); cv2.width = cv2.height = 80; const c = cv2.getContext('2d');
+  c.translate(30, 66); c.rotate(.6); c.scale(1.7, 1.7); drawBatShape(c, id, 0);
+  return (batThumbCache[id] = cv2.toDataURL());
+}
+function batsHTML() {
+  return `<h3>Bats</h3><p class="note">Hit friends in a party with F or the HIT button. Better bats knock them farther.</p>
+    <div class="cos-grid">${BATS.map(b => {
+      const own = batOwned(b.id), on = (G.bat || 'wood') === b.id;
+      const btn = on ? '<button class="sell" disabled>Using</button>' : own ? `<button class="sell" data-bat="${b.id}">Use</button>` : `<button class="buy" data-bat="${b.id}" data-cost="${b.price}">Buy $${fmt(b.price)}</button>`;
+      return `<div class="cos${on ? ' on' : ''}"><img src="${batThumb(b.id)}" alt="" width="64" height="64"><b>${esc(b.name)}</b><span class="note" style="font-size:12px">${b.power === 1 ? 'normal hit' : '×' + b.power + ' farther'}</span>${btn}</div>`;
+    }).join('')}</div>`;
+}
+function batAction(id) {
+  const b = batItem(id); if (b.id !== id) return;
+  if (!batOwned(id)) {
+    if (G.money < b.price) { toast('💸', 'Not enough money', `You need $${fmt(b.price)} for the ${b.name}.`, true); return; }
+    G.money -= b.price; G.bats = G.bats || []; G.bats.push(id); sfx.buy(); toast('🏏', `Bought the ${b.name}!`, `It knocks friends ×${b.power} farther.`);
+  }
+  G.bat = id; save(); syncHud(); renderTab(); sendPresence(true);
 }
 // ================= MODELS =================
 // Every pet and guardian is drawn in a 110-unit box centred on (0,0), facing right, feet near y=40.
@@ -4546,9 +4622,7 @@ function drawKid(x, y, fx, moving, step, carry, look, t, fade, c = ctx) {
   drawHat(c, L.hat || 'cap', L.capColor);
   if (L.bat !== undefined) {
     c.save(); c.translate(13, -22); c.rotate(L.bat < 0 ? .5 : -1.9 + L.bat * 3.4);
-    c.fillStyle = '#B07A45'; c.strokeStyle = '#5A3A22'; c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(-1.6, 0); c.lineTo(-3.6, -30); c.quadraticCurveTo(0, -35, 3.6, -30); c.lineTo(1.6, 0); c.closePath(); c.fill(); c.stroke();
-    c.fillStyle = '#2B2219'; c.fillRect(-2, -2, 4, 5);
+    drawBatShape(c, L.batType || 'wood', t);
     c.restore();
   }
   c.fillStyle = '#1E2A1B'; c.beginPath(); c.arc(4, -40, 1.8, 0, 7); c.arc(-3, -40, 1.8, 0, 7); c.fill();
@@ -4762,7 +4836,8 @@ function drawGate(i) {
   }
   for (const sy of [BH * .2, BH * .5, BH * .8]) drawSign(x, sy, B, locked || weak, night ? '🌙 closed for the night' : weak ? `🔒 eggs need speed ${B.req}` : '');
   if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'D')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('🌟 DIVINE egg inside!', x, sy - 64, 17, '#FFE066');
-  if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'M')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('✨ Mythic egg inside!', x, sy - 44, 16, '#FFB8F0');
+  if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'T')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('🩵 ETERNAL egg inside!', x, sy - 44, 16, '#9FF2FF');
+  if (!night && zones[i] && zones[i].eggs.some(e => e.r === 'S')) for (const sy of [BH * .2, BH * .5, BH * .8]) label('🟣 SECRET egg inside!', x, sy - 84, 16, '#D9B8FF');
 }
 function drawGuard(g, B0, z, t) {
   const B = g.def ? { guard: g.def } : B0;
