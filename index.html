@@ -1377,9 +1377,9 @@ function updateGuards(dt) {
       const d = dist(player.x, player.y, g.x, g.y), GD = g.def || B.guard;
       // guardians only care about you while you carry one of THEIR eggs (a placed one: any egg), and give up once you are home
       const theirs = !!player.carry && (g.wild || player.carry.b === zi) && !atHome;
-      // an egg of theirs lying on the ground in their biome: the guardian goes to get it back
+      // an egg of theirs lying on the ground anywhere outside the homes: the guardian goes to get it back
       if (g.st === 'patrol' && !theirs && !g.wild) {
-        const e = loose.find(o => o.b === zi && zoneAt(o.x) === zi && dist(o.x, o.y, g.hx, g.hy) > 90 && !zones[k].guards.some(o2 => o2 !== g && o2.fetchId === o.id));
+        const e = loose.find(o => o.b === zi && zoneAt(o.x) !== 'hub' && dist(o.x, o.y, g.hx, g.hy) > 90 && !zones[k].guards.some(o2 => o2 !== g && o2.fetchId === o.id));
         if (e) { g.st = 'fetch'; g.fetchId = e.id; g.alert = 1; }
       }
       if ((g.st === 'patrol' || g.st === 'fetch') && theirs && scene === zi && player.invuln <= 0 && d < GD.seeCarry) { g.st = 'wait'; g.wait = clamp(400 / GD.speed, .15, 1); g.alert = 1; sfx.alert(); }
@@ -1391,7 +1391,7 @@ function updateGuards(dt) {
         if (d < 30 && player.invuln <= 0) { caught({ guard: GD }, g); return; }
       } else if (g.st === 'fetch') {
         const e = loose.find(o => o.id === g.fetchId);
-        if (!e || zoneAt(e.x) !== zi) { g.st = 'return'; g.fetchId = null; continue; }
+        if (!e || zoneAt(e.x) === 'hub') { g.st = 'return'; g.fetchId = null; continue; }
         tx = e.x; ty = e.y; sp = GD.speed;
         if (dist(g.x, g.y, e.x, e.y) < 28) {
           // picked it up: it disappears from the ground (for everyone in a party) and goes back to the nest
