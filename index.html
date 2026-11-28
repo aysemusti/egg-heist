@@ -171,6 +171,8 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 .mut-box .buy{margin:0;align-self:flex-start;padding:9px 18px;font-size:16px}
 .chip.D{background:linear-gradient(90deg,#F2C230,#FFF8E0 50%,#F2C230);color:#6A4A00;box-shadow:0 0 6px rgba(242,194,48,.8)}
 .chip.M{background:linear-gradient(90deg,#FF3FD0,#7F5BFF,#3FC8E0)}
+.chip.S{background:linear-gradient(90deg,#1E1828,#5A2E8A,#1E1828);box-shadow:0 0 6px rgba(154,74,224,.8)}
+.chip.T{background:linear-gradient(90deg,#3FD8E8,#E4FBFF 50%,#3FD8E8);color:#0A4A55;box-shadow:0 0 6px rgba(63,216,232,.8)}
 .sell{border:0;cursor:pointer;font-weight:800;font-size:13px;background:#fff;color:var(--ink);border-radius:10px;padding:7px 10px;box-shadow:0 3px 0 var(--line);flex:none}
 .eggic{width:26px;height:32px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;margin:0 7px;box-shadow:inset -3px -3px 0 rgba(0,0,0,.1)}
 
@@ -201,6 +203,7 @@ button:focus-visible{outline:3px solid #fff;outline-offset:2px}
   <canvas id="cv"></canvas>
   <div class="hud">
     <div class="pill money"><span class="coin">$</span><b id="money">0</b><small id="rate">+0/s</small></div>
+    <div class="pill" id="rockPill" hidden><span>🪨</span><b id="rocks">0</b></div>
     <div class="pill speed"><span class="lbl">Speed</span><b id="spd">0</b><div class="bar"><i id="spdBar"></i></div><small id="spdCap">max 30</small></div>
     <div class="pill clock" id="clock"><span class="ci" id="clockIcon"></span><b id="clockT">3:00</b><small id="clockL">until night</small></div>
     <div class="pill where" id="where">Home</div>
@@ -405,6 +408,8 @@ const RAR = {
   E: { name: 'Epic',      inc: 10, hatch: 15, carry: 0.85, color: '#A85FE8', w: 14 },
   L: { name: 'Legendary', inc: 40, hatch: 30, carry: 0.75, color: '#F2B418', w: 5 },
   M: { name: 'Mythic',    inc: 150, hatch: 60, carry: 0.68, color: '#FF3FD0', w: 0.8 },
+  S: { name: 'Secret',    inc: 250, hatch: 90, carry: 0.64, color: '#3A2E48', w: 0.35 },
+  T: { name: 'Eternal',   inc: 400, hatch: 105, carry: 0.62, color: '#3FD8E8', w: 0.22 },
   D: { name: 'Divine',    inc: 600, hatch: 120, carry: 0.6, color: '#F2C230', w: 0.15 },   // about 1 egg in 670   // 0.8 out of 99.8 total = 1 egg in 125
 };
 const BIOMES = [
@@ -438,11 +443,13 @@ const BIOMES = [
     obs: { n: 14, kinds: [['crystal', 26, 40], ['cloud', 34, 50]] }, guard: { name: 'Prism Golem', m: 'g-prism', speed: 3350, see: 250, seeCarry: 380 }, nests: [[1200, 250], [1200, 650]] },
   { name: 'Mushroom Grove',   req: 3600, mult: 900e6, portal: '#9B5AE8', egg: '#EDE0FF', frame: '#2A2036', pal: { g: '#34503A', p: '#2E4834', p2: '#3E5C42' },
     obs: { n: 16, kinds: [['mushroom', 26, 44], ['tree', 30, 44]] }, guard: { name: 'Toadstool Troll', m: 'g-toadstool', speed: 3900, see: 250, seeCarry: 390 }, nests: [[1200, 250], [1200, 650]] },
+  { name: 'Thunder Peaks',    req: 0, mult: 4e9, portal: '#FFE066', egg: '#C8D8F0', frame: '#10141F', pal: { g: '#2A3348', p: '#252D40', p2: '#323C55' },
+    obs: { n: 14, kinds: [['stormrock', 26, 42], ['rod', 14, 18]] }, guard: { name: 'Thunder Titan', m: 'g-thunder', speed: 4500, see: 260, seeCarry: 410 }, nests: [[1200, 250], [1200, 650]] },
 ];
 // Biomes were designed on a 1400x900 map; they are now this much bigger.
 const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 // guardian speeds use the same speed numbers as the player: a guardian with speed 75 runs like a player with speed 75
-const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000];
+const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000, 45000];
 const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 300 * Math.log(1 + (sp - 280) / 280);
 // the same numbers are also the smallest speed you need to take eggs in that biome
 BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = b.guard.lv;   // guardians run 50% faster than the first list; you need that same speed to take eggs
@@ -467,11 +474,12 @@ const SPECIES = [
   ['rainbowfrog', 'Rainbow Frog', '', 13, 'C'], ['butterfly', 'Prism Butterfly', '', 13, 'C'], ['rainbowcobra', 'Rainbow Cobra', '', 13, 'R'], ['glitterowl', 'Glitter Owl', '', 13, 'R'], ['lion', 'Rainbow Lion', '', 13, 'E'], ['prismunicorn', 'Prism Unicorn', '', 13, 'L'], ['aurorphoenix', 'Aurora Phoenix', '', 13, 'M'],
   ['moonfox', 'Moon Fox', '', 0, 'L'], ['jadefrog', 'Jade Frog Lord', '', 1, 'L'], ['goldcamel', 'Golden Camel', '', 2, 'L'], ['emeraldtoucan', 'Emerald Toucan', '', 3, 'L'], ['snowlion', 'Snow Lion', '', 4, 'L'], ['emberwolf', 'Ember Wolf', '', 5, 'L'], ['pearldolphin', 'Pearl Dolphin', '', 6, 'L'], ['opalaxolotl', 'Opal Axolotl', '', 7, 'L'], ['lunarpup', 'Lunar Pup', '', 8, 'L'], ['candyunicorn', 'Cotton Candy Unicorn', '', 9, 'L'], ['stormeagle', 'Storm Eagle', '', 10, 'L'], ['goldraptor', 'Golden Raptor', '', 11, 'L'], ['ghostfox', 'Ghost Fox', '', 12, 'L'], ['rainbowpegasus', 'Rainbow Pegasus', '', 13, 'L'], ['elderowl', 'Elder Owl King', '', 0, 'M'], ['bogdragon', 'Bog Dragon', '', 1, 'M'], ['miragecobra', 'Mirage Cobra', '', 2, 'M'], ['silverback', 'Silverback King', '', 3, 'M'], ['blizzardmammoth', 'Blizzard Mammoth', '', 4, 'M'], ['lavaphoenix', 'Lava Phoenix', '', 5, 'M'], ['krakenqueen', 'Kraken Queen', '', 6, 'M'], ['spiderqueen', 'Crystal Spider Queen', '', 7, 'M'], ['galaxydragon', 'Galaxy Dragon', '', 8, 'M'], ['gumdrophydra', 'Gumdrop Hydra', '', 9, 'M'], ['thunderbird', 'Thunderbird', '', 10, 'M'], ['ancientbrachio', 'Ancient Brachio', '', 11, 'M'], ['reaperraven', 'Reaper Raven', '', 12, 'M'], ['spectrumserpent', 'Spectrum Serpent', '', 13, 'M'], ['seraphstag', 'Seraph Stag', '', 0, 'D'], ['divinehydra', 'Divine Hydra', '', 1, 'D'], ['pharaohsphinx', 'Pharaoh Sphinx', '', 2, 'D'], ['suntiger', 'Sun Tiger', '', 3, 'D'], ['halophoenix', 'Halo Phoenix', '', 4, 'D'], ['solarkraken', 'Solar Kraken', '', 5, 'D'], ['oceansovereign', 'Ocean Sovereign', '', 6, 'D'], ['diamondtitan', 'Diamond Titan', '', 7, 'D'], ['starwhale', 'Star Whale', '', 8, 'D'], ['heavenlydragon', 'Heavenly Candy Dragon', '', 9, 'D'], ['archangeldragon', 'Archangel Dragon', '', 10, 'D'], ['titanrex', 'Titan Rex', '', 11, 'D'], ['wraithking', 'Wraith King', '', 12, 'D'], ['radiantphoenix', 'Radiant Phoenix', '', 13, 'D'],
   ['shroomhog', 'Mushroom Hedgehog', '', 14, 'C'], ['glowworm', 'Glow Worm', '', 14, 'C'], ['sporefrog', 'Spore Frog', '', 14, 'R'], ['mossturtle', 'Moss Turtle', '', 14, 'R'], ['fairyfox', 'Fairy Fox', '', 14, 'E'], ['shroomstag', 'Glowcap Stag', '', 14, 'L'], ['mothqueen', 'Moon Moth', '', 14, 'L'], ['fungaldragon', 'Fungal Dragon', '', 14, 'M'], ['mycowyrm', 'Myco Wyrm', '', 14, 'M'], ['sporeemperor', 'Spore Emperor', '', 14, 'D'],
+  ['stormhare', 'Storm Hare', '', 15, 'E'], ['voltfox', 'Volt Fox', '', 15, 'E'], ['thunderwolf', 'Thunder Wolf', '', 15, 'L'], ['zaplynx', 'Zap Lynx', '', 15, 'L'], ['cloudram', 'Cloud Ram', '', 15, 'L'], ['voltdragon', 'Volt Dragon', '', 15, 'M'], ['stormserpent', 'Storm Serpent', '', 15, 'M'], ['shadowstorm', 'Shadow Stormbird', '', 15, 'S'], ['eternalkirin', 'Eternal Kirin', '', 15, 'T'], ['thunderking', 'Thunder King', '', 15, 'D'],
 ].map(([id, name, e, b, r]) => ({ id, name, e, b, r }));
 // Always add new animals at the END of this list. Version 5 briefly had Reef/Cave/Moon (36-53)
 // inserted before the Volcano animals (30-35); this is that order, used only to repair those saves.
 const V5_ORDER = [...SPECIES.slice(0, 30), ...SPECIES.slice(36, 54), ...SPECIES.slice(30, 36)];
-const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72, D: 80 };
+const PSIZE = { C: 48, R: 52, E: 58, L: 64, M: 72, S: 76, T: 78, D: 80 };
 const STYLE_IDS = {
   fly: 'mothqueen fairyfox owl parrot toucan eagle emberbat phoenix ptero butterfly crystalbat nightbat raven bluebird thunderowl snowyowl glitterowl icephoenix aurorphoenix dragon crystaldragon candydragon celestialdragon phantomdragon',
   hop: 'sporefrog bunny frog moonbunny chocobunny cloudbunny zombiebunny rainbowfrog gummybear marshchick squirrel seal',
@@ -551,7 +559,7 @@ const EGG_SIZES = [
   { name: 'Big',  w: 12, scale: 1.4, carry: .92, up: .15, big: [.42, .5, .08] },
   { name: 'Huge', w: 3,  scale: 1.8, carry: .84, up: .35, big: [0, .55, .45] },
 ];
-const RORDER = ['C', 'R', 'E', 'L', 'M', 'D'];
+const RORDER = ['C', 'R', 'E', 'L', 'M', 'S', 'T', 'D'];
 // Day and night: 3 minutes of day, then 10 seconds of night when the biomes close and eggs reset
 let DAY = 180, NIGHT = 10;   // the game owner can change these in the admin panel
 const isNight = () => G.clock >= DAY;
@@ -562,9 +570,9 @@ const pxSpeed = () => G.slow ? 200 : speedPx(Math.min(G.speed, MOVE_SPEED_CAP));
 // ================= SAVE STATE =================
 const SAVE_KEY = 'egg-heist-save-v1';
 let G = freshSave();
-const CARRY_LOSS = { C: 0, R: 30, E: 100, L: 250, M: 300, D: 2000 }, SIZE_LOSS = [0, 600, 2000];
+const CARRY_LOSS = { C: 0, R: 30, E: 100, L: 250, M: 300, S: 600, T: 1000, D: 2000 }, SIZE_LOSS = [0, 600, 2000];
 const carryLoss = c => c ? (CARRY_LOSS[c.r] || 0) + (SIZE_LOSS[c.es || 0] || 0) : 0;
-function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', born: Date.now(), mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
+function freshSave() { return { money: 0, speed: 0, tL: 1, pL: 1, pen: [], found: {}, fusedFound: {}, gifts: [], inv: [], muts: {}, nextId: 1, muted: false, clock: 0, carry: null, slow: false, savedAt: 0, lang: 'en', rocks: 0, born: Date.now(), mounts: 0, ride: 0, cos: { own: [], shirt: 'orange', hat: 'cap', back: 'none', trail: 'none', tone: 't1' } }; }
 function loadSave(obj) {
   const g = freshSave();
   if (obj && typeof obj === 'object') {
@@ -584,6 +592,7 @@ function loadSave(obj) {
     }
     g.cos = Object.assign(freshSave().cos, g.cos && typeof g.cos === 'object' ? g.cos : {}); if (!Array.isArray(g.cos.own)) g.cos.own = [];
     if (g.lang !== 'tr') g.lang = 'en';
+    g.rocks = Math.max(0, Math.floor(+g.rocks || 0));
     g.born = 'born' in obj ? Math.max(0, +obj.born || 0) : 0;   // saves from before this existed may still get waiting gifts
     g.mounts = Math.max(0, Math.floor(+g.mounts || 0)); g.ride = +g.ride || 0;
     g.tL = clamp(g.tL | 0, 1, TREAD_MAX); g.pL = clamp(g.pL | 0, 1, PEN_MAX);
@@ -669,6 +678,7 @@ function genObstacles(bi) {
     const kd = kinds[Math.floor(r() * kinds.length)], rad = kd[1] + r() * (kd[2] - kd[1]);
     if (nests.some(([nx, ny]) => dist(x, y, nx, ny) < 170 + rad)) continue;
     if (Math.abs(y - EXIT.y) < 70 && x < 420) continue;
+    if (BIOMES[bi].name === 'Thunder Peaks' && dist(x, y, TRADER.x, TRADER.y) < 190) continue;
     if (list.some(o => dist(x, y, o.x, o.y) < rad + o.r + 60)) continue;
     list.push({ x, y, r: rad, kind: kd[0] });
   }
@@ -699,8 +709,8 @@ function changeZone(z) {
   setTimeout(() => { const n = z === 'hub' ? 0 : z + 1; if (n < BIOMES.length) getTile(n); }, 60);
   save();
 }
-function pickRarity(R = Math.random) {
-  const ks = ['C', 'R', 'E', 'L', 'M', 'D'];
+function pickRarity(R = Math.random, bi = -1) {
+  const ks = RORDER.filter(k => bi < 0 || SPECIES.some(sp => sp.b === bi && sp.r === k));
   const w = k => RAR[k].w * (abuseOn() ? ABUSE_W[k] : 1);
   let r = R() * ks.reduce((s, k) => s + w(k), 0);
   for (const k of ks) { if ((r -= w(k)) < 0) return k; }
@@ -729,7 +739,7 @@ function ensureMythic(list) {
 // `forced` puts back a specific egg (one a guardian took back from you).
 function spawnEgg(i, forced, R = Math.random, meta = null) {
   const rnd = (a, b) => a + R() * (b - a);
-  const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(R), see = B.guard.seeCarry;
+  const zd = zones[i], B = BIOMES[i], r = forced ? forced.r : pickRarity(R, i), see = B.guard.seeCarry;
   for (let t = 0; t < 60; t++) {
     const [nx, ny] = B.nests[Math.floor(R() * B.nests.length)];
     const a = rnd(0, 6.28), d = r === 'C' ? rnd(150, see - 40) : r === 'R' ? rnd(100, 220) : r === 'E' ? rnd(60, 150) : r === 'L' ? rnd(35, 90) : r === 'M' ? rnd(14, 45) : rnd(0, 18);
@@ -741,6 +751,7 @@ function spawnEgg(i, forced, R = Math.random, meta = null) {
     const er = R() * 100, es = forced ? forced.es || 0 : er < EGG_SIZES[2].w ? 2 : er < EGG_SIZES[2].w + EGG_SIZES[1].w ? 1 : 0;
     zd.eggs.push(Object.assign({ x, y, r, es, b: i, ph: rnd(0, 6) }, meta || {}));
     if (r === 'M' && !forced) announceMythic(i);
+    if ((r === 'S' || r === 'T') && !forced) setTimeout(() => toast(B.guard.m, `A ${RAR[r].name.toUpperCase()} egg appeared in the ${B.name}!`, `It sits right on the ${B.guard.name.toLowerCase()}'s nest${G.speed + 1e-6 < B.req ? ` (needs speed ${B.req})` : ''}.`, false, true, 'mythic'), 1000);
     if (r === 'D' && !forced) setTimeout(() => toast(B.guard.m, `A DIVINE egg appeared in the ${B.name}!`, `It sits right on the ${B.guard.name.toLowerCase()}'s nest${G.speed + 1e-6 < B.req ? ` (needs speed ${B.req})` : ''}. The rarest egg there is!`, false, true, 'mythic'), 1200);
     return;
   }
@@ -824,6 +835,8 @@ function buildBg(cvs) {
       for (let i = 0; i < 80 * A; i++) { c.fillStyle = ['#FF7AD9', '#7FD8F5', '#FFE066'][i % 3]; c.beginPath(); c.arc(r() * worldW, r() * worldH, 2, 0, 7); c.fill(); } }
     if (scene === 14) { for (let i = 0; i < 70 * A; i++) { const x = r() * worldW, y = r() * worldH, col = ['#9B5AE8', '#5FE0E8', '#B6F07A'][i % 3]; c.fillStyle = col; c.globalAlpha = .16; c.beginPath(); c.arc(x, y, 10, 0, 7); c.fill(); c.globalAlpha = .8; c.beginPath(); c.arc(x, y, 2.2, 0, 7); c.fill(); c.globalAlpha = 1; }
       for (let i = 0; i < 40 * A; i++) { const x = r() * worldW, y = r() * worldH, col = ['#E8402C', '#9B5AE8', '#F2A33A'][i % 3]; c.fillStyle = '#F3E3C3'; c.fillRect(x - 1.5, y, 3, 6); c.fillStyle = col; c.beginPath(); c.ellipse(x, y, 6, 4.5, 0, Math.PI, 0); c.fill(); } }
+    if (scene === 15) { c.strokeStyle = 'rgba(127,216,245,.35)'; c.lineWidth = 2; for (let i = 0; i < 40 * A; i++) { let x = r() * worldW, y = r() * worldH; c.beginPath(); c.moveTo(x, y); for (let k = 0; k < 5; k++) { x += (r() - .5) * 60; y += (r() - .3) * 40; c.lineTo(x, y); } c.stroke(); }
+      for (let i = 0; i < 50 * A; i++) { c.fillStyle = 'rgba(160,190,230,.18)'; c.beginPath(); c.ellipse(r() * worldW, r() * worldH, 16 + r() * 30, 6 + r() * 8, 0, 0, 7); c.fill(); } }
     // nests
     for (const [nx, ny] of BIOMES[scene].nests) {
       c.fillStyle = 'rgba(0,0,0,.15)'; c.beginPath(); c.ellipse(nx, ny + 6, 62, 34, 0, 0, 7); c.fill();
@@ -927,6 +940,13 @@ function drawObstacle(c, o, r) {
     c.strokeStyle = '#241E2C'; c.lineCap = 'round';
     for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + r(), l = R * (.7 + r() * .4); c.lineWidth = 7; c.beginPath(); c.moveTo(x, y); const mx = x + Math.cos(a) * l * .6, my = y + Math.sin(a) * l * .6; c.lineTo(mx, my); c.lineTo(x + Math.cos(a + .4) * l, y + Math.sin(a + .4) * l); c.stroke(); c.lineWidth = 3; c.beginPath(); c.moveTo(mx, my); c.lineTo(mx + Math.cos(a - .7) * l * .35, my + Math.sin(a - .7) * l * .35); c.stroke(); }
     c.fillStyle = '#2E2638'; c.beginPath(); c.arc(x, y, R * .3, 0, 7); c.fill();
+  } else if (o.kind === 'stormrock') {
+    c.beginPath(); for (let k = 0; k < 7; k++) { const a = k / 7 * 6.283, rr = R * (.8 + r() * .25); c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * .85); } c.closePath();
+    c.fillStyle = '#3A4256'; c.fill(); c.fillStyle = '#4E5870'; c.beginPath(); c.ellipse(x - R * .25, y - R * .25, R * .4, R * .25, -.4, 0, 7); c.fill();
+    c.strokeStyle = '#7FD8F5'; c.lineWidth = 3; c.shadowColor = '#7FD8F5'; c.shadowBlur = 8; c.beginPath(); c.moveTo(x - R * .5, y - R * .1); c.lineTo(x - R * .1, y + R * .05); c.lineTo(x + R * .1, y - R * .3); c.lineTo(x + R * .45, y - R * .15); c.stroke(); c.shadowBlur = 0;
+  } else if (o.kind === 'rod') {
+    c.fillStyle = '#5A6478'; c.beginPath(); c.arc(x, y, R, 0, 7); c.fill(); c.fillStyle = '#9AA3AD'; c.beginPath(); c.arc(x, y, R * .55, 0, 7); c.fill();
+    c.fillStyle = '#FFE066'; c.shadowColor = '#FFE066'; c.shadowBlur = 12; c.beginPath(); c.arc(x, y, R * .3, 0, 7); c.fill(); c.shadowBlur = 0;
   } else if (o.kind === 'mushroom') {
     const col = ['#E8402C', '#9B5AE8', '#F2A33A', '#5FC8E8'][Math.floor(r() * 4)];
     c.fillStyle = 'rgba(155,90,232,.16)'; c.beginPath(); c.arc(x, y, R + 14, 0, 7); c.fill();
@@ -1007,6 +1027,7 @@ function setActionBtn(mode) {
   if (mode === 'run') b.innerHTML = 'RUN<small>tap fast</small>';
   if (mode === 'grab') b.innerHTML = 'GRAB<small>or Space</small>';
   if (mode === 'adopt') b.innerHTML = 'ADOPT<small>or Space</small>';
+  if (mode === 'trade') b.innerHTML = 'TRADE<small>or Space</small>';
 }
 function tryGrab() {
   const e = nearEgg; if (!e || player.carry) return;
@@ -1026,7 +1047,7 @@ function tryGrab() {
 }
 function tap() {
   if (modalOpen) return;
-  if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); else jump();
+  if (nearEgg) tryGrab(); else if (nearPet) adoptPet(); else if (nearTrader) openModal('trade'); else jump();
 }
 // put down the egg you are carrying, right where you stand (in a party everyone sees it)
 function dropCarry() {
@@ -1176,7 +1197,10 @@ function updateHub(dt) {
 function makeEggItem(e) {
   const ES = EGG_SIZES[e.es || 0];
   let r = e.r, upgraded = false;
-  if (r !== 'M' && r !== 'D' && RAR[RORDER[RORDER.indexOf(r) + 1]] && Math.random() < ES.up) { r = RORDER[RORDER.indexOf(r) + 1]; upgraded = true; }
+  const has = k => SPECIES.some(sp => sp.b === e.b && sp.r === k);
+  const nx = RORDER[RORDER.indexOf(r) + 1];
+  if (r !== 'M' && r !== 'D' && nx && RORDER.indexOf(nx) < RORDER.indexOf('S') && has(nx) && Math.random() < ES.up) { r = nx; upgraded = true; }
+  if (!has(r)) { const i0 = RORDER.indexOf(r); const alt = RORDER.slice(0, i0).reverse().find(has) || RORDER.find(has); if (alt) r = alt; }
   const rz = Math.random(), z = rz < ES.big[2] ? 2 : rz < ES.big[2] + ES.big[1] ? 1 : 0;
   const pool = SPECIES.filter(s => s.b === e.b && s.r === r);
   // animals not in the Index yet are 3x as likely, so collections fill up fairly
@@ -1293,7 +1317,7 @@ function updateBiome(dt) {
     gateToast('egg' + scene, '\ud83d\udd12', `You need speed ${B.req} to take eggs here`, `You have ${fmt(G.speed)}. Run on the treadmill to build it up`, true);
     nearEgg = null;
   }
-  setActionBtn(nearEgg ? 'grab' : nearPet ? 'adopt' : null);
+  setActionBtn(nearEgg ? 'grab' : nearPet ? 'adopt' : nearTrader ? 'trade' : null);
   for (let i = biome.respawn.length - 1; i >= 0; i--) { biome.respawn[i] -= dt; if (biome.respawn[i] <= 0) { biome.respawn.splice(i, 1); spawnEgg(scene); } }
   for (const e of biome.eggs) e.ph += dt;
 
@@ -1464,6 +1488,7 @@ function syncHud() {
   $('spdBar').style.width = (nextB ? (G.speed - prevReq) / (nextB.req - prevReq) * 100 : 100).toFixed(1) + '%';
   $('spdCap').textContent = '+' + fmt(treadIdle(G.tL)) + '/s';
   $('dropBtn').hidden = !player.carry;
+  $('rockPill').hidden = !(G.rocks > 0 || scene === THUNDER); $('rocks').textContent = fmt(G.rocks || 0);
   $('penCnt').textContent = `${G.pen.length}/${penSlots(G.pL)}`;
   $('bagCnt').textContent = G.inv.length;
   $('idxCnt').textContent = `${SPECIES.filter(s => G.found[s.id]).length}/${SPECIES.length}`;
@@ -1496,6 +1521,8 @@ function syncHud() {
     if (chased) h = 'A guardian is chasing you! Run all the way home.';
     else if (player.carry) h = `Got a ${RAR[player.carry.r].name.toLowerCase()} egg. Run left, back home to your pen. (X drops it.)`;
     else if (nearEgg) h = 'Press Space or tap GRAB to pick up the egg.';
+    else if (nearTrader) h = 'Press Space or tap TRADE to swap meteor rocks for mutations and eggs.';
+    else if (scene === THUNDER && meteorOn()) h = 'Meteor rain! Walk over the glowing rocks to collect them.';
     else if (party && lastFriends.some(fr => Math.abs(fr.v.x - player.x) < 400)) h = 'Press F or tap HIT to swing your bat. A friend you hit drops their egg!';
     else if (G.speed + 1e-6 < B.req) h = `You can look around, but you need speed ${B.req} to take eggs in the ${B.name}.`;
     else h = `Walk up to an egg. The ${B.guard.name.toLowerCase()} only chases you once you take one of its eggs, and the rarest sit by its nest.`;
@@ -1528,6 +1555,7 @@ $('modal').addEventListener('click', ev => {
   else if (b.dataset.bagsell) sellFromBag(+b.dataset.bagsell);
   else if (b.dataset.bag === 'carry') storeCarry();
   else if (b.dataset.cos) cosAction(b.dataset.cos);
+  else if (b.dataset.trade) doTrade(b.dataset.trade);
   else if (b.dataset.ride) toggleRide(+b.dataset.ride);
   else if (b.dataset.mountapply) applyMount();
   else if (b.dataset.lang) setLang(b.dataset.lang);
@@ -1594,6 +1622,8 @@ function renderTab() {
       ${window.__siteAdmin && !isAdmin ? '<button class="reset" id="ownerLogin" style="color:var(--muted)">Owner login</button>' : ''}
       <div class="cloud-box"><p><b>Language</b><br>Choose the language of the game.</p><button class="sell" data-lang="en">English</button><button class="sell" data-lang="tr">T\u00fcrk\u00e7e</button></div>
       <button class="reset" id="resetBtn">Reset progress</button>`;
+  } else if (tab === 'trade') {
+    body.innerHTML = tradeHTML();
   } else if (tab === 'style') {
     body.innerHTML = styleHTML(); requestAnimationFrame(drawStylePreview);
   } else if (tab === 'bag') {
@@ -1821,6 +1851,7 @@ async function adminInit() {
     if (user && user.id) { try { myUid = await user.id(); } catch (e) {} }
     if (db) {
       adminDb = db;
+      db.doc('admin/meteor').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setMeteor(d.until); }, () => {});
       db.doc('admin/abuse').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setAbuse(d.until); }, () => {});
       db.doc('admin/times').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setTimes(d.day, d.night, !giftsLoaded); }, () => {});
       db.doc('admin/objects').onSnapshot(snap => { const d = snap.exists ? snap.data() : null; if (d) setObjs(d.list); }, () => {});
@@ -1830,7 +1861,7 @@ async function adminInit() {
         claimGifts(); if (modalOpen && tab === 'admin') renderTab();
       }, () => {});
     }
-    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); r.on('abuse', onAbuse, () => {}); }
+    const r = await getRoom(); if (r) { r.on('spawn', onAdminSpawn, () => {}); r.on('place', onPlace, () => {}); r.on('unplace', onUnplace, () => {}); r.on('gift', onPartyGift, () => {}); r.on('objs', onObjs, () => {}); r.on('times', onTimes, () => {}); r.on('abuse', onAbuse, () => {}); r.on('meteor', onMeteor, () => {}); }
     if (user && await user.isOwner()) { isAdmin = true; $('adminBtn').hidden = false; $('adminTab').hidden = false; }
   } catch (e) {}
 }
@@ -1939,6 +1970,7 @@ async function adminAction(what) {
   }
   if (kind === 'place') { startPlacing(); return; }
   if (kind === 'abuse') { await saveAbuse(Date.now() + clamp(num(f.admAbuseMin) || 5, 1, 180) * 60000); renderTab(); return; }
+  if (kind === 'meteor') { await startMeteorForAll(); toast('☄️', 'Meteor rain started', 'Thunder Peaks, for 1 minute.'); return; }
   if (kind === 'abusestop') { await saveAbuse(1); renderTab(); return; }
   if (kind === 'times') { await saveTimesForAll(f.admDay || DAY, f.admNight || NIGHT); f.admDay = ''; f.admNight = ''; renderTab(); return; }
   if (kind === 'objplace' || kind === 'objerase') {
@@ -2069,6 +2101,7 @@ function adminHTML() {
         <label>How many minutes<input id="admAbuseMin" type="number" min="1" max="180" value="${esc(f.admAbuseMin)}"></label>
         <span class="note" style="font-size:12px">${abuseOn() ? `Running now: ${Math.ceil((abuseUntil - Date.now()) / 60000)} minutes left.` : 'Not running.'}</span>
         <div class="adm-btns"><button class="buy" data-adm="abuse">Start for everyone</button><button class="sell" data-adm="abusestop">Stop</button></div></div>
+      <div class="up"><h3>Meteor rain</h3><span class="note" style="font-size:12px">Starts 1 minute of meteor rain in Thunder Peaks for everyone. (It also happens by itself now and then.)</span><div class="adm-btns"><button class="buy" data-adm="meteor">Start meteor rain</button></div></div>
       <div class="up"><h3>Day and night</h3>
         <div class="adm-row"><label>Day (seconds)<input id="admDay" type="number" min="20" max="3600" value="${esc(f.admDay || DAY)}"></label><label>Night (seconds)<input id="admNight" type="number" min="5" max="600" value="${esc(f.admNight || NIGHT)}"></label></div>
         <span class="note" style="font-size:12px">Now: day ${DAY} seconds, night ${NIGHT} seconds. Day can be 20 to 3600 seconds, night 5 to 600.</span>
@@ -2086,7 +2119,7 @@ function adminHTML() {
 const OBJ_KINDS = [['tree', 'Tree', 42], ['pine', 'Pine tree', 40], ['palm', 'Palm tree', 44], ['deadtree', 'Spooky tree', 42], ['bush', 'Bush', 34],
   ['rock', 'Rock', 36], ['cactus', 'Cactus', 30], ['pool', 'Pond', 52], ['ice', 'Ice block', 38], ['lava', 'Lava pool', 46], ['basalt', 'Lava rock', 38],
   ['coral', 'Coral', 40], ['anemone', 'Anemone', 30], ['crystal', 'Crystal', 36], ['stalag', 'Cave rock', 38], ['crater', 'Crater', 46], ['moonrock', 'Moon rock', 34],
-  ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28], ['mushroom', 'Giant mushroom', 38]];
+  ['lollipop', 'Lollipop', 36], ['gumdrop', 'Gumdrop', 32], ['cloud', 'Cloud', 44], ['pillar', 'Pillar', 34], ['tomb', 'Gravestone', 28], ['mushroom', 'Giant mushroom', 38], ['stormrock', 'Storm rock', 36], ['rod', 'Lightning rod', 18]];
 const OBJ_R = Object.fromEntries(OBJ_KINDS.map(k => [k[0], k[2]])), OBJ_SIZES = [[.6, 'Small'], [1, 'Normal'], [1.6, 'Big'], [2.4, 'Giant']];
 const LEFT_EDGE = -30000;   // friends' homes in a party are to the left of x = 0
 const OBJ_MAX = 400, OBJ_KEY = 'egg-heist-objs-v1';
@@ -2130,10 +2163,128 @@ async function commitObjs(list) {
 }
 function onObjs(msg) { if (msg && msg.data && !msg.isMe) setObjs(msg.data.list); }
 
+// ================= THUNDER PEAKS: METEOR RAIN, ROCKS AND THE TRADER =================
+const THUNDER = BIOMES.findIndex(b => b.name === 'Thunder Peaks');
+const TRADER = { x: 330, y: 380 };                     // inside the biome (add ZX(THUNDER) for the world)
+const traderPos = () => ({ x: ZX(THUNDER) + TRADER.x, y: TRADER.y });
+// Meteor rain comes now and then, at the same moments for everyone (it follows the real clock):
+// every 2.5 minutes there is a 1 in 3 chance of 45 seconds of meteors. The owner can also start one.
+const METEOR_WIN = 150000, METEOR_LEN = 45000;
+let meteorUntil = 0, meteors = [], rocksOnGround = [], meteorT = 0, meteorWas = false, nearTrader = false;
+function meteorOn() {
+  if (isNight()) return false;
+  const now = Date.now(), w = Math.floor(now / METEOR_WIN);
+  return now < meteorUntil || (hashStr('meteor:' + w) % 3 === 0 && now - w * METEOR_WIN < METEOR_LEN);
+}
+function setMeteor(until) { until = Math.round(+until || 0); if (Number.isFinite(until) && until > 0) meteorUntil = Math.min(until, Date.now() + 600000); }
+function onMeteor(msg) { const d = msg && msg.data; if (d && !msg.isMe) setMeteor(d.until); }
+async function startMeteorForAll() {
+  setMeteor(Date.now() + 60000);
+  const r = await getRoom(); if (r) { try { await r.emit('meteor', { until: meteorUntil }); } catch (e) {} }
+  if (adminDb) { try { await adminDb.doc('admin/meteor').set({ until: meteorUntil }); } catch (e) {} }
+}
+function updateMeteors(dt) {
+  const on = meteorOn();
+  if (on && !meteorWas) toast('☄️', 'Meteor rain in Thunder Peaks!', 'Run there and collect the glowing meteor rocks. The trader swaps them for mutations and eggs.', false, true, 'mythic');
+  if (!on && meteorWas) toast('☄️', 'The meteor rain stopped', 'Rocks still on the ground can be picked up for a little while.');
+  meteorWas = on;
+  if (on) {
+    meteorT -= dt;
+    if (meteorT <= 0) {
+      meteorT = .35;
+      const x0 = ZX(THUNDER), near = scene === THUNDER;
+      for (let tries = 0; tries < 8; tries++) {
+        const x = near ? clamp(player.x + rand(-700, 700), x0 + 60, x0 + BW - 60) : x0 + rand(80, BW - 80), y = rand(60, BH - 60);
+        if (zones[THUNDER] && zones[THUNDER].obst.some(o => dist(x, y, o.x, o.y) < o.r + 26)) continue;
+        if (dist(x, y, traderPos().x, traderPos().y) < 80) continue;
+        meteors.push({ x, y, t: 0, big: Math.random() < .12 }); break;
+      }
+    }
+  }
+  for (const m of meteors) {
+    m.t += dt;
+    if (m.t >= .9 && !m.landed) { m.landed = true; rocksOnGround.push({ x: m.x, y: m.y, n: m.big ? 3 : 1, age: 0 }); if (scene === THUNDER && Math.abs(m.x - player.x) < 900) { burst(m.x, m.y, '#FF9A3A', 14); shake = Math.max(shake, m.big ? 5 : 2); } }
+  }
+  meteors = meteors.filter(m => m.t < 1.2);
+  for (const rk of rocksOnGround) rk.age += dt;
+  rocksOnGround = rocksOnGround.filter(rk => rk.age < 75 && !isNight());
+  // walking over a rock picks it up
+  if (scene === THUNDER) for (let i = rocksOnGround.length - 1; i >= 0; i--) {
+    const rk = rocksOnGround[i];
+    if (dist(player.x, player.y, rk.x, rk.y) < 38) { rocksOnGround.splice(i, 1); G.rocks = (G.rocks || 0) + rk.n; sfx.grab(); floatText(rk.x, rk.y - 30, `+${rk.n} 🪨`, '#FFB13B', 1); }
+  }
+  const tp = traderPos(); nearTrader = scene === THUNDER && dist(player.x, player.y, tp.x, tp.y) < 90;
+}
+function drawThunder(t, xs, xe) {
+  if (THUNDER < 0) return;
+  const x0 = ZX(THUNDER); if (x0 > xe || x0 + BW < xs) return;
+  // the trader
+  const tp = traderPos();
+  ctx.fillStyle = 'rgba(255,224,102,.25)'; ctx.beginPath(); ctx.ellipse(tp.x, tp.y + 14, 50, 16, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#6B4A2F'; roundRect(ctx, tp.x - 70, tp.y + 18, 140, 18, 6); ctx.fill();
+  drawModel('g-trader', tp.x, tp.y + 16, 96, -1);
+  if (nearTrader) drawGrabPrompt({ x: tp.x, y: tp.y - 50, es: 0 }, t, 'trade'); else label('TRADER', tp.x, tp.y - 88, 18, '#FFE066');
+  // rocks on the ground
+  for (const rk of rocksOnGround) {
+    if (rk.x < xs - 40 || rk.x > xe + 40) continue;
+    const s2 = rk.n > 1 ? 15 : 10, glow = .5 + .5 * Math.sin(t * 6 + rk.x);
+    ctx.fillStyle = `rgba(255,140,40,${.25 + .2 * glow})`; ctx.beginPath(); ctx.arc(rk.x, rk.y, s2 + 10, 0, 7); ctx.fill();
+    ctx.fillStyle = '#4A3A3A'; ctx.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283; ctx.lineTo(rk.x + Math.cos(a) * s2 * (k % 2 ? .8 : 1), rk.y + Math.sin(a) * s2 * .8); } ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#FF9A3A'; ctx.beginPath(); ctx.arc(rk.x - s2 * .2, rk.y - s2 * .2, s2 * .35, 0, 7); ctx.fill();
+  }
+  // falling meteors
+  for (const m of meteors) {
+    if (m.landed || m.x < xs - 400 || m.x > xe + 400) continue;
+    const k = m.t / .9, mx = m.x - (1 - k) * 260, my = m.y - (1 - k) * 520, r2 = m.big ? 16 : 10;
+    const tr = ctx.createLinearGradient(mx, my, mx - 90, my - 180); tr.addColorStop(0, 'rgba(255,200,80,.9)'); tr.addColorStop(1, 'rgba(255,80,20,0)');
+    ctx.strokeStyle = tr; ctx.lineWidth = r2 * 1.4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx - 90, my - 180); ctx.stroke();
+    ctx.fillStyle = '#FFE066'; ctx.beginPath(); ctx.arc(mx, my, r2, 0, 7); ctx.fill(); ctx.fillStyle = '#FF7A2A'; ctx.beginPath(); ctx.arc(mx, my, r2 * .6, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(m.x, m.y + 6, 18 * k, 6 * k, 0, 0, 7); ctx.stroke();
+  }
+  // storm: rain and lightning
+  const a0 = Math.max(xs, x0), a1 = Math.min(xe, x0 + BW);
+  if (a1 > a0) {
+    ctx.strokeStyle = 'rgba(190,215,255,.35)'; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (let i = 0; i < 90; i++) { const rx = a0 + ((i * 97 + t * 900) % (a1 - a0 + 1)), ry = (i * 53 + t * 1400) % BH; ctx.moveTo(rx, ry); ctx.lineTo(rx - 6, ry + 22); }
+    ctx.stroke();
+    const flashT = (t * 1000) % 7000;
+    if (flashT < 220) {
+      const seed = Math.floor(t * 1000 / 7000), bx = a0 + (hashStr('bolt' + seed) % Math.max(1, a1 - a0));
+      ctx.fillStyle = `rgba(230,240,255,${.25 * (1 - flashT / 220)})`; ctx.fillRect(a0, 0, a1 - a0, BH);
+      ctx.strokeStyle = '#FFF6C8'; ctx.lineWidth = 4; ctx.shadowColor = '#FFE066'; ctx.shadowBlur = 18; ctx.beginPath();
+      let lx = bx, ly = 0; ctx.moveTo(lx, ly); while (ly < BH * .7) { lx += (hashStr('x' + seed + ly) % 80) - 40; ly += 60; ctx.lineTo(lx, ly); }
+      ctx.stroke(); ctx.shadowBlur = 0;
+    }
+  }
+}
+const TRADE_MUT = [['bronze', 5], ['silver', 10], ['golden', 20], ['singer', 35], ['enchanted', 60], ['dark', 100], ['mount', 80]];
+const TRADE_EGG = [['E', 15], ['L', 40], ['M', 100], ['S', 250], ['T', 500], ['D', 1000]];
+function tradeHTML() {
+  const rocks = G.rocks || 0, btn = (v, cost) => `<button class="buy" data-trade="${v}" ${rocks < cost ? 'disabled' : ''}>${cost} 🪨</button>`;
+  return `<div class="cloud-box"><p><b>The trader</b><br>"Rocks from the sky! I'll swap them for something nice."</p><b style="font-size:22px">🪨 ${fmt(rocks)}</b></div>
+    <h3>Mutations</h3><div class="cos-grid">${TRADE_MUT.map(([k, c]) => `<div class="cos"><b>${k === 'mount' ? 'Mount' : MUT[k].name}</b><span class="note" style="font-size:12px">${k === 'mount' ? 'ride a pet' : '×' + MUT[k].mult + ' money'}</span>${btn('mut:' + k, c)}</div>`).join('')}</div>
+    <h3>Thunder Peaks eggs</h3><div class="cos-grid">${TRADE_EGG.map(([r, c]) => `<div class="cos"><span class="eggic" style="background:${r === 'S' ? '#2A2236' : r === 'T' ? '#E4FBFF' : r === 'D' ? '#FFF6D6' : BIOMES[THUNDER].egg};box-shadow:inset -3px -3px 0 rgba(0,0,0,.1),0 0 0 3px ${RAR[r].color}"></span><b>${RAR[r].name} egg</b>${btn('egg:' + r, c)}</div>`).join('')}</div>
+    <p class="note">Collect meteor rocks in Thunder Peaks during meteor rain. Eggs go into your pen, or your bag if the pen is full.</p>`;
+}
+function doTrade(v) {
+  const [kind, k] = String(v).split(':');
+  const offer = (kind === 'mut' ? TRADE_MUT : TRADE_EGG).find(o => o[0] === k); if (!offer) return;
+  const cost = offer[1]; if ((G.rocks || 0) < cost) { toast('🪨', 'Not enough rocks', `You need ${cost} rocks.`, true); return; }
+  if (kind === 'mut') {
+    if (k === 'mount') G.mounts = (G.mounts || 0) + 1; else { G.muts = G.muts || {}; G.muts[k] = (G.muts[k] || 0) + 1; }
+    G.rocks -= cost; sfx.buy(); toast('🧪', `Traded for a ${k === 'mount' ? 'Mount' : MUT[k].name} mutation`, 'It is in your Bag.');
+  } else {
+    if (G.pen.length >= penSlots(G.pL) && G.inv.length >= BAG_MAX) { toast('🚧', 'Your pen and bag are full', 'Make room first.', true); return; }
+    const { item } = makeEggItem({ r: k, b: THUNDER, es: 0 });
+    if (G.pen.length < penSlots(G.pL)) G.pen.push(item); else G.inv.push(item);
+    G.rocks -= cost; sfx.buy(); toast('🥚', `Traded for a ${RAR[item.r].name} egg`, G.pen.includes(item) ? 'It is hatching in your pen.' : 'Your pen is full, so it went into your bag.');
+  }
+  save(); syncHud(); renderTab();
+}
 // ================= ADMIN ABUSE (an event the game owner starts for everyone) =================
 // While it runs: rarer eggs spawn, eggs hatch twice as fast, and every home gets a golden admin treadmill.
 const ABUSE_KEY = 'egg-heist-abuse-v1', ABUSE_GAIN = 2500;
-const ABUSE_W = { C: .3, R: 1.5, E: 3, L: 6, M: 10, D: 10 };
+const ABUSE_W = { C: .3, R: 1.5, E: 3, L: 6, M: 10, S: 10, T: 10, D: 10 };
 const ATM = { x: 545, y: 820, w: 210, h: 92 };
 const atmRect = ox => ({ x: ATM.x + ox, y: ATM.y, w: ATM.w, h: ATM.h });
 let abuseUntil = 0, abuseWas = false, onAdminTread = false;
@@ -2509,7 +2660,7 @@ const TR_NAMES = {
   'Shark': 'Köpekbalığı', 'Giant Spider': 'Dev Örümcek', 'Alien': 'Uzaylı', 'Gingerbread Giant': 'Zencefilli Dev', 'Storm Griffin': 'Fırtına Grifonu',
   'T-Rex': 'T-Rex', 'Giant Ghost': 'Dev Hayalet', 'Prism Golem': 'Prizma Golemi',
   // rarities, sizes, fusions, mutations
-  'Common': 'Sıradan', 'Rare': 'Nadir', 'Epic': 'Destansı', 'Legendary': 'Efsanevi', 'Mythic': 'Mitik', 'Divine': 'İlahi',
+  'Common': 'Sıradan', 'Rare': 'Nadir', 'Epic': 'Destansı', 'Legendary': 'Efsanevi', 'Mythic': 'Mitik', 'Divine': 'İlahi', 'Secret': 'Gizli', 'Eternal': 'Ebedi', 'Thunder Peaks': 'Gök Gürültüsü Tepeleri', 'Thunder Titan': 'Gök Gürültüsü Titanı',
   'Big': 'Büyük', 'Huge': 'Dev', 'Fused': 'Birleşik', 'Mega': 'Mega',
   'Bronze': 'Bronz', 'Silver': 'Gümüş', 'Golden': 'Altın', 'Singer': 'Şarkıcı', 'Enchanted': 'Büyülü', 'Dark': 'Karanlık',
 };
@@ -2540,6 +2691,7 @@ const TR_ANIMALS = {
   oceansovereign: 'Okyanus Hükümdarı', diamondtitan: 'Elmas Titan', starwhale: 'Yıldız Balina', heavenlydragon: 'Cennet Şeker Ejderhası', archangeldragon: 'Başmelek Ejderha',
   shroomhog: 'Mantar Kirpi', glowworm: 'Ateş Böceği Kurdu', sporefrog: 'Spor Kurbağa', mossturtle: 'Yosun Kaplumbağa', fairyfox: 'Peri Tilki', shroomstag: 'Işıltılı Mantar Geyik',
   mothqueen: 'Ay Güvesi', fungaldragon: 'Mantar Ejderhası', mycowyrm: 'Miko Solucan Ejderi', sporeemperor: 'Spor İmparatoru',
+  stormhare: 'Fırtına Tavşanı', voltfox: 'Volt Tilki', thunderwolf: 'Gök Gürültüsü Kurdu', zaplynx: 'Şimşek Vaşak', cloudram: 'Bulut Koç', voltdragon: 'Volt Ejderha', stormserpent: 'Fırtına Yılanı', shadowstorm: 'Gölge Fırtına Kuşu', eternalkirin: 'Ebedi Kirin', thunderking: 'Gök Gürültüsü Kralı',
   titanrex: 'Titan Rex', wraithking: 'Hayalet Kral', radiantphoenix: 'Işıltılı Anka Kuşu',
 };
 const TR_EXACT = {
@@ -2590,7 +2742,7 @@ const TR_EXACT = {
   'Small': 'Küçük', 'Giant': 'Devasa', 'Tree': 'Ağaç', 'Pine tree': 'Çam ağacı', 'Palm tree': 'Palmiye', 'Spooky tree': 'Ürkütücü ağaç', 'Bush': 'Çalı', 'Rock': 'Kaya', 'Cactus': 'Kaktüs',
   'Pond': 'Gölet', 'Ice block': 'Buz kütlesi', 'Lava pool': 'Lav havuzu', 'Lava rock': 'Lav kayası', 'Coral': 'Mercan', 'Anemone': 'Anemon', 'Crystal': 'Kristal', 'Cave rock': 'Mağara kayası',
   'Crater': 'Krater', 'Moon rock': 'Ay kayası', 'Lollipop': 'Lolipop', 'Gumdrop': 'Jelibon', 'Cloud': 'Bulut', 'Pillar': 'Sütun', 'Gravestone': 'Mezar taşı',
-  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
+  'JUMP': 'ZIPLA', 'HIT': 'VUR', 'or F': 'veya F', 'BONK!': 'BAM!', 'Ouch!': 'Ay!', 'Bonk!': 'Bam!', 'You dropped your egg!': 'Yumurtanı düşürdün!', '(no pets yet)': '(henüz hayvan yok)', 'DROPPED!': 'DÜŞTÜ!', 'DROP': 'BIRAK', 'or X': 'veya X', 'Dropped!': 'Bırakıldı!', 'TRADER': 'TÜCCAR', 'TRADE': 'TAKAS', 'trade': 'takas', 'Mutations': 'Mutasyonlar', 'Meteor rain': 'Meteor yağmuru', 'Start meteor rain': 'Meteor yağmurunu başlat', 'Meteor rain started': 'Meteor yağmuru başladı', 'Thunder Peaks, for 1 minute.': 'Gök Gürültüsü Tepeleri, 1 dakika.', 'Meteor rain in Thunder Peaks!': 'Gök Gürültüsü Tepeleri\'nde meteor yağmuru!', 'The meteor rain stopped': 'Meteor yağmuru durdu', 'Not enough rocks': 'Yeterli taş yok', 'It is in your Bag.': 'Çantanda.', 'It is hatching in your pen.': 'Ağılında çıkıyor.', 'Storm rock': 'Fırtına kayası', 'Lightning rod': 'Paratoner', 'ride a pet': 'hayvana bin', 'Thunder Peaks eggs': 'Gök Gürültüsü Tepeleri yumurtaları', 'The trader': 'Tüccar', 'Admin abuse': 'Yönetici çılgınlığı', 'ADMIN ABUSE!': 'YÖNETİCİ ÇILGINLIĞI!', 'Admin abuse is over': 'Yönetici çılgınlığı bitti', 'Thanks for playing!': 'Oynadığın için teşekkürler!', 'How many minutes': 'Kaç dakika', 'Start for everyone': 'Herkes için başlat', 'Stop': 'Durdur', 'Not running.': 'Çalışmıyor.', '⚡ ADMIN TREADMILL ⚡': '⚡ YÖNETİCİ KOŞU BANDI ⚡', 'Day and night': 'Gece ve gündüz', 'Day (seconds)': 'Gündüz (saniye)', 'Night (seconds)': 'Gece (saniye)', 'Save for everyone': 'Herkes için kaydet', 'Day and night changed': 'Gece ve gündüz değişti', 'Saved for everyone': 'Herkes için kaydedildi', 'Got it back!': 'Geri aldı!', 'Your home': 'Senin evin',
   'Press F or tap HIT to swing your bat. A friend you hit drops their egg!': 'Sopanı sallamak için F\'ye bas ya da VUR\'a dokun. Vurduğun arkadaşın yumurtasını düşürür!',
   'Skin 1': 'Ten 1', 'Skin 2': 'Ten 2', 'Skin 3': 'Ten 3', 'Skin 4': 'Ten 4',
   // Admin
@@ -2697,6 +2849,15 @@ const TR_RULES = [
   [/^For everyone: better eggs spawn.*$/, 'Herkes için: daha iyi yumurtalar çıkar, yumurtalar 2 kat hızlı çıkar ve her evde bir yönetici koşu bandı (saniyede +2.5k hız) belirir.'],
   [/^The admin treadmill gives you (.+) speed every second!$/, 'Yönetici koşu bandı sana saniyede $1 hız veriyor!'],
   [/^🌟 DIVINE egg in (.+)$/, '🌟 İLAHİ yumurta: $1'],
+  [/^Run there and collect the glowing meteor rocks.*$/, 'Oraya koş ve parlayan meteor taşlarını topla. Tüccar onları mutasyon ve yumurtayla takas eder.'],
+  [/^Rocks still on the ground.*$/, 'Yerde kalan taşlar bir süre daha toplanabilir.'], [/^You need (\d+) rocks\.$/, '$1 taş gerekiyor.'],
+  [/^Traded for an? (.+) mutation$/, 'Takas: $1 mutasyonu'], [/^Traded for an? (.+) egg$/, 'Takas: $1 yumurta'], [/^(.+) egg$/, '$1 yumurta'],
+  [/^Press Space or tap TRADE.*$/, 'Meteor taşlarını mutasyon ve yumurtayla takas etmek için Boşluk\'a bas ya da TAKAS\'a dokun.'],
+  [/^Meteor rain! Walk over.*$/, 'Meteor yağmuru! Toplamak için parlayan taşların üstünden yürü.'],
+  [/^"Rocks from the sky!.*$/, '"Gökten taşlar! Onları güzel şeylerle takas ederim."'],
+  [/^Collect meteor rocks in Thunder Peaks.*$/, 'Meteor yağmurunda Gök Gürültüsü Tepeleri\'nde meteor taşı topla. Yumurtalar ağılına, ağıl doluysa çantana gider.'],
+  [/^Starts 1 minute of meteor rain.*$/, 'Herkes için Gök Gürültüsü Tepeleri\'nde 1 dakikalık meteor yağmuru başlatır. (Ara sıra kendiliğinden de olur.)'],
+  [/^A (SECRET|ETERNAL) egg appeared in the (.+)!$/, (m, r, b) => (r === 'SECRET' ? 'GİZLİ' : 'EBEDİ') + ' yumurta çıktı: ' + b + '!'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
@@ -3948,6 +4109,26 @@ const MODELS = {
     h.E(22, -12, 13, 10, 0.2, '#4A3A6E'); h.E(33, -7, 8, 5.5, 0.2, '#4A3A6E');
     h.eye(24, -15, 3); h.dot(38, -8, 1.6, '#2B2219');
   },
+  'g-thunder': (h) => {
+    h.L([[-14, 22], [-20, 32], [-12, 32], [-18, 42]], '#FFE066', 4); h.L([[12, 22], [18, 32], [10, 32], [16, 42]], '#FFE066', 4);
+    h.L([[-30, -2], [-44, 8], [-36, 10], [-50, 22]], '#FFE066', 5); h.L([[30, -2], [44, 6], [36, 10], [50, 20]], '#FFE066', 5);
+    [[-24, 6, 16], [24, 6, 16], [0, 14, 20], [-14, -10, 18], [14, -10, 18], [0, -22, 18]].forEach(([x, y, r]) => h.C(x, y, r, '#5A6478'));
+    [[-18, -16, 10], [10, -26, 9], [20, -8, 8]].forEach(([x, y, r]) => h.F(x, y, r, r * .8, 0, '#76809A'));
+    h.E(-9, -8, 5.5, 4.5, 0, '#FFF6A8'); h.E(9, -8, 5.5, 4.5, 0, '#FFF6A8'); h.dot(-8, -8, 2, '#2B2219'); h.dot(10, -8, 2, '#2B2219');
+    h.brow(-16, -16, -4, -12); h.brow(16, -16, 4, -12);
+    h.line([[-8, 6], [-4, 3], [0, 6], [4, 3], [8, 6]], '#FFE066', 2.5);
+    h.P([[-6, -36], [2, -48], [0, -40], [8, -46], [2, -32]], '#FFE066');
+  },
+  'g-trader': (h) => {
+    h.E(-10, 38, 9, 5, 0, '#4A3424'); h.E(10, 38, 9, 5, 0, '#4A3424');
+    h.P([[22, -6], [40, -2], [42, 26], [20, 28]], '#8A5A35'); h.C(31, 4, 4, '#C8A060'); h.C(36, 16, 4, '#9AA3AD'); h.C(28, 18, 4, '#FF7A2A');
+    h.B(c => { c.moveTo(-22, 34); c.quadraticCurveTo(-26, -8, -14, -20); c.lineTo(14, -20); c.quadraticCurveTo(26, -8, 22, 34); }, '#4A3A6A');
+    h.line([[0, -16], [0, 32]], '#2E2448', 2); h.line([[-20, 14], [20, 14]], '#C8A060', 3);
+    h.C(0, -26, 13, '#E8C8A0');
+    h.B(c => { c.moveTo(-17, -22); c.quadraticCurveTo(-18, -48, 0, -50); c.quadraticCurveTo(18, -48, 17, -22); c.quadraticCurveTo(0, -34, -17, -22); }, '#5A4880');
+    h.eye(-5, -27, 2.4); h.eye(6, -27, 2.4); h.arc(1, -21, 4, .3, 2.8, 2);
+    h.F(0, -14, 9, 5, 0, '#D8D8E0');
+  },
   'g-toadstool': (h) => {
     h.E(-12, 40, 10, 5, 0, '#6B4A2E'); h.E(12, 40, 10, 5, 0, '#6B4A2E');
     h.P([[-12, 24], [-4, 24], [-5, 38], [-13, 38]], '#E8D6B0'); h.P([[4, 24], [12, 24], [13, 38], [5, 38]], '#E8D6B0');
@@ -4099,6 +4280,11 @@ const VAR = {
   oceansovereign: { base: 'leviathan', divine: true, acc: [176, .8] }, diamondtitan: { base: 'geodetitan', divine: true, acc: [200, .9] }, starwhale: { base: 'cosmicwhale', divine: true, acc: [232, .75] },
   heavenlydragon: { base: 'candydragon', divine: true, acc: [330, .85], lt: .8 }, archangeldragon: { base: 'celestialdragon', divine: true, acc: [212, .5] }, titanrex: { base: 'spino', divine: true, acc: [350, .85] },
   fungaldragon: { base: 'shroomdragonbase', shift: 130, sat: .65 }, mycowyrm: { base: 'leviathan', shift: 95, sat: .6 }, sporeemperor: { base: 'shroomdragonbase', divine: true, acc: [285, .8] },
+  stormhare: { base: 'bunny', hue: 215, shift: 185, sat: .6, dim: .8, bolt: true }, voltfox: { base: 'fox', shift: 180, sat: .6, bolt: true },
+  thunderwolf: { base: 'firehound', shift: 200, sat: .6, bolt: true }, zaplynx: { base: 'tiger', shift: 175, sat: .7, bolt: true }, cloudram: { base: 'cottonsheep', shift: 170, sat: .35, bolt: true },
+  voltdragon: { base: 'dragon', shift: 200, sat: .75, bolt: true }, stormserpent: { base: 'leviathan', shift: 240, sat: .7, bolt: true },
+  shadowstorm: { base: 'phoenix', hue: 270, shift: 250, sat: .45, dim: .55, bolt: true }, eternalkirin: { base: 'skyunicorn', divine: true, acc: [186, .9], lt: .9, bolt: true },
+  thunderking: { base: 'g-griffin', divine: true, acc: [52, .95], bolt: true },
   wraithking: { base: 'phantomdragon', divine: true, acc: [140, .75] }, radiantphoenix: { base: 'aurorphoenix', divine: true, acc: 'rainbow', lt: .84 },
 };
 // recolours a drawn model in place (dark outlines and eyes stay as they are)
@@ -4119,6 +4305,7 @@ function tintCanvas(x, v) {
       else {
         if (sat < .15) { if (v.hue === undefined) continue; h = v.hue; } else h = (h + (v.shift || 0)) % 360;
         sat = Math.max(sat, v.sat || 0);
+        if (v.dim) l = .1 + l * v.dim;
       }
       const [r, g, b] = hsl2rgb(h, sat, l); a[i] = r; a[i + 1] = g; a[i + 2] = b;
     }
@@ -4134,11 +4321,16 @@ function tintCanvas(x, v) {
   }
 }
 const modelCache = {}, modelUrlCache = {};
+// small yellow lightning bolts added to the Thunder Peaks animals
+function drawBolts(x) {
+  const bolt = (bx, by, k) => { x.save(); x.translate(bx, by); x.scale(k, k); x.beginPath(); x.moveTo(6, 0); x.lineTo(-2, 14); x.lineTo(3, 14); x.lineTo(-4, 30); x.lineTo(10, 10); x.lineTo(5, 10); x.lineTo(11, 0); x.closePath(); x.fillStyle = '#FFE066'; x.strokeStyle = '#2B2219'; x.lineWidth = 2.5; x.lineJoin = 'round'; x.fill(); x.stroke(); x.restore(); };
+  bolt(18, 20, 1.1); bolt(160, 34, .9); bolt(166, 140, .8);
+}
 function modelImg(key) {
   if (!modelCache[key]) {
     const c = document.createElement('canvas'); c.width = c.height = 192;
     const x = c.getContext('2d'); x.setTransform(192 / 110, 0, 0, 192 / 110, 96, 88);
-    if (VAR[key]) { x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(modelImg(VAR[key].base), 0, 0); tintCanvas(x, VAR[key]); }
+    if (VAR[key]) { x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(modelImg(VAR[key].base), 0, 0); tintCanvas(x, VAR[key]); if (VAR[key].bolt) drawBolts(x); }
     else MODELS[key](kit(x), x);
     modelCache[key] = c;
   }
@@ -4243,11 +4435,13 @@ function drawEmoji(ch, x, y, size, flip = 1, glow = null) {
   ctx.restore();
 }
 function drawEgg(x, y, w, rarity, base, t = 0) {
-  const col = rarity === 'M' ? rainbow(t) : rarity === 'D' ? `hsl(46,100%,${62 + Math.sin(t * 5) * 14}%)` : RAR[rarity].color;
+  const col = rarity === 'M' ? rainbow(t) : rarity === 'D' ? `hsl(46,100%,${62 + Math.sin(t * 5) * 14}%)` : rarity === 'T' ? `hsl(186,90%,${55 + Math.sin(t * 4) * 15}%)` : rarity === 'S' ? `hsl(275,60%,${30 + Math.sin(t * 6) * 12}%)` : RAR[rarity].color;
   if (rarity === 'D') base = '#FFF6D6';
+  if (rarity === 'S') base = '#2A2236';
+  if (rarity === 'T') base = '#E4FBFF';
   ctx.save(); ctx.translate(x, y);
   if (rarity !== 'C') { ctx.fillStyle = col; ctx.globalAlpha = .25 + Math.sin(t * 4) * .1; ctx.beginPath(); ctx.ellipse(0, w * .55, w * 1.1, w * .45, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1; }
-  if (rarity === 'L' || rarity === 'M' || rarity === 'D') { ctx.shadowColor = rarity === 'D' ? '#FFFFFF' : col; ctx.shadowBlur = rarity === 'D' ? 34 : rarity === 'M' ? 24 : 16; }
+  if (rarity === 'L' || rarity === 'M' || rarity === 'D' || rarity === 'S' || rarity === 'T') { ctx.shadowColor = rarity === 'D' ? '#FFFFFF' : rarity === 'S' ? '#9A4AE0' : col; ctx.shadowBlur = rarity === 'D' ? 34 : rarity === 'M' || rarity === 'L' ? (rarity === 'M' ? 24 : 16) : 28; }
   const k = w / 17; ctx.scale(k, k); ctx.translate(-12, -13);
   ctx.fillStyle = base; ctx.fill(EGG); ctx.shadowBlur = 0;
   ctx.lineWidth = rarity === 'C' ? 1.2 : 2; ctx.strokeStyle = rarity === 'C' ? 'rgba(0,0,0,.25)' : col; ctx.stroke(EGG);
@@ -4531,6 +4725,7 @@ function drawWorld(t, dt) {
   if (vis.includes('hub')) drawHub(t, dt);
   drawObjs(xs, xe);
   drawLoose(t, xs, xe);
+  drawThunder(t, xs, xe);
   const ents = [{ y: player.y, p: true }];
   for (const z of vis) if (z !== 'hub') {
     const zd = getZone(z), B = BIOMES[z];
@@ -4568,6 +4763,7 @@ function frame(now) {
   update(dt);
   hudT += dt; if (hudT > .1) { hudT = 0; syncHud(); }
   presT += dt; if (presT > .066) { presT = 0; sendPresence(false); }
+  if (THUNDER >= 0) updateMeteors(dt);
   clockT += dt; if (clockT > .5) { clockT = 0; checkAbuse(); if (party) { readFriends(); syncPartyClock(); } }
   saveT += dt; if (saveT > 4) { saveT = 0; save(); }
 
