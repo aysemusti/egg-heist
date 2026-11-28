@@ -459,7 +459,7 @@ const BW = 2200, BH = 1300, SX = BW / 1400, SY = BH / 900;
 const GUARD_SPEED = [0, 75, 120, 250, 320, 450, 620, 800, 1200, 1750, 2200, 4000, 7000, 10000, 25000, 45000];
 const speedPx = sp => sp <= 280 ? 160 + 2.2 * Math.max(0, sp) : 776 + 300 * Math.log(1 + (sp - 280) / 280);
 // the same numbers are also the smallest speed you need to take eggs in that biome
-BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = b.guard.lv;   // guardians run 50% faster than the first list; you need that same speed to take eggs
+BIOMES.forEach((b, i) => { b.guard.lv = Math.round((GUARD_SPEED[i] || 0) * 1.5); b.req = 0;   // guardians run 50% faster than the first list; anyone can take any egg (be fast enough to escape!)
   b.guard.speed = Math.round(speedPx(b.guard.lv)); });
 BIOMES.forEach(b => { b.nests = b.nests.map(([x, y]) => [Math.round(x * SX), Math.round(y * SY)]); b.obs.n = Math.round(b.obs.n * 2.1); });
 const SPECIES = [
@@ -1491,11 +1491,11 @@ function gateToast(key, em, t, s, bad) { const now = performance.now(); if ((toa
 let lastHud = '';
 function syncHud() {
   let rate = 0; for (const p of G.pen) if (!p.egg) rate += petInc(p);
-  const nextB = BIOMES.find(b => b.req > G.speed), prevReq = BIOMES.filter(b => b.req <= G.speed).reduce((a, b) => Math.max(a, b.req), 0);
+  const nextB = BIOMES.find(b => b.guard.lv > G.speed), prevReq = BIOMES.filter(b => b.guard.lv <= G.speed).reduce((a, b) => Math.max(a, b.guard.lv), 0);
   $('money').textContent = fmt(G.money);
   $('rate').textContent = '+' + fmt(rate) + '/s';
   $('spd').textContent = fmt(G.speed);
-  $('spdBar').style.width = (nextB ? (G.speed - prevReq) / (nextB.req - prevReq) * 100 : 100).toFixed(1) + '%';
+  $('spdBar').style.width = (nextB ? (G.speed - prevReq) / (nextB.guard.lv - prevReq) * 100 : 100).toFixed(1) + '%';
   $('spdCap').textContent = '+' + fmt(treadIdle(G.tL)) + '/s';
   $('dropBtn').hidden = !player.carry;
   $('rockPill').hidden = !(G.rocks > 0 || scene === THUNDER); $('rocks').textContent = fmt(G.rocks || 0);
@@ -1522,14 +1522,14 @@ function syncHud() {
   // hint
   let h = '';
   if (scene === 'hub') {
-    const next = BIOMES.find(b => b.req > G.speed);
+    const next = BIOMES.find(b => b.guard.lv > G.speed);
     if (player.carry) h = G.pen.length >= penSlots(G.pL) ? 'Your pen is full. Sell a pet or upgrade the pen in the Shop.' : `Carry the ${RAR[player.carry.r].name.toLowerCase()} egg into your pen.`;
     else if (isNight()) h = `It's night. The biomes open again in ${Math.ceil(DAY + NIGHT - G.clock)} seconds.`;
     else if (onAdminTread) h = `The admin treadmill gives you ${fmt(ABUSE_GAIN)} speed every second!`;
     else if (onTread) h = `Stand on the treadmill to gain ${fmt(treadIdle(G.tL))} speed every second. Upgrade it in the Shop to gain more.`;
     else if (Object.values(fuseGroups()).some(l => l.length >= 3 && (l[0].f || 0) < FUSE.length - 1)) h = 'You have 3 of the same animal. Walk to the Fuse Machine to fuse them.';
     else if (!G.pen.length && !Object.keys(G.found).length) h = 'Run right into the Forest and grab an egg. Move with WASD, arrows or drag.';
-    else if (next && G.speed < next.req) h = `Reach speed ${next.req} on the treadmill to take eggs in the ${next.name}.`;
+    else if (next) h = `The ${next.guard.name.toLowerCase()} in the ${next.name} runs at speed ${fmt(next.guard.lv)}. Train on the treadmill to outrun it.`;
   } else {
     const B = BIOMES[scene];
     const chased = Object.values(zones).some(z => z.guards.some(g => g.st === 'chase' || g.st === 'wait'));
@@ -1539,7 +1539,6 @@ function syncHud() {
     else if (nearTrader) h = 'Press Space or tap TRADE to swap meteor rocks for mutations and eggs.';
     else if (scene === THUNDER && meteorOn()) h = 'Meteor rain! Walk over the glowing rocks to collect them.';
     else if (party && lastFriends.some(fr => Math.abs(fr.v.x - player.x) < 400)) h = 'Press F or tap HIT to swing your bat. A friend you hit drops their egg!';
-    else if (G.speed + 1e-6 < B.req) h = `You can look around, but you need speed ${B.req} to take eggs in the ${B.name}.`;
     else h = `Walk up to an egg. The ${B.guard.name.toLowerCase()} only chases you once you take one of its eggs, and the rarest sit by its nest.`;
   }
   if (h !== lastHud) { $('hint').textContent = h; lastHud = h; }
@@ -1632,8 +1631,8 @@ function renderTab() {
         </div>
       </div>
       ${batsHTML()}
-      <h3>Speed needed to take eggs</h3>
-      <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.req ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Speed ${b.req}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
+      <h3>Guardian speeds</h3><p class="note">You can take eggs anywhere. To get away with one, be faster than its guardian.</p>
+      <div class="reqs">${BIOMES.map(b => `<div class="req ${G.speed >= b.guard.lv ? 'ok' : ''}"><span>${esc(b.name)}</span><b>Guardian ${fmt(b.guard.lv)}</b><span>${modelTag(b.guard.m, 'gi')} ${b.guard.name} · pets ×${fmt(b.mult)}</span></div>`).join('')}</div>
       <p class="note">Carrying an egg takes away speed: rare eggs −30, epic −100, legendary −250, mythic −300, divine −2000 (common eggs −0). Big eggs take −600 more and huge eggs −2000 more, but they hatch bigger animals that earn 2× or 5×, and can turn up a rarity. Build enough speed to outrun the guardian while holding one.</p>
       <div class="cloud-box"><p><b>Cloud save</b><br>${cloud ? (cloudState === 'error' ? 'Could not reach the cloud just now. It will try again.' : cloudAt ? `Saved ${Math.max(0, Math.round((Date.now() - cloudAt) / 1000))} seconds ago. Open the game on another device to keep playing.` : 'Saving…') : 'Your progress is saved in this browser. Play on the same device and browser to keep it.'}</p>${cloud ? '<button class="buy" id="cloudBtn">Save now</button>' : ''}</div>
       ${window.__siteAdmin && !isAdmin ? '<button class="reset" id="ownerLogin" style="color:var(--muted)">Owner login</button>' : ''}
@@ -1674,7 +1673,7 @@ function renderTab() {
     body.innerHTML = `<div><h3>Animal index · ${n}/${SPECIES.length}</h3><p class="note">Every animal you hatch is recorded here. Undiscovered ones show as shadows.</p></div>` +
       BIOMES.map((b, bi) => `
       <section class="biome">
-        <div class="biome-head"><h3>${b.name}</h3><span>${modelTag(b.guard.m, 'gi')} Guarded by the ${b.guard.name.toLowerCase()} (runs at speed ${fmt(b.guard.lv)}) · speed ${b.req} to take eggs · pets earn ×${fmt(b.mult)}</span></div>
+        <div class="biome-head"><h3>${b.name}</h3><span>${modelTag(b.guard.m, 'gi')} Guarded by the ${b.guard.name.toLowerCase()} (runs at speed ${fmt(b.guard.lv)}) · pets earn ×${fmt(b.mult)}</span></div>
         <div class="grid">${SPECIES.filter(s => s.b === bi).map(s => {
           const got = G.found[s.id], fz = G.fusedFound[s.id] || 0;
           return `<div class="card ${s.r} ${got ? '' : 'locked'}">${modelTag(s.id, 'em')}<span class="nm">${got ? esc(s.name) : '???'}</span><span class="chip ${s.r}">${RAR[s.r].name}</span><span class="sub">${got ? `$${fmt(RAR[s.r].inc * b.mult)}/s · hatched ${got}${fz ? ` · ${FUSE[fz].name} ✓` : ''}` : `from ${/^[EA]/.test(RAR[s.r].name) ? 'an' : 'a'} ${RAR[s.r].name.toLowerCase()} egg`}</span></div>`;
@@ -2794,7 +2793,7 @@ const TR_EXACT = {
   // Shop
   'Treadmill': 'Koşu bandı', 'Max speed': 'En yüksek hız', 'Speed per second on it': 'Üstündeyken saniyede hız', 'Speed every second on it': 'Üstündeyken saniyede hız', 'Speed limit': 'Hız sınırı', 'Speed per tap': 'Dokunuş başına hız',
   'Fully upgraded': 'Tamamen geliştirildi', 'Slots for eggs and pets': 'Yumurta ve hayvan yeri', 'Pet income bonus': 'Hayvan gelir bonusu',
-  'Biome gates': 'Biyom kapıları', 'Speed needed to take eggs': 'Yumurta almak için gereken hız', 'Cloud save': 'Bulut kaydı', 'Save now': 'Şimdi kaydet', 'Saving…': 'Kaydediliyor…', 'Reset progress': 'İlerlemeyi sıfırla',
+  'Biome gates': 'Biyom kapıları', 'Speed needed to take eggs': 'Yumurta almak için gereken hız', 'Guardian speeds': 'Bekçi hızları', 'You can take eggs anywhere. To get away with one, be faster than its guardian.': 'Her yerde yumurta alabilirsin. Kaçabilmek için bekçisinden hızlı ol.', 'Cloud save': 'Bulut kaydı', 'Save now': 'Şimdi kaydet', 'Saving…': 'Kaydediliyor…', 'Reset progress': 'İlerlemeyi sıfırla',
   'Tap again to wipe all progress': 'Her şeyi silmek için tekrar dokun', 'Owner login': 'Sahip girişi', 'Language': 'Dil', 'Choose the language of the game.': 'Oyunun dilini seç.',
   'Could not reach the cloud just now. It will try again.': 'Şu an buluta ulaşılamadı. Tekrar deneyecek.',
   "Off. Sign in to claude.ai to save your progress across devices.": 'Kapalı. İlerlemeni cihazlar arasında kaydetmek için claude.ai\'ye giriş yap.',
@@ -2955,6 +2954,8 @@ const TR_RULES = [
   [/^Gift: (.+) meteor rocks$/, 'Hediye: $1 meteor taşı'], [/^(.+)\. Trade them with the trader in Thunder Peaks\.$/, (m, a) => (TR_EXACT[a] || a) + '. Onları Gök Gürültüsü Tepeleri\'ndeki tüccarla takas et.'], [/^(.+) meteor rocks$/, '$1 meteor taşı'],
   [/^×(.+) farther$/, '×$1 daha uzağa'], [/^It knocks friends ×(.+) farther\.$/, 'Arkadaşları ×$1 daha uzağa fırlatır.'], [/^All (\d+) bats from the Shop$/, 'Mağazadaki $1 sopanın hepsi'],
   [/^🩵 ETERNAL egg in (.+)$/, '🩵 EBEDİ yumurta: $1'], [/^🟣 SECRET egg in (.+)$/, '🟣 GİZLİ yumurta: $1'],
+  [/^Guardian (.+)$/, 'Bekçi $1'], [/^Guarded by the (.+) \(runs at speed (.+)\) · pets earn ×(.+)$/, 'Bekçi: $1 ($2 hızla koşar) · hayvanlar ×$3'],
+  [/^The (.+) in the (.+) runs at speed (.+)\. Train on the treadmill to outrun it\.$/, '$2 içindeki $1 $3 hızla koşar. Onu geçmek için koşu bandında çalış.'],
   [/^Gift: (.+)$/, 'Hediye: $1'], [/^You found an? (.+) mutation!$/, '$1 mutasyonu buldun!'],
   [/^Open your Bag to put it on an egg\. (.+) animals earn ×(.+)\.$/, 'Bir yumurtaya koymak için Çantanı aç. $1 hayvanlar ×$2 kazandırır.'],
   [/^Your egg is now (.+)!$/, 'Yumurtan artık $1!'], [/^The (\w*) ?animal inside will hatch (.+) and earn ×(.+)\.$/, 'İçindeki hayvan $2 olarak çıkacak ve ×$3 kazandıracak.'],
